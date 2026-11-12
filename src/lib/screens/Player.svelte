@@ -14,7 +14,9 @@ import {
 	RotateCcw,
 	RotateCw,
 } from "@lucide/svelte";
-import { digits, languageLabel, modeName } from "#lib/core/playback/names.ts";
+import { rememberedThroughput } from "#lib/core/playback/auto.ts";
+import { digits, languageLabel, modeName, subInfo } from "#lib/core/playback/names.ts";
+import { fmtOffset, panelWords } from "#lib/core/playback/panel-words.ts";
 import {
 	type Launch,
 	nowPlaying,
@@ -35,7 +37,16 @@ import {
 	seekFlash,
 	segments,
 } from "#lib/core/player-view.ts";
-import { prefs } from "#lib/core/prefs.svelte.ts";
+import { account } from "#lib/core/me.svelte.ts";
+import {
+	audioRows,
+	haltView,
+	qualityRows,
+	speedRows,
+	statsRows,
+	subtitleRows,
+} from "#lib/core/player-panels.ts";
+import { prefs, setPref as savePref } from "#lib/core/prefs.svelte.ts";
 import type { Kind } from "#lib/core/types.ts";
 import { m as i18n } from "#lib/paraglide/messages.js";
 import { getLocale } from "#lib/paraglide/runtime.js";
@@ -52,16 +63,22 @@ import BufferingSpinner from "#lib/ui/BufferingSpinner.svelte";
 import Button from "#lib/ui/Button.svelte";
 import EmptyState from "#lib/ui/EmptyState.svelte";
 import EndScreen from "#lib/ui/EndScreen.svelte";
+import HaltOverlay from "#lib/ui/HaltOverlay.svelte";
 import { goto } from "#lib/ui/nav.ts";
 import Osd from "#lib/ui/Osd.svelte";
 import PausedCard from "#lib/ui/PausedCard.svelte";
 import PlayerBar from "#lib/ui/PlayerBar.svelte";
+import PlayerMenu from "#lib/ui/PlayerMenu.svelte";
 import Scrubber from "#lib/ui/Scrubber.svelte";
 import SkipButton from "#lib/ui/SkipButton.svelte";
+import StatsPanel from "#lib/ui/StatsPanel.svelte";
+import Stepper from "#lib/ui/Stepper.svelte";
+import SubtitleStyle from "#lib/ui/SubtitleStyle.svelte";
 import UpNextCard from "#lib/ui/UpNextCard.svelte";
 import { afterNavigate, beforeNavigate } from "$app/navigation";
 import { onMount } from "svelte";
 
+type Tab = "subs" | "audio" | "quality" | "speed";
 type Phase = "idle" | "in" | "out";
 type Flash = { ph: Phase; amt: number; rot: number };
 
@@ -71,6 +88,24 @@ const MAX_EXTRAPOLATION = 1.5;
 const VOLUME_STEP = 0.05;
 const CUE_BOTTOM = { shown: 140, hidden: 48 };
 const CARD_BOTTOM = { shown: 130, hidden: 40 };
+const MENU_SWITCH_MS = 170;
+const SUB_STEP = 0.1;
+const AUDIO_STEP = 10;
+const TONE = {
+	ok: "var(--status-available)",
+	conv: "var(--status-downloading)",
+	warn: "var(--status-warning)",
+};
+// Prefs hold the English values; only the label shown to the viewer follows the locale.
+const STYLE_LABEL: Record<string, () => string> = {
+	None: i18n.player_style_bg_none,
+	Shadow: i18n.player_style_bg_shadow,
+	Box: i18n.player_style_bg_box,
+	White: i18n.player_style_color_white,
+	Yellow: i18n.player_style_color_yellow,
+};
+const styleText = (v: string) => STYLE_LABEL[v]?.() ?? v;
+const words = panelWords(playbackPort.playerName);
 
 let { kind, id, epId, resume }: { kind: Kind; id: number; epId: number | null; resume: boolean } =
 	$props();
@@ -86,11 +121,14 @@ let pfPause = $state(false);
 let skL = $state<Flash>({ ph: "idle", amt: 0, rot: 0 });
 let skR = $state<Flash>({ ph: "idle", amt: 0, rot: 0 });
 let frameAt = $state(0);
+let menu = $state<Tab | null>(null);
+let styleOpen = $state(false);
 
 let lastMove = Date.now();
 let osdTimer: ReturnType<typeof setTimeout> | undefined;
 let pfTimer: ReturnType<typeof setTimeout> | undefined;
 let seekTimer: ReturnType<typeof setTimeout> | undefined;
+let menuTimer: ReturnType<typeof setTimeout> | undefined;
 let run: SeekFlash | null = null;
 let fromDetail = false;
 let leaving = false;
@@ -106,8 +144,8 @@ beforeNavigate(({ to }) => {
 
 const pb = $derived(launch && nowPlaying.launch?.key === launch.key ? nowPlaying.pb : null);
 const view = $derived(launch?.view ?? null);
-const controlsOn = $derived(!!pb && (controls || (!pb.playing && !pb.buffering)));
-const showBar = $derived(controlsOn && !pb?.ended);
+const controlsOn = $derived(!!pb && (controls || (!pb.playing && !pb.buffering) || !!menu));
+const showBar = $derived(controlsOn && !pb?.ended && !pb?.halt);
 
 $effect(() => {
 	const [k, i, e, r] = [kind, id, epId, resume];
@@ -168,7 +206,7 @@ function flashPlay(wasPlaying: boolean) {
 }
 
 function togglePlay() {
-	if (!pb || pb.ended) return;
+	if (!pb || pb.ended || pb.halt) return;
 	const was = pb.playing;
 	pb.togglePlay();
 	flashPlay(was);
@@ -245,6 +283,23 @@ function leaveRoute() {
 	else goto(view?.season ? `${detail}?s=${view.season}` : detail, { replace: true });
 }
 
+function openMenu(tab: Tab) {
+	clearTimeout(menuTimer);
+	if (menu === tab) return closeMenu();
+	show();
+	if (!menu) {
+		menu = tab;
+		return;
+	}
+	menu = null;
+	menuTimer = setTimeout(() => (menu = tab), MENU_SWITCH_MS);
+}
+
+function closeMenu() {
+	clearTimeout(menuTimer);
+	menu = null;
+}
+
 function exit() {
 	if (fullscreen) toggleFullscreen(false);
 	leaveRoute();
@@ -278,7 +333,7 @@ function onKey(e: KeyboardEvent) {
 			altKey: e.altKey,
 			target: e.target as Element | null,
 		},
-		{ ended: pb.ended, menuOpen: false, fullscreen },
+		{ ended: pb.ended, menuOpen: menu !== null, fullscreen },
 	);
 	if (!act) return;
 	e.preventDefault();
@@ -302,7 +357,7 @@ function onKey(e: KeyboardEvent) {
 		next: goNext,
 		previous: goPrevious,
 		fullscreen: () => toggleFullscreen(),
-		closeMenu: () => {},
+		closeMenu,
 		exitFullscreen: () => toggleFullscreen(false),
 		exit,
 	};
@@ -311,8 +366,15 @@ function onKey(e: KeyboardEvent) {
 
 onMount(() => {
 	const hide = setInterval(() => {
-		if (controls && pb?.playing && !hovering && Date.now() - lastMove > HIDE_MS) controls = false;
+		if (controls && pb?.playing && !hovering && !menu && Date.now() - lastMove > HIDE_MS)
+			controls = false;
 	}, 250);
+	// No click-catcher over the bar, so its buttons keep their cursor: a press outside the panel closes it.
+	const outside = (e: PointerEvent) => {
+		const t = e.target as Element | null;
+		if (menu && !t?.closest("[data-menu-panel], [data-menu-btn]")) closeMenu();
+	};
+	document.addEventListener("pointerdown", outside, true);
 	const sync = () =>
 		isFullscreen().then(
 			(v) => (fullscreen = v),
@@ -325,6 +387,8 @@ onMount(() => {
 		clearTimeout(pfTimer);
 		clearTimeout(seekTimer);
 		document.removeEventListener("fullscreenchange", sync);
+		document.removeEventListener("pointerdown", outside, true);
+		clearTimeout(menuTimer);
 		if (fullscreen) setFullscreen(false).catch(() => {});
 	};
 });
@@ -408,6 +472,219 @@ const subtitleCue = $derived.by(() => {
 	};
 });
 
+const selectedSub = $derived(pb?.tracks?.subtitles.find((t) => t.index === pb.subPick) ?? null);
+const subKind = $derived(pb?.burn ? "burn" : selectedSub ? subInfo(selectedSub).kind : "text");
+const audioList = $derived(
+	pb ? audioRows(pb.tracks, pb.selectedAudio, pb.preview, pb.session, words) : [],
+);
+const subList = $derived(pb ? subtitleRows(pb.tracks, pb.subPick, words) : []);
+const qualityList = $derived(
+	pb
+		? qualityRows(
+				{
+					qSel: pb.qSel,
+					autoPick: pb.autoPick,
+					measuredOnce: pb.measuredOnce,
+					originalPlays: pb.originalPlays,
+					preview: pb.preview,
+					tracks: pb.tracks,
+				},
+				words,
+			)
+		: [],
+);
+const speedList = $derived(speedRows(pb?.speed ?? 1, words));
+const menuRows = $derived(
+	menu === "audio"
+		? audioList
+		: menu === "subs"
+			? subList
+			: menu === "quality"
+				? qualityList
+				: speedList,
+);
+const MENU_TITLES: Record<Tab, () => string> = {
+	audio: i18n.player_audio,
+	subs: i18n.player_subtitles,
+	quality: i18n.player_quality,
+	speed: i18n.player_speed,
+};
+const menuNote = $derived.by(() => {
+	const session = pb?.session;
+	if (!pb || !session) return undefined;
+	if (menu === "quality") {
+		const why = (r: { text: string }[]) => r.map((x) => x.text).join(", ");
+		const text =
+			session.mode === "direct"
+				? i18n.player_note_direct()
+				: session.mode === "remux"
+					? i18n.player_note_remux({
+							player: playbackPort.playerName,
+							container: pb.tracks?.container.toUpperCase() ?? "",
+						})
+					: session.mode === "audio_transcode"
+						? i18n.player_note_audio_transcode({
+								audio: words.audioOut(session),
+								why: why(session.audio_reasons),
+							})
+						: i18n.player_note_transcode({
+								video: words.videoOut(session),
+								why: why(session.video_reasons),
+							});
+		return { text, color: pb.full ? TONE.ok : TONE.conv };
+	}
+	if (menu === "audio") {
+		const track = pb.selectedAudio;
+		if (!track) return undefined;
+		const name = words.audioName(track);
+		const asIs = session.audio.action === "copy";
+		return {
+			text: asIs
+				? i18n.player_audio_note_as_is({ player: playbackPort.playerName, name })
+				: i18n.player_audio_note_convert({
+						player: playbackPort.playerName,
+						name,
+						out: words.audioOut(session),
+					}),
+			color: asIs ? TONE.ok : TONE.conv,
+		};
+	}
+	if (menu === "subs") {
+		if (pb.tracks?.preparing)
+			return { text: i18n.player_subtitles_preparing_note(), color: TONE.conv };
+		if (pb.burn && selectedSub)
+			return {
+				text: i18n.player_subtitles_burn_note({
+					player: playbackPort.playerName,
+					format: subInfo(selectedSub).fmt,
+					name: words.subName(selectedSub),
+					back: pb.burnBack,
+				}),
+				color: TONE.warn,
+			};
+	}
+	return undefined;
+});
+
+function pickRow(id: string) {
+	if (!pb) return;
+	if (menu === "audio") {
+		const t = pb.tracks?.audio.find((a) => String(a.index) === id);
+		if (t) pb.pickAudio(t);
+	} else if (menu === "subs") {
+		pb.pickSub(
+			id === "off" ? null : (pb.tracks?.subtitles.find((t) => String(t.index) === id) ?? null),
+		);
+	} else if (menu === "quality") {
+		pb.pickQuality(id === "auto" || id === "original" ? id : Number(id));
+	} else if (menu === "speed") {
+		pb.pickSpeed(Number(id));
+	}
+}
+
+function nudgeSub(step: number) {
+	if (!pb) return;
+	if (step === 0) pb.resetTiming("sub");
+	else pb.nudgeSub(step);
+	show();
+	flashOsd(i18n.player_osd_subtitles({ offset: fmtOffset(pb.subOffset, true) }));
+}
+
+function nudgeAudio(step: number) {
+	if (!pb) return;
+	if (step === 0) pb.resetTiming("audio");
+	else pb.nudgeAudio(step);
+	show();
+	flashOsd(i18n.player_osd_audio({ offset: fmtOffset(pb.audioDelay, false) }));
+}
+
+function setStyle(key: "subSize" | "subBg" | "subColor", value: string) {
+	savePref(key, value);
+	pb?.syncTiming();
+}
+
+const styleOk = (key: string) => subKind === "text" || (subKind === "styled" && key === "subSize");
+const styleNote = $derived(
+	subKind === "styled"
+		? i18n.player_style_note_styled()
+		: subKind === "image"
+			? i18n.player_style_note_image()
+			: subKind === "burn"
+				? i18n.player_style_note_burn()
+				: "",
+);
+const styleSummary = $derived(
+	subKind === "text"
+		? `${prefs.subSize} · ${styleText(prefs.subBg)} · ${styleText(prefs.subColor)}`
+		: subKind === "styled"
+			? i18n.player_style_own_look({ size: prefs.subSize })
+			: i18n.player_style_drawn(),
+);
+const styleGroups = $derived(
+	(
+		[
+			[i18n.player_style_size(), "subSize", ["S", "M", "L", "XL"]],
+			[i18n.player_style_background(), "subBg", ["None", "Shadow", "Box"]],
+			[i18n.player_style_color(), "subColor", ["White", "Yellow"]],
+		] as const
+	).map(([label, key, values]) => ({
+		label,
+		values: values.map((value) => ({ value, label: styleText(value) })),
+		current: prefs[key],
+		enabled: styleOk(key),
+		onpick: (value: string) => setStyle(key, value),
+	})),
+);
+
+const statList = $derived.by(() => {
+	if (!pb?.session) return [];
+	return statsRows(
+		{
+			session: pb.session,
+			live: pb.live,
+			encodeSpeed: pb.encodeSpeed,
+			tracks: pb.tracks,
+			selectedAudio: pb.selectedAudio,
+			subPick: pb.subPick,
+			burn: pb.burn,
+			subOffset: pb.subOffset,
+			audioDelay: pb.audioDelay,
+			measured: pb.measured,
+			throughput: pb.network ? rememberedThroughput(pb.network) : null,
+			host: new URL(pb.session.url).host,
+			playerName: playbackPort.playerName,
+			full: pb.full,
+			speed: pb.speed,
+		},
+		words,
+	);
+});
+
+const haltModel = $derived(
+	pb?.halt && launch
+		? haltView(
+				pb.halt,
+				{
+					title: launch.item.titleName,
+					host: pb.host,
+					position: pb.position,
+					isAdmin: account.me?.role === "Admin",
+					routes: { serverSettings: false },
+				},
+				words,
+			)
+		: null,
+);
+
+function haltAction(id: string) {
+	if (id === "retry") pb?.retry();
+	else if (id === "back") exit();
+}
+
+$effect(() => {
+	if (pb?.halt) closeMenu();
+});
+
 const menuButtons = $derived.by(() => {
 	const label = (name: string, key?: string) => ({
 		label: name,
@@ -418,31 +695,31 @@ const menuButtons = $derived.by(() => {
 			id: "subtitles",
 			icon: pb?.subPick === null ? CaptionsOff : Captions,
 			...label(i18n.player_subtitles(), "c"),
-			active: false,
-			onclick: () => {},
+			active: menu === "subs" || pb?.subPick !== null,
+			onclick: () => openMenu("subs"),
 		},
 		{
 			id: "audio",
 			icon: AudioLines,
 			...label(i18n.player_audio()),
-			active: false,
-			onclick: () => {},
+			active: menu === "audio",
+			onclick: () => openMenu("audio"),
 		},
 		{
 			id: "quality",
 			icon: Settings,
 			...label(i18n.player_quality()),
-			active: false,
+			active: menu === "quality",
 			text: qualText,
-			onclick: () => {},
+			onclick: () => openMenu("quality"),
 		},
 		{
 			id: "speed",
 			icon: Gauge,
 			...label(i18n.player_speed()),
-			active: false,
+			active: menu === "speed",
 			text: pb && pb.speed !== 1 ? times(pb.speed) : undefined,
-			onclick: () => {},
+			onclick: () => openMenu("speed"),
 		},
 		{
 			id: "pip",
@@ -485,7 +762,7 @@ const labels = {
 		</EmptyState>
 	</div>
 {:else if pb && view && launch}
-	<div class="stage" style:cursor={controlsOn || pb.ended ? "default" : "none"}>
+	<div class="stage" style:cursor={controlsOn || pb.ended || pb.halt ? "default" : "none"}>
 		<button
 			type="button"
 			class="surface"
@@ -499,7 +776,7 @@ const labels = {
 			<BufferingSpinner label={i18n.player_buffering()} />
 		{/if}
 
-		{#if pb.cueText && !paused && !pb.ended}
+		{#if pb.cueText && !paused && !pb.ended && !pb.halt}
 			<div class="cue-wrap" style:bottom="{cueBottom}px">
 				<span
 					class="cue"
@@ -645,6 +922,73 @@ const labels = {
 				creditsLabel={i18n.player_watch_credits()}
 				onplay={goNext}
 				oncredits={() => pb.dismissUpNext()}
+			/>
+		{/if}
+
+		{#if menu}
+			<PlayerMenu
+				title={MENU_TITLES[menu]()}
+				rows={menuRows}
+				note={menuNote}
+				night={menu === "audio"}
+				onpick={pickRow}
+				onclose={closeMenu}
+			>
+				{#if menu === "audio"}
+					<Stepper
+						label={i18n.player_audio_delay()}
+						desc={pb.audioDelay > 0
+							? i18n.player_audio_delay_later()
+							: i18n.player_audio_delay_earlier()}
+						value={fmtOffset(pb.audioDelay, false)}
+						zero={pb.audioDelay === 0}
+						what={i18n.player_audio()}
+						ondec={() => nudgeAudio(-AUDIO_STEP)}
+						oninc={() => nudgeAudio(AUDIO_STEP)}
+						onreset={() => nudgeAudio(0)}
+					/>
+				{:else if menu === "subs"}
+					<Stepper
+						label={i18n.player_sync()}
+						desc={pb.subOffset > 0 ? i18n.player_sync_later() : i18n.player_sync_earlier()}
+						value={fmtOffset(pb.subOffset, true)}
+						zero={pb.subOffset === 0}
+						what={i18n.player_subtitles()}
+						disabled={pb.subPick === null || !!pb.tracks?.preparing}
+						ondec={() => nudgeSub(-SUB_STEP)}
+						oninc={() => nudgeSub(SUB_STEP)}
+						onreset={() => nudgeSub(0)}
+					/>
+					<SubtitleStyle
+						title={i18n.player_style_title()}
+						summary={styleSummary}
+						note={styleNote}
+						open={styleOpen}
+						groups={styleGroups}
+						ontoggle={() => (styleOpen = !styleOpen)}
+					/>
+				{/if}
+			</PlayerMenu>
+		{/if}
+
+		{#if pb.stats}
+			<StatsPanel
+				title={i18n.player_stats_title()}
+				closeLabel={i18n.player_close_stats()}
+				rows={statList}
+				onclose={() => pb.setStats(false)}
+			/>
+		{/if}
+
+		{#if pb.halt && haltModel}
+			<HaltOverlay
+				view={haltModel}
+				frame={view.still}
+				poster={view.poster}
+				framePos={view.framePos ?? "50% 40%"}
+				leaving={pb.haltLeaving}
+				onaction={haltAction}
+				onalt={(id) => pb.halt?.alts?.[Number(id)]?.run()}
 			/>
 		{/if}
 

@@ -113,6 +113,7 @@ let {
 		<button
 			type="button"
 			class="menu"
+			data-menu-btn="1"
 			class:on={b.active}
 			aria-label={b.label}
 			title={b.title}
