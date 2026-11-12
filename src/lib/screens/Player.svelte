@@ -23,6 +23,8 @@ import {
 	play,
 	setVolume,
 	stop,
+	toFull,
+	toMini,
 	toggleMute,
 } from "#lib/core/playback/now-playing.svelte.ts";
 import { UP_NEXT_SECS } from "#lib/core/playback/playback.svelte.ts";
@@ -137,9 +139,9 @@ afterNavigate(({ from }) => {
 	if (from?.route.id?.startsWith("/detail")) fromDetail = true;
 });
 
-// No mini player takes the session over yet, so any way out of the player that is not another player route ends it.
+// Any way out of the player that is neither another player route nor a hand-over to the mini player ends the session.
 beforeNavigate(({ to }) => {
-	if (!to?.route.id?.startsWith("/player")) stop();
+	if (!to?.route.id?.startsWith("/player") && !nowPlaying.mini) stop();
 });
 
 const pb = $derived(launch && nowPlaying.launch?.key === launch.key ? nowPlaying.pb : null);
@@ -179,6 +181,7 @@ function startPlayback(l: Launch) {
 			subtitlesUnavailable: () => flashOsd(i18n.player_subtitles_unavailable()),
 		},
 	);
+	toFull();
 	playbackPort.command("viewport", { full: true }).catch(() => {});
 }
 
@@ -279,6 +282,15 @@ const detail = $derived(`/detail/${kind}/${id}`);
 
 function leaveRoute() {
 	stop();
+	if (fromDetail) history.back();
+	else goto(view?.season ? `${detail}?s=${view.season}` : detail, { replace: true });
+}
+
+function toPip() {
+	if (!pb || pb.ended || pb.halt) return;
+	if (fullscreen) toggleFullscreen(false);
+	closeMenu();
+	toMini();
 	if (fromDetail) history.back();
 	else goto(view?.season ? `${detail}?s=${view.season}` : detail, { replace: true });
 }
@@ -726,8 +738,8 @@ const menuButtons = $derived.by(() => {
 			icon: PictureInPicture2,
 			...label(i18n.player_pip()),
 			active: false,
-			disabled: true,
-			onclick: () => {},
+			disabled: !pb || pb.ended || !!pb.halt,
+			onclick: toPip,
 		},
 		{
 			id: "fullscreen",

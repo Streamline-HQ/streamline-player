@@ -11,6 +11,8 @@ export type PlayView = {
 	eyebrow: string;
 	still: string;
 	synopsis: string;
+	/** The player route that shows this launch. */
+	href?: string;
 	/** The line under the title in the player's top bar. */
 	sub?: string;
 	poster?: string;
@@ -106,10 +108,10 @@ export function play(p: PlaybackPort, launch: Launch, ui: PlaybackUi): Playback 
 	return pb;
 }
 
-export function stop(): void {
+export function stop(): Promise<void> {
 	generation++;
 	port = null;
-	release();
+	return release();
 }
 
 export function setVolume(v: number): void {

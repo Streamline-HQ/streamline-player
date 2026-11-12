@@ -3,6 +3,7 @@ import { goto } from "#lib/ui/nav.ts";
 import { page } from "$app/state";
 import { account, clearMe, initialsOf, setMe } from "#lib/core/me.svelte.ts";
 import { activeToast, toast } from "#lib/core/toast.svelte.ts";
+import { nowPlaying, stop, toFull } from "#lib/core/playback/now-playing.svelte.ts";
 import { m as i18n } from "#lib/paraglide/messages.js";
 import { IS_WEB, TARGET } from "#lib/platform/target.ts";
 import { keyAction } from "#lib/shells/desktop/shortcuts.ts";
@@ -12,10 +13,11 @@ import Dialog from "#lib/ui/Dialog.svelte";
 import DesktopToast from "#lib/ui/DesktopToast.svelte";
 import Kbd from "#lib/ui/Kbd.svelte";
 import Menu from "#lib/ui/Menu.svelte";
+import MiniPlayer from "#lib/ui/MiniPlayer.svelte";
 import ShortcutList from "#lib/ui/ShortcutList.svelte";
 import { presence } from "#lib/ui/presence.svelte.ts";
 import { provideScroll } from "#lib/ui/scroll.ts";
-import { me, myPicture, signOut } from "#platform";
+import { me, myPicture, playbackPort, signOut } from "#platform";
 import type { Snippet } from "svelte";
 import { onMount } from "svelte";
 
@@ -35,6 +37,9 @@ let helpOpen = $state(false);
 let fullscreenHint = $state(false);
 let gAt = 0;
 let content = $state<HTMLElement>();
+let pip = $state<HTMLElement>();
+let pipArt = $state<HTMLElement>();
+let hole = $state<{ x: number; y: number; width: number; height: number } | null>(null);
 provideScroll(() => content);
 
 const menu = presence(() => menuOpen, 140);
@@ -48,6 +53,12 @@ const onboarding = $derived(
 const inPlayer = $derived(route.startsWith("/player"));
 const showBar = $derived(!onboarding && !inPlayer);
 const narrow = $derived(web && width < MIN_WIDTH);
+const launch = $derived(nowPlaying.launch);
+const showMini = $derived(
+	!!nowPlaying.pb && nowPlaying.mini && !!launch && !inPlayer && !onboarding && !narrow,
+);
+const pictureReady = $derived((nowPlaying.pb?.position ?? 0) > 0);
+const holed = $derived(showMini && pictureReady);
 const solidBar = $derived(scrolledDown || !(route === "/" || route.startsWith("/detail")));
 const padLeft = $derived(!web && mac ? 92 : 28);
 const padRight = $derived(
@@ -114,6 +125,7 @@ function search() {
 
 async function leave() {
 	menuOpen = false;
+	await stop();
 	await signOut();
 	toast(web ? i18n.shell_signed_out() : i18n.shell_signed_out_key_removed());
 	await (web ? goto("/signin", { replace: true }) : goto("/welcome", { replace: true }));
@@ -188,6 +200,61 @@ $effect(() => {
 	};
 });
 
+$effect(() => {
+	if (!showMini || !pip || !pipArt) {
+		hole = null;
+		return;
+	}
+	const wrap = pip;
+	const art = pipArt;
+	// The card's rise animation moves the art, so the position comes from the wrapper and only the size from the art.
+	const measure = () => {
+		const at = wrap.getBoundingClientRect();
+		const size = art.getBoundingClientRect();
+		hole = { x: at.left, y: at.top, width: size.width, height: size.height };
+	};
+	measure();
+	const watch = new ResizeObserver(measure);
+	watch.observe(wrap);
+	watch.observe(art);
+	window.addEventListener("resize", measure);
+	return () => {
+		watch.disconnect();
+		window.removeEventListener("resize", measure);
+	};
+});
+
+$effect(() => {
+	if (!showMini || !hole) return;
+	playbackPort.command("viewport", { ...hole }).catch(() => {});
+});
+
+$effect(() => {
+	if (showMini && nowPlaying.pb?.ended) stop();
+});
+
+function expand() {
+	const href = launch?.view.href;
+	if (!href) return;
+	toFull();
+	goto(href);
+}
+
+const miniTitle = $derived(
+	launch?.view.season ? launch.view.eyebrow : (launch?.view.heading ?? ""),
+);
+const miniProgress = $derived(
+	nowPlaying.pb && nowPlaying.pb.duration > 0
+		? Math.min(100, (nowPlaying.pb.position / nowPlaying.pb.duration) * 100)
+		: 0,
+);
+const miniLabels = $derived({
+	play: i18n.player_play(),
+	pause: i18n.player_pause(),
+	expand: i18n.player_mini_expand(),
+	close: i18n.player_mini_close(),
+});
+
 onMount(() => {
 	const zoom = () =>
 		document.documentElement.style.setProperty(
@@ -217,39 +284,65 @@ const toastNow = $derived(activeToast());
 
 <svelte:window bind:innerWidth={width} />
 
-<div class="shell" class:player={inPlayer}>
+<div class="shell" class:player={inPlayer} class:holed>
 	{#if narrow}
 		<p class="narrow">{i18n.shell_narrow()}</p>
 	{:else}
 		<div
-			class="content"
-			bind:this={content}
-			onscroll={(e) => (scrolledDown = e.currentTarget.scrollTop > 24)}
+			class="layer"
+			style:--hole-x="{hole?.x ?? 0}px"
+			style:--hole-y="{hole?.y ?? 0}px"
+			style:--hole-w="{hole?.width ?? 0}px"
+			style:--hole-h="{hole?.height ?? 0}px"
 		>
-			{@render children()}
+			<div
+				class="content"
+				bind:this={content}
+				onscroll={(e) => (scrolledDown = e.currentTarget.scrollTop > 24)}
+			>
+				{@render children()}
+			</div>
+
+			{#if showBar}
+				<AppBar
+					{tabs}
+					{padLeft}
+					{padRight}
+					scrolled={solidBar}
+					searchLabel={i18n.nav_search()}
+					searchKbd={mac ? "⌘K" : "Ctrl K"}
+					activityLabel={i18n.shell_activity()}
+					downloadsLabel={i18n.shell_downloads()}
+					showDownloads={!web}
+					account={{ name, email: account.me?.email ?? "", initials, color: AVATAR_COLOR, picture }}
+					accountLabel={i18n.shell_account_menu()}
+					{menuOpen}
+					onhome={() => go("home")}
+					ontab={go}
+					onsearch={search}
+					onactivity={() => {}}
+					ondownloads={() => {}}
+					onmenu={() => (menuOpen = !menuOpen)}
+				/>
+			{/if}
 		</div>
 
-		{#if showBar}
-			<AppBar
-				{tabs}
-				{padLeft}
-				{padRight}
-				scrolled={solidBar}
-				searchLabel={i18n.nav_search()}
-				searchKbd={mac ? "⌘K" : "Ctrl K"}
-				activityLabel={i18n.shell_activity()}
-				downloadsLabel={i18n.shell_downloads()}
-				showDownloads={!web}
-				account={{ name, email: account.me?.email ?? "", initials, color: AVATAR_COLOR, picture }}
-				accountLabel={i18n.shell_account_menu()}
-				{menuOpen}
-				onhome={() => go("home")}
-				ontab={go}
-				onsearch={search}
-				onactivity={() => {}}
-				ondownloads={() => {}}
-				onmenu={() => (menuOpen = !menuOpen)}
-			/>
+		{#if showMini && launch && nowPlaying.pb}
+			<div class="pip" bind:this={pip}>
+				<MiniPlayer
+					title={miniTitle}
+					still={launch.view.still}
+					progress={miniProgress}
+					playing={nowPlaying.pb.playing}
+					live
+					ready={pictureReady}
+					labels={miniLabels}
+					bind:art={pipArt}
+					ontoggle={() => nowPlaying.pb?.togglePlay()}
+					onexpand={expand}
+					onclose={() => stop()}
+				/>
+			</div>
 		{/if}
 
 		{#if showBar && menu.mounted}
@@ -336,10 +429,41 @@ const toastNow = $derived(activeToast());
 	background: transparent;
 }
 
+.layer {
+	position: absolute;
+	inset: 0;
+}
+
+/* The picture shows through the mini player's art area, so the page is painted around that rectangle. */
+.shell.holed {
+	background: transparent;
+}
+
+.shell.holed .layer {
+	background: var(--bg-deep);
+	mask-image: linear-gradient(#000 0 0), linear-gradient(#000 0 0);
+	mask-size:
+		100% 100%,
+		var(--hole-w) var(--hole-h);
+	mask-position:
+		0 0,
+		var(--hole-x) var(--hole-y);
+	mask-repeat: no-repeat;
+	mask-composite: exclude;
+	-webkit-mask-composite: xor;
+}
+
 .content {
 	position: absolute;
 	inset: 0;
 	overflow-y: auto;
+}
+
+.pip {
+	position: absolute;
+	right: 24px;
+	bottom: 24px;
+	z-index: 40;
 }
 
 .narrow {

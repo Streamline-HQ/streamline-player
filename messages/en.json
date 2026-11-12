@@ -248,6 +248,8 @@
 	"player_fullscreen_exit": "Exit full screen",
 	"player_mbit": "{value} Mbit/s",
 	"player_measuring": "Measuring…",
+	"player_mini_close": "Close picture in picture",
+	"player_mini_expand": "Back to full player",
 	"player_mode_audio_transcode": "Audio converted",
 	"player_mode_direct": "Direct",
 	"player_mode_remux": "Remux",

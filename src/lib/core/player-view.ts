@@ -145,6 +145,7 @@ export async function loadLaunch(
 			view: {
 				kind,
 				id,
+				href: `/player/movies/${id}`,
 				heading: t.title,
 				eyebrow: `${t.year} · ${t.genres[0] ?? ""}`,
 				sub: `${t.year} · ${runtime(t.runtime ?? 0)}`,
@@ -176,6 +177,7 @@ export async function loadLaunch(
 		view: {
 			kind,
 			id,
+			href: `/player/series/${id}?ep=${e.id}`,
 			season: e.season,
 			episode: e.number,
 			heading: e.title,
