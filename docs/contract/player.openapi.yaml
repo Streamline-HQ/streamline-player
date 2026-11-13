@@ -303,6 +303,250 @@ paths:
       responses:
         "204": { description: The device is revoked. }
         default: { $ref: "#/components/responses/Error" }
+  /admin/overview:
+    get:
+      operationId: adminOverview
+      description: Server settings, Overview. Admin only; anyone else gets 403 `forbidden`. Sizes are bytes.
+      responses:
+        "200":
+          description: What the server runs, where it keeps its data, and its health.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AdminOverview" }
+        default: { $ref: "#/components/responses/Error" }
+  /admin/settings:
+    get:
+      operationId: adminSettings
+      description: Server settings. The fifteen keys, who owns each, and which ones wait for a restart. Admin only.
+      responses:
+        "200":
+          description: The settings as the server holds them.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AdminSettings" }
+        default: { $ref: "#/components/responses/Error" }
+    patch:
+      operationId: adminSaveSettings
+      description: Server settings. Saves the given keys, all or nothing. Streamline forwards the engine-owned ones to the engine. Admin only.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: { $ref: "#/components/schemas/SettingValue" }
+      responses:
+        "200":
+          description: The settings after the change.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AdminSettings" }
+        "400":
+          description: An unknown key or a value it does not take. `error.code` is `invalid_setting`, `error.key` names the key. Nothing changed.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "409":
+          description: The owner's config is read-only. `error.code` is `read_only`, `error.owner` is `streamline` or `engine`.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        default: { $ref: "#/components/responses/Error" }
+  /admin/restart:
+    post:
+      operationId: adminRestart
+      description: Server settings, Restart. Restarts Streamline and the engine; streams stop for about ten seconds. The message is shown to the players. Admin only.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                message: { type: string, maxLength: 200 }
+      responses:
+        "202": { description: The restart is under way. }
+        default: { $ref: "#/components/responses/Error" }
+  /admin/streams:
+    get:
+      operationId: adminStreams
+      description: Server settings, Now playing. Every stream running now. Admin only.
+      responses:
+        "200":
+          description: The streams, in no particular order.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items]
+                properties:
+                  items:
+                    type: array
+                    items: { $ref: "#/components/schemas/AdminStream" }
+        default: { $ref: "#/components/responses/Error" }
+  /admin/streams/{streamId}/stop:
+    post:
+      operationId: adminStopStream
+      description: Server settings, Now playing. Stops one stream; the player is told on its next heartbeat, with the message and the admin's name. Admin only.
+      parameters:
+        - name: streamId
+          in: path
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                message: { type: string, maxLength: 200 }
+      responses:
+        "204": { description: The stream is stopped. }
+        "404":
+          description: No such stream. `error.code` is `not_found`.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        default: { $ref: "#/components/responses/Error" }
+  /admin/pairings:
+    get:
+      operationId: adminPairings
+      description: Server settings, Devices. Pairing requests waiting for approval. Approving stays on the bearer-only `/auth/device/{userCode}/approve`. Admin only.
+      responses:
+        "200":
+          description: The pending requests.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items]
+                properties:
+                  items:
+                    type: array
+                    items: { $ref: "#/components/schemas/AdminPairing" }
+        default: { $ref: "#/components/responses/Error" }
+  /admin/devices:
+    get:
+      operationId: adminDevices
+      description: Server settings, Devices. Every paired app and browser session of every user, the caller's own first. Admin only.
+      responses:
+        "200":
+          description: The devices.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items]
+                properties:
+                  items:
+                    type: array
+                    items: { $ref: "#/components/schemas/AdminDevice" }
+        default: { $ref: "#/components/responses/Error" }
+  /admin/devices/{deviceId}:
+    delete:
+      operationId: adminRevokeDevice
+      description: Server settings, Devices. Revokes any user's device or browser session. Admin only.
+      parameters:
+        - $ref: "#/components/parameters/DeviceId"
+      responses:
+        "204": { description: The device is revoked. }
+        "404":
+          description: No such device. `error.code` is `not_found`.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "409":
+          description: The caller's own device. `error.code` is `current_device`.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        default: { $ref: "#/components/responses/Error" }
+  /admin/library:
+    get:
+      operationId: adminLibrary
+      description: Server settings, Library. The folders and the scan running on each. Admin only.
+      responses:
+        "200":
+          description: The folders.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AdminLibrary" }
+        default: { $ref: "#/components/responses/Error" }
+  /admin/library/scan:
+    post:
+      operationId: adminScan
+      description: Server settings, Library. Starts a scan of one folder, or of all without `folder_id`. A folder already scanning is left alone. Admin only.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                folder_id: { type: string }
+      responses:
+        "202": { description: The scan runs; its progress is in `/admin/library`. }
+        "404":
+          description: No such folder. `error.code` is `not_found`.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        default: { $ref: "#/components/responses/Error" }
+  /admin/cache/clear:
+    post:
+      operationId: adminClearCache
+      description: Server settings, Transcoding. Empties the conversion cache. Admin only.
+      responses:
+        "200":
+          description: What was freed.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [freed]
+                properties:
+                  freed: { type: integer, description: Bytes. }
+        default: { $ref: "#/components/responses/Error" }
+  /admin/logs:
+    get:
+      operationId: adminLogs
+      description: Server settings, Logs. The newest lines first, at most 80. `warn` includes errors; `after` leaves out every line up to that ID. Admin only.
+      parameters:
+        - name: level
+          in: query
+          schema: { type: string, enum: [all, warn, error], default: all }
+        - name: after
+          in: query
+          schema: { type: integer, minimum: 0 }
+      responses:
+        "200":
+          description: The lines.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items]
+                properties:
+                  items:
+                    type: array
+                    maxItems: 80
+                    items: { $ref: "#/components/schemas/LogLine" }
+        default: { $ref: "#/components/responses/Error" }
+  /admin/logs/download:
+    get:
+      operationId: adminLogsDownload
+      description: Server settings, Logs. The log files as one zip. Admin only.
+      responses:
+        "200":
+          description: The archive, named by `Content-Disposition`.
+          headers:
+            Content-Disposition:
+              schema: { type: string, example: attachment; filename="streamline-logs.zip" }
+          content:
+            application/zip:
+              schema: { type: string, format: binary }
+        default: { $ref: "#/components/responses/Error" }
   /auth/methods:
     get:
       operationId: authMethods
@@ -687,6 +931,8 @@ components:
       properties:
         code: { type: string }
         message: { type: string }
+        key: { type: string, description: "`invalid_setting`: the key refused." }
+        owner: { type: string, enum: [streamline, engine], description: "`read_only`: whose config is locked." }
     Error:
       type: object
       required: [error]
@@ -960,6 +1206,228 @@ components:
         last_seen: { type: string }
         streaming: { type: boolean }
         current: { type: boolean }
+
+    SettingValue:
+      description: A setting's value; its type is the key's.
+      oneOf:
+        - { type: string }
+        - { type: number }
+        - { type: boolean }
+    AdminSettings:
+      type: object
+      required: [values, owners, read_only, pending, restart_keys]
+      properties:
+        values:
+          type: object
+          description: "transcoding.hw_accel, transcoding.hw_device, stream.tonemap, stream.max_live, library.watch, library.scan_every, ffmpeg.enabled, log.app.level, log.app.format, log.http.format, log.rotate.max_size, log.rotate.max_backups, log.rotate.compress, otel.endpoint, events.retention."
+          additionalProperties: { $ref: "#/components/schemas/SettingValue" }
+        owners:
+          type: object
+          description: The engine owns transcoding.hw_accel, transcoding.hw_device and stream.max_live; Streamline owns the rest.
+          additionalProperties: { type: string, enum: [streamline, engine] }
+        read_only:
+          type: object
+          description: An owner whose config is read-only refuses every change to its keys.
+          required: [streamline, engine]
+          properties:
+            streamline: { type: boolean }
+            engine: { type: boolean }
+        pending: { type: array, items: { type: string }, description: Keys saved but only applied after a restart. }
+        restart_keys: { type: array, items: { type: string }, description: Every key that waits for a restart. }
+    AdminOverview:
+      type: object
+      required: [server, storage, health, logs]
+      properties:
+        server:
+          type: object
+          required: [version, go, platform, commit, built_at, started_at, config_path, public_url, https, bind_address, trusted_proxies, session_secret]
+          properties:
+            version: { type: string }
+            go: { type: string }
+            platform: { type: string }
+            commit: { type: string }
+            built_at: { type: string }
+            started_at: { type: string }
+            config_path: { type: string }
+            public_url: { type: string }
+            https: { type: boolean }
+            bind_address: { type: string }
+            trusted_proxies: { type: array, items: { type: string } }
+            session_secret: { type: string, description: Where the secret is read from, never the secret. }
+        storage:
+          type: object
+          required: [media, data, database, cache]
+          properties:
+            media:
+              type: object
+              required: [free, total]
+              properties:
+                free: { type: integer }
+                total: { type: integer }
+            data:
+              type: object
+              required: [path, free, total]
+              properties:
+                path: { type: string }
+                free: { type: integer }
+                total: { type: integer }
+            database:
+              type: object
+              required: [path, size]
+              properties:
+                path: { type: string }
+                size: { type: integer }
+            cache:
+              type: object
+              required: [path, size, streams]
+              properties:
+                path: { type: string }
+                size: { type: integer }
+                streams: { type: integer, description: Streams the cache holds segments for. }
+        health:
+          type: object
+          required: [ffmpeg, hw, folders, errors_today]
+          properties:
+            ffmpeg:
+              type: object
+              nullable: true
+              description: Null when ffmpeg is not found.
+              required: [path, version]
+              properties:
+                path: { type: string }
+                version: { type: string }
+            hw:
+              type: object
+              required: [mode, ready]
+              properties:
+                mode: { type: string, enum: [vaapi, software] }
+                device: { type: string, description: The device's name. }
+                ready: { type: boolean }
+            folders:
+              type: object
+              required: [reachable, total]
+              properties:
+                reachable: { type: integer }
+                total: { type: integer }
+            errors_today: { type: integer }
+            errors_source: { type: string }
+        logs:
+          type: object
+          required: [app_path, http_path]
+          properties:
+            app_path: { type: string }
+            http_path: { type: string }
+    AdminStream:
+      type: object
+      description: A fact, not a sentence. `video` and `audio` describe a stream sent as it is; `from` and `to` one that is converted.
+      required: [id, user, title, device, network, position, duration, playing, mode, bitrate]
+      properties:
+        id: { type: string }
+        user:
+          type: object
+          required: [name, you]
+          properties:
+            name: { type: string }
+            you: { type: boolean }
+        title:
+          type: object
+          required: [kind, id]
+          properties:
+            kind: { $ref: "#/components/schemas/Kind" }
+            id: { type: integer }
+        season: { type: integer }
+        episode: { type: integer }
+        device:
+          type: object
+          required: [name, kind]
+          properties:
+            name: { type: string }
+            kind: { type: string, enum: [browser, tablet, phone, tv, desktop] }
+        network: { type: string, enum: [home, remote] }
+        position: { type: number, description: Seconds. }
+        duration: { type: number, description: Seconds. }
+        playing: { type: boolean }
+        mode: { type: string, enum: [copy, audio, transcode] }
+        video: { type: string }
+        audio: { type: string }
+        from: { type: string }
+        to: { type: string }
+        hw: { type: string }
+        speed: { type: number, description: Times realtime. }
+        cannot_decode: { type: string, description: The codec the device cannot decode, which is why the stream is converted. }
+        bitrate: { type: integer, description: Bits per second. }
+    AdminPairing:
+      type: object
+      required: [user_code, name, platform, created_at, expires_at]
+      properties:
+        user_code: { type: string }
+        name: { type: string }
+        platform: { type: string }
+        created_at: { type: string }
+        expires_at: { type: string }
+    AdminDevice:
+      type: object
+      description: The `Device` shape, with the owner and where its key is kept.
+      required: [id, kind, name, platform, last_seen, streaming, current, user]
+      properties:
+        id: { type: string }
+        kind: { type: string, enum: [app, browser] }
+        name: { type: string }
+        platform: { type: string }
+        last_seen: { type: string }
+        streaming: { type: boolean }
+        current: { type: boolean }
+        user:
+          type: object
+          required: [name]
+          properties:
+            name: { type: string }
+        key_store: { type: string, description: Apps. }
+        location: { type: string }
+        expires_at: { type: string, description: Browsers. }
+    AdminLibrary:
+      type: object
+      required: [folders]
+      properties:
+        folders:
+          type: array
+          items:
+            type: object
+            required: [id, name, path, kind, count, size]
+            properties:
+              id: { type: string }
+              name: { type: string }
+              path: { type: string }
+              kind: { $ref: "#/components/schemas/Kind" }
+              count: { type: integer }
+              size: { type: integer, description: Bytes. }
+              scan:
+                type: object
+                description: Present while the folder is scanning.
+                required: [progress, eta_seconds]
+                properties:
+                  progress: { type: number, minimum: 0, maximum: 1 }
+                  eta_seconds: { type: integer }
+        last_scan:
+          type: object
+          required: [at, added, replaced, errors]
+          properties:
+            at: { type: string }
+            added: { type: integer }
+            replaced: { type: integer }
+            errors: { type: integer }
+    LogLine:
+      type: object
+      required: [id, at, level, source, message]
+      properties:
+        id: { type: integer, description: Grows with time. }
+        at: { type: string }
+        level: { $ref: "#/components/schemas/LogLevel" }
+        source: { type: string }
+        message: { type: string }
+    LogLevel:
+      type: string
+      enum: [debug, info, warn, error]
 
     Capabilities:
       type: object

@@ -39,6 +39,7 @@ tasks:
       - node dev/contract/browse-check.ts
       - node dev/contract/pair-check.ts
       - node dev/contract/activity-check.ts
+      - node dev/contract/admin-check.ts
       - node dev/contract/media-files-check.ts
       - cmd: node dev/web-build-check.ts
         # Only a web build in build/ is checked; `task build:web` makes one and marks it. A native build lands in build/ too.

@@ -6,14 +6,22 @@ import type {
 	Decision,
 	DecisionOption,
 	ActivityEvent,
+	AdminDevice,
+	AdminLibrary,
+	AdminOverview,
+	AdminPairing,
+	AdminSettings,
+	AdminStream,
 	Device,
 	DeviceInfo,
 	HomeFeed,
 	Kind,
+	LogLine,
 	Me,
 	Pairing,
 	PairRequest,
 	Person,
+	SettingValue,
 	Title,
 	Watch,
 } from "#lib/core/types.ts";
@@ -115,6 +123,24 @@ export const revokeDevice = (id: string) => invoke<void>("revoke_device", { id }
 export const devices = () => invoke<{ items: Device[] }>("devices").then(listOf);
 export const activity = () => invoke<{ items: ActivityEvent[] }>("activity").then(listOf);
 export const markActivityRead = (ids: string[]) => invoke<void>("activity_read", { ids });
+export const adminOverview = () => invoke<AdminOverview>("admin_overview");
+export const adminSettings = () => invoke<AdminSettings>("admin_settings");
+export const saveAdminSettings = (patch: Record<string, SettingValue>) =>
+	invoke<AdminSettings>("save_admin_settings", { patch });
+export const adminRestart = (message?: string) => invoke<void>("admin_restart", { message });
+export const adminStreams = () => invoke<{ items: AdminStream[] }>("admin_streams").then(listOf);
+export const stopStream = (id: string, message?: string) =>
+	invoke<void>("stop_stream", { id, message });
+export const adminPairings = () => invoke<{ items: AdminPairing[] }>("admin_pairings").then(listOf);
+export const adminDevices = () => invoke<{ items: AdminDevice[] }>("admin_devices").then(listOf);
+export const adminRevokeDevice = (id: string) => invoke<void>("admin_revoke_device", { id });
+export const adminLibrary = () => invoke<AdminLibrary>("admin_library");
+export const adminScan = (folderId?: string) => invoke<void>("admin_scan", { folderId });
+export const adminClearCache = () => invoke<{ freed: number }>("admin_clear_cache");
+export const adminLogs = (level: "all" | "warn" | "error", after?: number) =>
+	invoke<{ items: LogLine[] }>("admin_logs", { level, after }).then(listOf);
+/** Saves the log archive in the Downloads folder and resolves to the file's name. */
+export const adminLogsDownload = () => invoke<string>("admin_logs_download");
 export const playbackStatus = () => invoke<{ network?: string }>("playback_status");
 export const serverHost = () => invoke<string>("server_host");
 export const deviceInfo = () => invoke<DeviceInfo>("plugin:player|deviceInfo");

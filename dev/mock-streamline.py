@@ -15,6 +15,12 @@ own file. --art points at p/<slug>.jpg and b/<slug>.jpg artwork, and c/<person>.
     python3 dev/mock-streamline.py --secret <engine secret> --art /path/to/img \
         --clip /path/to/clip.mkv [--clip ...] [--media film=/path/to/film.mkv ...]
 
+Server settings (/api/v1/admin) answers 403 to a member (--role member, or POST /dev/role/member|admin).
+--demo-admin serves the design's sample; --read-only[=streamline|engine] locks settings; --restart-hangs
+keeps an admin restart from ever returning; --engine-settings forwards the engine's three keys and the
+restart to the engine. POST /dev/admin/fail/save|action makes every admin write of that kind answer 500
+until /dev/admin/fail/off, and POST /dev/admin/scan/finish ends running scans at once.
+
 The public URL defaults to 10.0.2.2, the Android emulator's alias for the host.
 """
 
@@ -23,8 +29,10 @@ import base64
 import hashlib
 import hmac
 import datetime
+import io
 import itertools
 import json
+import math
 import os
 import re
 import secrets
@@ -34,6 +42,7 @@ import unicodedata
 import urllib.error
 import urllib.parse
 import urllib.request
+import zipfile
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 TOKEN_TTL = 6 * 3600
@@ -60,6 +69,11 @@ p.add_argument("--demo-progress", action="store_true", help="start with Dune: Pa
 p.add_argument("--sso-deny", action="store_true", help="have the SSO provider refuse every sign-in")
 p.add_argument("--player-url", help="the player web app's URL; pairing links then point at its /pair page")
 p.add_argument("--pair-ttl", type=int, default=600, help="seconds a pairing lasts")
+p.add_argument("--demo-admin", action="store_true", help="serve the design's sample for Server settings (streams, pairings, devices, library, overview, logs) instead of what the mock itself holds")
+p.add_argument("--role", choices=["admin", "member"], default="admin", help="the signed-in user's role; a member gets 403 from every admin path")
+p.add_argument("--read-only", nargs="?", const="both", choices=["both", "streamline", "engine"], help="lock the settings Streamline owns, the engine's, or both")
+p.add_argument("--restart-hangs", action="store_true", help="an admin restart never comes back")
+p.add_argument("--engine-settings", action="store_true", help="forward the engine-owned settings and the restart to the engine's /v1/settings and /v1/restart")
 p.add_argument("--heartbeat-timeout", type=float, default=90, help="seconds without a heartbeat before a session is stopped")
 args = p.parse_args()
 CORS_ORIGINS = args.cors_origin or ["http://localhost:1430", "http://127.0.0.1:1430"]
@@ -67,7 +81,7 @@ USER_EMAIL = "antoine@example.net"
 TAKEN_EMAIL = "taken@example.net"
 PICTURE_MAX = 2 * 1024 * 1024
 PICTURE_TYPES = ("image/jpeg", "image/png", "image/webp")
-ME = {"name": "Antoine Langlois", "email": USER_EMAIL, "role": "Admin", "library_language": "English"}
+ME = {"name": "Antoine Langlois", "email": USER_EMAIL, "role": "Member" if args.role == "member" else "Admin", "library_language": "English"}
 PICTURE = {"data": None, "type": ""}
 ART_ON = {"on": True}
 ARRIVAL_DAYS = 7
@@ -432,12 +446,384 @@ def pkce_matches(verifier, challenge):
     return base64.urlsafe_b64encode(digest).rstrip(b"=").decode() == challenge
 
 
+# Server settings. Streamline owns most keys; the engine owns three, held here unless --engine-settings forwards them.
+SETTING_DEFAULTS = {
+    "transcoding.hw_accel": "auto", "transcoding.hw_device": "/dev/dri/renderD128",
+    "stream.tonemap": True, "stream.max_live": 2,
+    "library.watch": True, "library.scan_every": "6h", "ffmpeg.enabled": True,
+    "log.app.level": "info", "log.app.format": "json", "log.http.format": "combined",
+    "log.rotate.max_size": 50, "log.rotate.max_backups": 5, "log.rotate.compress": True,
+    "otel.endpoint": "", "events.retention": "2160h",
+}
+ENGINE_KEYS = {"transcoding.hw_accel": "hw_accel", "transcoding.hw_device": "hw_device", "stream.max_live": "max_transcodes"}
+# Read once at boot, so a change waits for a restart; the engine reads its whole config that way.
+RESTART_KEYS = ["log.app.level", "log.app.format", "log.http.format", "otel.endpoint", *ENGINE_KEYS]
+CHOICES = {
+    "transcoding.hw_accel": {"auto", "none", "vaapi"}, "library.scan_every": {"1h", "6h", "24h"},
+    "log.app.level": {"debug", "info", "warn", "error"}, "log.app.format": {"text", "json"},
+    "log.http.format": {"json", "combined"},
+}
+BOOLS = {"stream.tonemap", "library.watch", "ffmpeg.enabled", "log.rotate.compress"}
+RANGES = {"stream.max_live": (1, 8), "log.rotate.max_size": (1, 1024), "log.rotate.max_backups": (0, 100)}
+SETTINGS = dict(SETTING_DEFAULTS)
+BOOTED = dict(SETTING_DEFAULTS)
+STARTED = {"at": shown_now() - 31 * 3600}
+FAIL = {"mode": "off"}
+CACHE = {"size": 3_200_000_000}
+SCANS = {}
+SCAN = {"finished": 0, "last": None}
+SCAN_SECONDS = {"movies": 16, "series": 24}
+BASE_TIME = shown_now()
+
+
+class EngineDown(Exception):
+    pass
+
+
+def valid_setting(key, value):
+    if key in CHOICES:
+        return isinstance(value, str) and value in CHOICES[key]
+    if key in BOOLS:
+        return isinstance(value, bool)
+    if key in RANGES:
+        low, high = RANGES[key]
+        return isinstance(value, int) and not isinstance(value, bool) and low <= value <= high
+    if key == "transcoding.hw_device":
+        return isinstance(value, str) and 0 < len(value) <= 200
+    if key == "otel.endpoint":
+        return isinstance(value, str) and len(value) <= 200
+    return isinstance(value, str) and re.fullmatch(r"[0-9]+[smh]", value) is not None
+
+
+def settings_view():
+    values = dict(SETTINGS)
+    forwarded = set()
+    engine_read_only = args.read_only in ("both", "engine")
+    if args.engine_settings:
+        st, e = engine("GET", "/v1/settings")
+        if st != 200:
+            raise EngineDown()
+        engine_read_only = engine_read_only or e["read_only"]
+        for key, name in ENGINE_KEYS.items():
+            values[key] = e["values"][name]
+            if name in e["pending"]:
+                forwarded.add(key)
+    pending = [k for k in RESTART_KEYS if (k in forwarded if args.engine_settings and k in ENGINE_KEYS else SETTINGS[k] != BOOTED[k])]
+    return {
+        "values": values, "owners": {k: "engine" if k in ENGINE_KEYS else "streamline" for k in SETTING_DEFAULTS},
+        "read_only": {"streamline": args.read_only in ("both", "streamline"), "engine": engine_read_only},
+        "pending": pending, "restart_keys": RESTART_KEYS,
+    }
+
+
+def patch_settings(patch):
+    """(status, body); nothing changes unless every key is accepted."""
+    if not isinstance(patch, dict):
+        return 400, {"error": {"code": "invalid_setting"}}
+    for key, value in patch.items():
+        if key not in SETTING_DEFAULTS or not valid_setting(key, value):
+            return 400, {"error": {"code": "invalid_setting", "key": key}}
+    view = settings_view()
+    for key in patch:
+        owner = "engine" if key in ENGINE_KEYS else "streamline"
+        if view["read_only"][owner]:
+            return 409, {"error": {"code": "read_only", "owner": owner}}
+    if FAIL["mode"] == "save":
+        return 500, {"error": {"code": "internal"}}
+    engine_part = {ENGINE_KEYS[k]: v for k, v in patch.items() if k in ENGINE_KEYS}
+    if args.engine_settings and engine_part:
+        st, resp = engine("PATCH", "/v1/settings", engine_part)
+        if st == 409:
+            return 409, {"error": {"code": "read_only", "owner": "engine"}}
+        if st == 400:
+            return 400, {"error": {"code": "invalid_setting", "key": next(k for k in patch if k in ENGINE_KEYS)}}
+        if st != 200:
+            raise EngineDown()
+    for key, value in patch.items():
+        if not (args.engine_settings and key in ENGINE_KEYS):
+            SETTINGS[key] = value
+    note("info", "config", "config saved to disk · " + ", ".join(patch) + f" · {USER_EMAIL}")
+    return 200, settings_view()
+
+
+LOGS = []
+
+
+def note(level, source, message, ago=0):
+    LOGS.append({"id": len(LOGS) + 1, "at": iso(shown_now() - ago), "level": level, "source": source, "message": message})
+
+
+def iso(t):
+    return datetime.datetime.fromtimestamp(t, datetime.UTC).isoformat()
+
+
+def clock_ago(hms):
+    """Seconds before 12:00:00 that the design's log time HH:MM:SS sits."""
+    h, m, sec = (int(x) for x in hms.split(":"))
+    return 12 * 3600 - (h * 3600 + m * 60 + sec)
+
+
+DEMO_LOGS = [
+    ("10:44:58", "info", "http", "GET /api/v1/stream/severance/s02e04/seg-187.m4s 206 · 1.9 MB · SHIELD"),
+    ("10:44:51", "info", "transcode", "dune2 · HEVC Main10 HDR10 → H.264 1080p SDR · vaapi · 2.1× · Chrome on Linux"),
+    ("10:44:40", "debug", "http", "GET /api/v1/capabilities 200 · Galaxy Tab S9"),
+    ("10:43:30", "info", "pairing", "request R4WX9P · iPad mini · approval email sent to camille@example.net"),
+    ("10:42:05", "info", "config", f"config saved to disk · stream.max_live: 1 → 2 · {USER_EMAIL}"),
+    ("10:31:17", "error", "scanner", "Arcane S02E09 · ffprobe: moov atom not found · skipped"),
+    ("10:12:44", "info", "session", "Chrome on Linux signed in · camille@example.net"),
+    ("09:58:20", "warn", "transcode", "vaapi test encode took 2.4 s"),
+    ("08:15:03", "info", "scanner", "Movies · Alien: Romulus replaced · 2160p Dolby Vision"),
+]
+PLAIN_LOGS = [
+    ("11:58:40", "info", "http", "GET /api/v1/home 200"),
+    ("11:58:12", "debug", "http", "GET /api/v1/capabilities 200"),
+    ("11:52:31", "info", "session", f"signed in · {USER_EMAIL}"),
+    ("11:40:09", "info", "http", "GET /api/v1/movies 200 · 17 titles"),
+    ("11:31:55", "warn", "transcode", "vaapi test encode took 2.4 s"),
+    ("10:31:17", "error", "scanner", "Severance S02E09 · ffprobe: moov atom not found · skipped"),
+    ("10:12:44", "info", "pairing", "request K7FQ2M · Living room · approved"),
+    ("09:30:00", "info", "config", "config loaded · /etc/streamline/config.yaml"),
+    ("08:15:03", "info", "scanner", "Movies · scan finished · 0 new files"),
+    ("08:14:41", "info", "scanner", "Movies · scan started"),
+]
+for hms, level, source, message in reversed(DEMO_LOGS if args.demo_admin else PLAIN_LOGS):
+    note(level, source, message, clock_ago(hms))
+
+DEMO_STREAMS = [
+    {"id": "s1", "user": {"name": "Antoine Langlois", "you": True}, "title": {"kind": "series", "id": 1}, "season": 2, "episode": 4,
+     "device": {"name": "Living room · SHIELD", "kind": "tv"}, "network": "home", "position": 31 * 60 + 12, "playing": True,
+     "mode": "copy", "video": "HEVC Main10 Dolby Vision", "audio": "EAC3 Atmos 5.1", "bitrate": 15_800_000},
+    {"id": "s2", "user": {"name": "Camille Roux", "you": False}, "title": {"kind": "movies", "id": 1},
+     "device": {"name": "Chrome on Linux", "kind": "browser"}, "network": "remote", "position": 72 * 60 + 44, "playing": True,
+     "mode": "transcode", "from": "HEVC Main10 HDR10", "to": "H.264 1080p SDR", "hw": "VAAPI", "speed": 2.1, "cannot_decode": "HEVC", "bitrate": 8_000_000},
+    {"id": "s3", "user": {"name": "Hugo Bernard", "you": False}, "title": {"kind": "series", "id": 4}, "season": 2, "episode": 2,
+     "device": {"name": "Galaxy Tab S9", "kind": "tablet"}, "network": "home", "position": 20 * 60 + 5, "playing": False,
+     "mode": "audio", "from": "EAC3 5.1", "to": "AAC 5.1", "cannot_decode": "EAC3", "bitrate": 6_100_000},
+]
+DEMO_PAIRING = {
+    "user_code": "R4W-X9P", "expires": time.monotonic() + PAIR_TTL - 120, "status": "pending", "client_id": "demo-ipad",
+    "name": "iPad mini", "platform": "iPadOS", "ip": "192.168.1.42",
+    "requested_at": datetime.datetime.fromtimestamp(shown_now() - 120, datetime.UTC).strftime("%Y-%m-%dT%H:%M:%SZ"),
+}
+DAY = 86400
+DEMO_APPS = [
+    {"id": "d1", "name": "Antoine’s MacBook Pro", "platform": "macOS", "user": "Antoine Langlois", "key_store": "macOS Keychain", "seen": 0},
+    {"id": "d2", "name": "Living room · SHIELD", "platform": "Android TV", "user": "Antoine Langlois", "key_store": "Android Keystore", "seen": 0, "streaming": True},
+    {"id": "d3", "name": "iPhone 16 Pro", "platform": "iOS", "user": "Antoine Langlois", "key_store": "iOS Keychain", "seen": 22 * 3600, "location": "Lyon"},
+    {"id": "d4", "name": "Galaxy Tab S9", "platform": "Android", "user": "Hugo Bernard", "key_store": "Android Keystore", "seen": 0, "streaming": True},
+    {"id": "d5", "name": "Pixel 9", "platform": "Android", "user": "Camille Roux", "key_store": "Android Keystore", "seen": 3 * DAY},
+]
+DEMO_BROWSERS = [
+    {"id": "w1", "name": "Chrome on Linux", "platform": "Web browser", "user": "Camille Roux", "seen": 0, "streaming": True, "expires": 6 * DAY},
+    {"id": "w2", "name": "Safari on macOS", "platform": "Web browser", "user": "Hugo Bernard", "seen": 5 * DAY, "expires": 2 * DAY},
+]
+if args.demo_admin:
+    PAIRINGS["demo-ipad-code"] = DEMO_PAIRING
+
+
+def title_of(ref):
+    return next((t for t in (MOVIES if ref["kind"] == "movies" else SERIES) if t["id"] == ref["id"]), None)
+
+
+def duration_of(stream):
+    title = title_of(stream["title"])
+    if title is None:
+        return 0
+    if stream["title"]["kind"] == "movies":
+        return title["runtime"] * 60
+    season = next(s for s in title["seasons"] if s["number"] == stream["season"])
+    return next(e for e in season["episodes"] if e["number"] == stream["episode"])["runtime"] * 60
+
+
+def stream_item(stream):
+    duration = duration_of(stream)
+    elapsed = shown_now() - BASE_TIME if stream["playing"] else 0
+    return {**stream, "position": min(duration, stream["position"] + elapsed), "duration": duration}
+
+
+ENGINE_MODE = {"direct": "copy", "remux": "copy", "audio_transcode": "audio", "transcode": "transcode"}
+
+
+def live_streams():
+    if not LAST_BEAT:
+        return []
+    try:
+        st, resp = engine("GET", "/v1/sessions")
+        infos = {i["session_id"]: i for i in resp["sessions"]} if st == 200 else {}
+    except OSError:
+        infos = {}
+    items = []
+    for sid in list(LAST_BEAT):
+        ref = REFS.get(SESSIONS.get(sid), {})
+        watch = WATCH.get(SESSIONS.get(sid), {})
+        if "movie_id" in ref:
+            title, season, episode = {"kind": "movies", "id": ref["movie_id"]}, None, None
+        elif "series_id" in ref:
+            show = next(s for s in SERIES if s["id"] == ref["series_id"])
+            number = next(e["number"] for s in show["seasons"] for e in s["episodes"] if e["id"] == ref["episode_id"])
+            title, season, episode = {"kind": "series", "id": ref["series_id"]}, ref["season"], number
+        else:
+            continue
+        info = infos.get(sid, {})
+        mode = ENGINE_MODE.get(info.get("mode"), "copy")
+        item = {
+            "id": sid, "user": {"name": ME["name"], "you": True}, "title": title,
+            "device": {"name": "This device", "kind": "desktop"}, "network": "home" if args.network == "home" else "remote",
+            "position": watch.get("position_seconds", 0), "duration": 0, "playing": True, "mode": mode, "bitrate": info.get("bitrate") or 0,
+        }
+        if season:
+            item.update(season=season, episode=episode)
+        video, audio = info.get("video", {}), info.get("audio", {})
+        if mode == "copy":
+            item.update(video=video.get("codec", ""), audio=audio.get("codec", ""))
+        else:
+            item.update(to=video.get("codec", "") if mode == "transcode" else audio.get("codec", ""))
+        if mode == "transcode":
+            item.update(hw=info.get("hw") or "software", **({"speed": info["speed"]} if info.get("speed") else {}))
+        item["duration"] = duration_of(item)
+        items.append(item)
+    return items
+
+
+def admin_streams():
+    return [stream_item(s) for s in DEMO_STREAMS] if args.demo_admin else live_streams()
+
+
+def admin_pairings():
+    now = time.monotonic()
+    items = []
+    for p in PAIRINGS.values():
+        if p["status"] != "pending" or now > p["expires"]:
+            continue
+        created = datetime.datetime.strptime(p["requested_at"], "%Y-%m-%dT%H:%M:%SZ").replace(tzinfo=datetime.UTC)
+        items.append({"user_code": p["user_code"], "name": p["name"], "platform": p["platform"], "created_at": created.isoformat(),
+                      "expires_at": (created + datetime.timedelta(seconds=PAIR_TTL)).isoformat()})
+    return items
+
+
+def library_view():
+    tick_scans()
+    if args.demo_admin:
+        folders = [
+            {"id": "movies", "name": "Movies", "path": "/media/movies", "kind": "movies", "count": 42, "size": 1_300_000_000_000},
+            {"id": "series", "name": "Series", "path": "/media/series", "kind": "series", "count": 28, "size": 2_200_000_000_000},
+        ]
+        last = SCAN["last"] or {"at": iso(shown_now() - (6 * DAY + 9 * 3600)), "added": 4, "replaced": 2, "errors": 0}
+    else:
+        sized = lambda items: sum(i.get("file_summary", {}).get("size", 0) for i in items)
+        folders = [
+            {"id": "movies", "name": "Movies", "path": "/media/movies", "kind": "movies", "count": len(MOVIES), "size": sized(MOVIES)},
+            {"id": "series", "name": "Series", "path": "/media/series", "kind": "series", "count": len(SERIES), "size": sized(SERIES)},
+        ]
+        last = SCAN["last"]
+    now = time.monotonic()
+    for folder in folders:
+        scan = SCANS.get(folder["id"])
+        if scan:
+            left = scan["dur"] - (now - scan["t0"])
+            folder["scan"] = {"progress": round(max(0.0, 1 - left / scan["dur"]), 3), "eta_seconds": math.ceil(left)}
+    return {"folders": folders, **({"last_scan": last} if last else {})}
+
+
+def tick_scans():
+    now = time.monotonic()
+    for folder, scan in list(SCANS.items()):
+        if now - scan["t0"] >= scan["dur"]:
+            del SCANS[folder]
+            SCAN["finished"] += 1
+    if SCAN["finished"] and not SCANS:
+        SCAN["last"] = {"at": stamp(), "added": SCAN["finished"], "replaced": 0, "errors": 0}
+        SCAN["finished"] = 0
+        note("info", "scanner", "scan finished · 0 errors")
+
+
+def overview():
+    streams = admin_streams()
+    errors = [line for line in LOGS if line["level"] == "error"]
+    hw_off = settings_view()["values"]["transcoding.hw_accel"] == "none"
+    return {
+        "server": {"version": "2.4.1", "go": "go1.25.3", "platform": "linux/amd64", "commit": "b74309c", "built_at": "2026-10-30T18:12:00Z",
+                   "started_at": iso(STARTED["at"]), "config_path": "/etc/streamline/config.yaml", "public_url": "https://streamline.home.arpa", "https": True,
+                   "bind_address": "0.0.0.0:8080", "trusted_proxies": ["10.0.0.0/8"], "session_secret": "/run/secrets/streamline-session"},
+        "storage": {"media": {"free": 4_500_000_000_000, "total": 8_000_000_000_000},
+                    "data": {"path": "/var/lib/streamline", "free": 620_000_000_000, "total": 1_000_000_000_000},
+                    "database": {"path": "/var/lib/streamline/streamline.db", "size": 184_000_000},
+                    "cache": {"path": "/var/cache/streamline", "size": CACHE["size"], "streams": len(streams) if CACHE["size"] else 0}},
+        "health": {"ffmpeg": {"path": "/usr/bin/ffmpeg", "version": "7.1"},
+                   "hw": {"mode": "software" if hw_off else "vaapi", **({} if hw_off else {"device": "Intel UHD Graphics 770"}), "ready": True},
+                   "folders": {"reachable": 2, "total": 2}, "errors_today": len(errors),
+                   **({"errors_source": errors[-1]["source"]} if errors else {})},
+        "logs": {"app_path": "/var/log/streamline/app.log", "http_path": "/var/log/streamline/http.log"},
+    }
+
+
+def admin_logs(level, after):
+    allowed = {"all": None, "warn": {"warn", "error"}, "error": {"error"}}[level]
+    lines = [line for line in reversed(LOGS) if (allowed is None or line["level"] in allowed) and line["id"] > after]
+    return lines[:80]
+
+
+def logs_zip():
+    out = io.BytesIO()
+    with zipfile.ZipFile(out, "w", zipfile.ZIP_DEFLATED) as z:
+        z.writestr("app.log", "".join(f"{l['at']} {l['level']} {l['source']} {l['message']}\n" for l in LOGS))
+        z.writestr("http.log", "".join(f"{l['at']} {l['message']}\n" for l in LOGS if l["source"] == "http"))
+    return out.getvalue()
+
+
+def admin_device_items(headers):
+    caller_browser = bearer_device(headers)
+    now = shown_now()
+    ago = lambda s: iso(now - s)
+    me = KEYS.get(headers.get("X-API-Key"), {"name": "Living room", "platform": "android-tv"})
+    if not args.demo_admin:
+        return [{**d, "user": {"name": ME["name"]}} for d in device_items(headers)]
+    if caller_browser:
+        b = BROWSERS[caller_browser]
+        caller = {"id": caller_browser, "kind": "browser", "name": b["name"], "platform": "Web browser", "last_seen": ago(0), "streaming": False,
+                  "current": True, "user": {"name": ME["name"]}, "expires_at": iso(b["expires"])}
+    else:
+        caller = {"id": "dev-self", "kind": "app", "name": me["name"] if headers.get("X-API-Key") in KEYS else "Desktop · app",
+                  "platform": "Linux", "last_seen": ago(0), "streaming": False, "current": True, "user": {"name": ME["name"]}, "key_store": "Secret Service"}
+    apps = [
+        {"id": d["id"], "kind": "app", "name": d["name"], "platform": d["platform"], "last_seen": ago(d["seen"]), "streaming": d.get("streaming", False),
+         "current": False, "user": {"name": d["user"]}, "key_store": d["key_store"], **({"location": d["location"]} if "location" in d else {})}
+        for d in DEMO_APPS
+    ]
+    browsers = [
+        {"id": d["id"], "kind": "browser", "name": d["name"], "platform": d["platform"], "last_seen": ago(d["seen"]), "streaming": d.get("streaming", False),
+         "current": False, "user": {"name": d["user"]}, "expires_at": ago(-d["expires"])}
+        for d in DEMO_BROWSERS
+    ]
+    return [caller, *apps, *browsers]
+
+
+def device_items(headers):
+    now = shown_now()
+    ago = lambda s: time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime(now - s))
+    me = KEYS.get(headers.get("X-API-Key"), {"name": "Living room", "platform": "android-tv"})
+    caller = bearer_device(headers)
+    browsers = [
+        {"id": i, "kind": "browser", "name": b["name"], "platform": "Web browser", "last_seen": ago(0), "streaming": False,
+         "current": i == caller, "expires_at": datetime.datetime.fromtimestamp(b["expires"], datetime.UTC).isoformat()}
+        for i, b in BROWSERS.items()
+    ]
+    return [
+        {"id": "dev-self", "kind": "app", "name": me["name"], "platform": me["platform"], "last_seen": ago(0), "streaming": False, "current": caller is None},
+        {"id": "dev-phone", "kind": "app", "name": "Pixel 9", "platform": "Android", "last_seen": ago(120), "streaming": True, "current": False},
+        {"id": "dev-laptop", "kind": "app", "name": "framework-13", "platform": "Linux", "last_seen": ago(3 * 86400), "streaming": False, "current": False},
+        {"id": "dev-parents", "kind": "app", "name": "Parents' TV", "platform": "Android TV", "last_seen": ago(9 * 86400), "streaming": False, "current": False},
+        *browsers,
+    ]
+
+
 class Handler(BaseHTTPRequestHandler):
     def end_headers(self):
         origin = self.headers.get("Origin")
         if origin in CORS_ORIGINS and self.path.startswith("/api/v1"):
             self.send_header("Access-Control-Allow-Origin", origin)
             self.send_header("Vary", "Origin")
+            self.send_header("Access-Control-Expose-Headers", "Content-Disposition")
             if self.command == "OPTIONS":
                 self.send_header("Access-Control-Allow-Headers", "Authorization, Content-Type")
                 self.send_header("Access-Control-Allow-Methods", "GET, POST, PUT, PATCH, DELETE")
@@ -546,9 +932,118 @@ class Handler(BaseHTTPRequestHandler):
         self.reply(404, {"error": {"code": "no_pending_pairing"}})
         return None
 
+    def admin(self, method):
+        """Server settings: /api/v1/admin/*, for an admin only."""
+        if ME["role"] != "Admin":
+            return self.reply(403, {"error": {"code": "forbidden"}})
+        url = urllib.parse.urlsplit(self.path)
+        try:
+            return self.admin_route(method, url.path[len("/api/v1/admin"):], urllib.parse.parse_qs(url.query))
+        except (OSError, EngineDown):
+            return self.reply(502, {"error": {"code": "engine_unavailable"}})
+
+    def admin_route(self, method, path, query):
+        not_found = lambda: self.reply(404, {"error": {"code": "not_found"}})
+        failing = lambda: FAIL["mode"] == "action" and method != "GET"
+        if method == "GET":
+            if path == "/overview":
+                return self.reply(200, overview())
+            if path == "/settings":
+                return self.reply(200, settings_view())
+            if path == "/streams":
+                return self.reply(200, {"items": admin_streams()})
+            if path == "/pairings":
+                return self.reply(200, {"items": admin_pairings()})
+            if path == "/devices":
+                return self.reply(200, {"items": admin_device_items(self.headers)})
+            if path == "/library":
+                return self.reply(200, library_view())
+            if path == "/logs":
+                level = query.get("level", ["all"])[0]
+                after = query.get("after", ["0"])[0]
+                if level not in ("all", "warn", "error") or not after.isdigit():
+                    return self.reply(400, {"error": {"code": "invalid_request"}})
+                return self.reply(200, {"items": admin_logs(level, int(after))})
+            if path == "/logs/download":
+                data = logs_zip()
+                self.send_response(200)
+                self.send_header("Content-Type", "application/zip")
+                self.send_header("Content-Disposition", 'attachment; filename="streamline-logs.zip"')
+                self.send_header("Content-Length", str(len(data)))
+                self.end_headers()
+                return self.wfile.write(data)
+            return not_found()
+        if method == "PATCH" and path == "/settings":
+            status, body = patch_settings(self.body())
+            return self.reply(status, body)
+        if failing():
+            return self.reply(500, {"error": {"code": "internal"}})
+        if method == "POST" and path == "/restart":
+            message = self.body().get("message", "")
+            if not isinstance(message, str) or len(message) > 200:
+                return self.reply(400, {"error": {"code": "invalid_request"}})
+            if args.engine_settings:
+                try:
+                    engine("POST", "/v1/restart")
+                except OSError:
+                    pass
+            RESTART.update(until=math.inf if args.restart_hangs else time.monotonic() + 10, message=message)
+            BOOTED.update(SETTINGS)
+            STARTED["at"] = shown_now()
+            note("info", "config", f"restart requested · {ME['name']}")
+            return self.reply(202)
+        m = re.fullmatch(r"/streams/([\w-]+)/stop", path)
+        if method == "POST" and m:
+            message = self.body().get("message", "")
+            if not isinstance(message, str) or len(message) > 200:
+                return self.reply(400, {"error": {"code": "invalid_request"}})
+            if args.demo_admin:
+                kept = [s for s in DEMO_STREAMS if s["id"] != m[1]]
+                if len(kept) == len(DEMO_STREAMS):
+                    return not_found()
+                DEMO_STREAMS[:] = kept
+            else:
+                if m[1] not in LAST_BEAT:
+                    return not_found()
+                STOPPED[m[1]] = message
+                LAST_BEAT.pop(m[1], None)
+                engine("DELETE", f"/v1/sessions/{m[1]}")
+            note("info", "session", f"stream {m[1]} stopped · {ME['name']}")
+            return self.reply(204)
+        m = re.fullmatch(r"/devices/([\w-]+)", path)
+        if method == "DELETE" and m:
+            if m[1] == (bearer_device(self.headers) or "dev-self"):
+                return self.reply(409, {"error": {"code": "current_device"}})
+            if args.demo_admin:
+                for group in (DEMO_APPS, DEMO_BROWSERS):
+                    if any(d["id"] == m[1] for d in group):
+                        group[:] = [d for d in group if d["id"] != m[1]]
+                        return self.reply(204)
+                return not_found()
+            if revoke_browser(m[1]) or m[1] in ("dev-phone", "dev-laptop", "dev-parents"):
+                return self.reply(204)
+            return not_found()
+        if method == "POST" and path == "/library/scan":
+            folder = self.body().get("folder_id")
+            known = ("movies", "series")
+            if folder is not None and folder not in known:
+                return not_found()
+            tick_scans()
+            for name in [folder] if folder else known:
+                SCANS.setdefault(name, {"t0": time.monotonic(), "dur": SCAN_SECONDS[name]})
+            note("info", "scanner", f"{folder or 'all folders'} · scan started · {ME['name']}")
+            return self.reply(202)
+        if method == "POST" and path == "/cache/clear":
+            freed, CACHE["size"] = CACHE["size"], 0
+            note("info", "transcode", f"cache cleared · {freed} bytes · {ME['name']}")
+            return self.reply(200, {"freed": freed})
+        return not_found()
+
     def do_GET(self):
         if self.refused():
             return
+        if self.path.startswith("/api/v1/admin/"):
+            return self.admin("GET")
         m = re.fullmatch(r"/api/v1/auth/device/([A-Za-z0-9-]+)", self.path)
         if m and m[1] not in ("code", "token"):
             found = self.approver_pairing(m[1])
@@ -604,22 +1099,7 @@ class Handler(BaseHTTPRequestHandler):
         if self.path == "/api/v1/activity":
             return self.reply(200, {"items": ACTIVITY})
         if self.path == "/api/v1/devices":
-            now = shown_now()
-            ago = lambda s: time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime(now - s))
-            me = KEYS.get(self.headers.get("X-API-Key"), {"name": "Living room", "platform": "android-tv"})
-            caller = bearer_device(self.headers)
-            browsers = [
-                {"id": i, "kind": "browser", "name": b["name"], "platform": "Web browser", "last_seen": ago(0), "streaming": False,
-                 "current": i == caller, "expires_at": datetime.datetime.fromtimestamp(b["expires"], datetime.UTC).isoformat()}
-                for i, b in BROWSERS.items()
-            ]
-            return self.reply(200, {"items": [
-                {"id": "dev-self", "kind": "app", "name": me["name"], "platform": me["platform"], "last_seen": ago(0), "streaming": False, "current": caller is None},
-                {"id": "dev-phone", "kind": "app", "name": "Pixel 9", "platform": "Android", "last_seen": ago(120), "streaming": True, "current": False},
-                {"id": "dev-laptop", "kind": "app", "name": "framework-13", "platform": "Linux", "last_seen": ago(3 * 86400), "streaming": False, "current": False},
-                {"id": "dev-parents", "kind": "app", "name": "Parents' TV", "platform": "Android TV", "last_seen": ago(9 * 86400), "streaming": False, "current": False},
-                *browsers,
-            ]})
+            return self.reply(200, {"items": device_items(self.headers)})
         m = re.fullmatch(r"/api/v1/playback/media/([^/]+)/tracks", self.path)
         if m and m[1] in MEDIA:
             return self.reply(200, tracks(m[1], MEDIA[m[1]]))
@@ -633,6 +1113,8 @@ class Handler(BaseHTTPRequestHandler):
     def do_POST(self):
         if self.refused():
             return
+        if self.path.startswith("/api/v1/admin/"):
+            return self.admin("POST")
         # Dev only: what an admin does from Streamline's web app. Both answer the next heartbeat.
         m = re.fullmatch(r"/dev/stop(?:/([0-9a-f]{32}))?", self.path)
         if m:
@@ -656,6 +1138,19 @@ class Handler(BaseHTTPRequestHandler):
                 return self.reply(404, {"error": {"code": "no_pending_pairing"}})
             found["status"] = "approved" if m[1] == "approve" else "denied"
             return self.reply(200, {"user_code": found["user_code"], "name": found["name"]})
+        m = re.fullmatch(r"/dev/role/(admin|member)", self.path)
+        if m:
+            ME["role"] = m[1].capitalize()
+            return self.reply(204)
+        m = re.fullmatch(r"/dev/admin/fail/(save|action|off)", self.path)
+        if m:
+            FAIL["mode"] = m[1]
+            return self.reply(204)
+        if self.path == "/dev/admin/scan/finish":
+            for scan in SCANS.values():
+                scan["t0"] -= scan["dur"]
+            tick_scans()
+            return self.reply(204)
         if self.path == "/dev/activity/unread":
             for event in ACTIVITY:
                 event["read"] = False
@@ -709,7 +1204,7 @@ class Handler(BaseHTTPRequestHandler):
             RESTART.update(until=time.monotonic() + b.get("seconds", 10), message=b.get("message", ""))
             return self.reply(204)
         if time.monotonic() < RESTART["until"] and self.path.startswith("/api/v1/playback/sessions"):
-            left = max(1, round(RESTART["until"] - time.monotonic()))
+            left = 10 if math.isinf(RESTART["until"]) else max(1, round(RESTART["until"] - time.monotonic()))
             return self.reply(503, {"error": {"code": "server_restarting", "message": RESTART["message"], "by": ADMIN, "retry_after": left}})
         if self.path == "/api/v1/playback/decisions":
             b = self.body()
@@ -768,6 +1263,8 @@ class Handler(BaseHTTPRequestHandler):
     def do_PATCH(self):
         if self.refused():
             return
+        if self.path.startswith("/api/v1/admin/"):
+            return self.admin("PATCH")
         if self.path == "/api/v1/me":
             b = self.body()
             email = b.get("email")
@@ -790,6 +1287,8 @@ class Handler(BaseHTTPRequestHandler):
     def do_DELETE(self):
         if self.refused():
             return
+        if self.path.startswith("/api/v1/admin/"):
+            return self.admin("DELETE")
         if self.path == "/api/v1/me/picture":
             PICTURE.update(data=None, type="")
             return self.reply(204)
