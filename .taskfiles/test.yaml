@@ -15,6 +15,7 @@ tasks:
     desc: Run the UI's rule and message checks
     cmds:
       - node dev/account-check.ts
+      - node --import ./dev/controller-check/register.mjs dev/ask-check.ts
       - node dev/auto-check.ts
       - node dev/activity-view-check.ts
       - node --import ./dev/controller-check/register.mjs dev/activity-store-check.ts

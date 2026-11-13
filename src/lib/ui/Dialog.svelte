@@ -9,12 +9,14 @@ let {
 	shown,
 	onclose,
 	children,
+	footer,
 }: {
 	title: string;
 	closeLabel: string;
 	shown: boolean;
 	onclose: () => void;
 	children: Snippet;
+	footer?: Snippet;
 } = $props();
 </script>
 
@@ -33,6 +35,9 @@ let {
 				<Button variant="icon" icon="x" label={closeLabel} onclick={onclose} />
 			</div>
 			<div class="sl-dialog__body">{@render children()}</div>
+			{#if footer}
+				<div class="sl-dialog__foot">{@render footer()}</div>
+			{/if}
 		</div>
 	</div>
 </div>

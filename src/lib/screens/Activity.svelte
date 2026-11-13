@@ -9,6 +9,7 @@ import { getLocale } from "#lib/paraglide/runtime.js";
 import ActivityRow from "#lib/ui/ActivityRow.svelte";
 import { activityWords } from "#lib/ui/activity-words.ts";
 import Button from "#lib/ui/Button.svelte";
+import ChoicePills from "#lib/ui/ChoicePills.svelte";
 import EmptyState from "#lib/ui/EmptyState.svelte";
 import type { IconName } from "#lib/ui/Icon.svelte";
 import { goto } from "#lib/ui/nav.ts";
@@ -19,7 +20,6 @@ const PAD_X = 56;
 const TOP = 92;
 const BOTTOM = 32;
 const MAX_WIDTH = 980;
-const GAP = 3;
 const port = { activity, markActivityRead };
 const libraryPort = { library, watchState, home, title };
 
@@ -36,7 +36,6 @@ const now = new Date();
 const find = (kind: Kind, id: number) =>
 	(kind === "movies" ? lib.movies : lib.shows).find((t) => t.id === id);
 const view = $derived(feedView(feed.items, filter, find, now, getLocale(), activityWords()));
-const index = $derived(FILTERS.indexOf(filter));
 
 async function open(r: RowView) {
 	markRead(port, [r.id]).then((ok) => {
@@ -67,23 +66,12 @@ onMount(() => {
 			<span class="summary">{view.summary}</span>
 		</div>
 		<div class="tools">
-			<fieldset class="filters" aria-label={i18n.activity_filter()}>
-				<span
-					class="pill"
-					style:width="calc((100% - {2 * GAP + GAP * (FILTERS.length - 1)}px) / {FILTERS.length})"
-					style:transform="translateX(calc({index} * (100% + {GAP}px)))"
-				></span>
-				{#each FILTERS as f (f)}
-					<button
-						type="button"
-						class:on={f === filter}
-						aria-pressed={f === filter}
-						onclick={() => (filter = f)}
-					>
-						{LABELS[f]}
-					</button>
-				{/each}
-			</fieldset>
+			<ChoicePills
+				options={FILTERS.map((f) => [f, LABELS[f]])}
+				value={filter}
+				label={i18n.activity_filter()}
+				onchange={(v) => (filter = v as Filter)}
+			/>
 			<Button variant="secondary" icon="tick" disabled={view.unread === 0} onclick={readAll}>
 				{i18n.activity_mark_all()}
 			</Button>
@@ -167,50 +155,6 @@ h1 {
 	display: flex;
 	align-items: center;
 	gap: 10px;
-}
-
-.filters {
-	margin: 0;
-	min-inline-size: 0;
-	position: relative;
-	display: grid;
-	grid-auto-flow: column;
-	grid-auto-columns: 1fr;
-	gap: 3px;
-	padding: 3px;
-	border-radius: 9px;
-	background: var(--bg-deep);
-	border: 1px solid var(--border);
-}
-
-.pill {
-	position: absolute;
-	top: 3px;
-	bottom: 3px;
-	left: 3px;
-	border-radius: 7px;
-	background: var(--bg-selected);
-	transition: transform 240ms var(--ease);
-}
-
-.filters button {
-	position: relative;
-	height: 30px;
-	padding: 0 12px;
-	border: 0;
-	border-radius: 7px;
-	background: transparent;
-	transition: color 180ms;
-	color: var(--fg-subtle);
-	font-size: 12.5px;
-	font-weight: 500;
-	cursor: pointer;
-	white-space: nowrap;
-}
-
-.filters button:hover,
-.filters button.on {
-	color: var(--fg);
 }
 
 section {

@@ -84,6 +84,11 @@
 	color: var(--fg);
 }
 
+.sl-btn--danger {
+	background: var(--status-failed);
+	color: var(--fg-on-status);
+}
+
 .sl-btn--danger-outline {
 	height: 36px;
 	padding: 0 14px;
@@ -283,6 +288,99 @@
 	font-size: 14px;
 	line-height: 1.5;
 	color: var(--fg-muted);
+}
+
+.sl-dialog__foot {
+	display: flex;
+	justify-content: flex-end;
+	gap: 8px;
+	padding: 12px 20px 16px;
+	border-top: 1px solid var(--border);
+}
+
+.sl-input {
+	width: 100%;
+	box-sizing: border-box;
+	height: 40px;
+	padding: 8px 12px;
+	border: 1px solid var(--border);
+	border-radius: var(--radius-md);
+	background: var(--bg-card);
+	color: var(--fg);
+	font: 400 14px var(--font-sans);
+	outline: none;
+	transition:
+		border-color var(--dur-fast) var(--ease),
+		box-shadow var(--dur-fast) var(--ease);
+}
+
+.sl-input::placeholder {
+	color: var(--fg-faint);
+}
+
+.sl-input:focus-visible {
+	border-color: var(--accent);
+	box-shadow: 0 0 0 2px var(--accent-ring);
+}
+
+.sl-cdtoast {
+	width: 420px;
+	max-width: 100%;
+	overflow: hidden;
+	border: 1px solid var(--border);
+	border-radius: var(--radius-md);
+	background: var(--bg-elevated);
+	box-shadow: var(--shadow-3);
+}
+
+.sl-cdtoast__row {
+	display: flex;
+	align-items: center;
+	gap: 12px;
+	padding: 10px 10px 10px 14px;
+}
+
+.sl-cdtoast__row > .sl-ico {
+	flex: none;
+	font-size: 18px;
+	stroke-width: 2;
+	color: var(--c, var(--status-warning));
+}
+
+.sl-cdtoast__text {
+	flex: 1;
+	min-width: 0;
+	display: flex;
+	flex-direction: column;
+	gap: 1px;
+}
+
+.sl-cdtoast__title {
+	font-size: 14px;
+	font-weight: 600;
+	white-space: nowrap;
+	overflow: hidden;
+	text-overflow: ellipsis;
+}
+
+.sl-cdtoast__sub {
+	font: 400 11.5px var(--font-mono);
+	font-variant-numeric: tabular-nums;
+	color: var(--fg-subtle);
+	white-space: nowrap;
+	overflow: hidden;
+	text-overflow: ellipsis;
+}
+
+.sl-cdtoast__bar {
+	height: 3px;
+	background: var(--progress-track);
+}
+
+.sl-cdtoast__bar > b {
+	display: block;
+	height: 100%;
+	background: var(--c, var(--status-warning));
 }
 
 .sl-sec {

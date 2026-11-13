@@ -1,6 +1,16 @@
 <script lang="ts">
 import { goto } from "#lib/ui/nav.ts";
 import { page } from "$app/state";
+import {
+	type AskSpec,
+	ask,
+	asking,
+	closeAsk,
+	confirmAsk,
+	countdown,
+	counting,
+	finishCountdown,
+} from "#lib/core/ask.svelte.ts";
 import { loadActivity, resetActivity, unread } from "#lib/core/activity.svelte.ts";
 import { bellLabel } from "#lib/core/activity-view.ts";
 import { account, clearMe, initialsOf, setMe } from "#lib/core/me.svelte.ts";
@@ -11,6 +21,8 @@ import { IS_WEB, TARGET } from "#lib/platform/target.ts";
 import { keyAction } from "#lib/shells/desktop/shortcuts.ts";
 import WindowButtons from "#lib/shells/desktop/WindowButtons.svelte";
 import AppBar from "#lib/ui/AppBar.svelte";
+import AskDialog from "#lib/ui/AskDialog.svelte";
+import CountdownToast from "#lib/ui/CountdownToast.svelte";
 import Dialog from "#lib/ui/Dialog.svelte";
 import DesktopToast from "#lib/ui/DesktopToast.svelte";
 import Kbd from "#lib/ui/Kbd.svelte";
@@ -47,6 +59,18 @@ let hole = $state<{ x: number; y: number; width: number; height: number } | null
 provideScroll(() => content);
 
 const menu = presence(() => menuOpen, 140);
+const question = presence(() => !!asking.spec, 230);
+const counter = presence(() => !!counting.spec, 240);
+// The dialog and the toast stay drawn while they fade out, after the store has dropped the spec.
+let lastAsk = $state<AskSpec>();
+let lastCount = $state<{ title: string; note: string; seconds: number }>();
+$effect(() => {
+	if (asking.spec) lastAsk = asking.spec;
+});
+$effect(() => {
+	const c = counting.spec;
+	if (c) lastCount = { title: c.title, note: c.note, seconds: c.seconds };
+});
 const help = presence(() => helpOpen, 240);
 
 const route = $derived(page.route.id ?? "");
@@ -69,6 +93,7 @@ const padRight = $derived(
 	!web && TARGET === "windows" ? 150 : !web && TARGET === "linux" ? 128 : 24,
 );
 const toastTop = $derived((showBar ? 64 : 0) + 16);
+const COUNTDOWN_SHIFT = 74;
 
 const name = $derived(account.me?.name ?? "");
 const initials = $derived(initialsOf(name));
@@ -170,6 +195,12 @@ function onKey(e: KeyboardEvent) {
 	);
 	if (act === "g") {
 		gAt = Date.now();
+		return;
+	}
+	if (asking.spec && act === "close") {
+		e.preventDefault();
+		e.stopPropagation();
+		closeAsk();
 		return;
 	}
 	if ((helpOpen || menuOpen) && (act === "close" || (helpOpen && act === "help"))) {
@@ -294,6 +325,9 @@ onMount(() => {
 });
 
 const toastNow = $derived(activeToast());
+
+if (import.meta.env.DEV)
+	(window as unknown as { __slp: unknown }).__slp = { ask, countdown, toast };
 </script>
 
 <svelte:window bind:innerWidth={width} />
@@ -400,8 +434,38 @@ const toastNow = $derived(activeToast());
 			</Dialog>
 		{/if}
 
+		{#if question.mounted && lastAsk}
+			{#key lastAsk}
+				<AskDialog
+					spec={lastAsk}
+					shown={question.shown}
+					cancelLabel={i18n.settings_cancel()}
+					closeLabel={i18n.shell_close()}
+					optionalLabel={i18n.ask_optional()}
+					onclose={closeAsk}
+					onconfirm={confirmAsk}
+				/>
+			{/key}
+		{/if}
+
+		{#if counter.mounted && lastCount}
+			<div class="countdown" class:shown={counter.shown} style:top="{toastTop}px">
+				<CountdownToast
+					title={lastCount.title}
+					line={lastCount.note
+						? i18n.countdown_in_note({ left: counting.left, note: lastCount.note })
+						: i18n.countdown_in({ left: counting.left })}
+					total={lastCount.seconds}
+					nowLabel={i18n.countdown_now()}
+					abortLabel={i18n.countdown_abort()}
+					onnow={() => finishCountdown(true)}
+					onabort={() => finishCountdown(false)}
+				/>
+			</div>
+		{/if}
+
 		{#if toastNow}
-			<div class="toasts" style:top="{toastTop}px">
+			<div class="toasts" style:top="{toastTop + (counting.spec ? COUNTDOWN_SHIFT : 0)}px">
 				{#key toastNow.title}
 					<DesktopToast
 						title={toastNow.title}
@@ -540,6 +604,22 @@ const toastNow = $derived(activeToast());
 	right: 24px;
 	z-index: 60;
 	pointer-events: none;
+}
+
+.countdown {
+	position: absolute;
+	right: 24px;
+	z-index: 61;
+	opacity: 0;
+	transform: translateY(-10px);
+	transition:
+		opacity var(--dur-base) var(--ease),
+		transform 240ms var(--ease);
+}
+
+.countdown.shown {
+	opacity: 1;
+	transform: none;
 }
 
 .hint {
