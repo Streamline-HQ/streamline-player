@@ -487,6 +487,18 @@
           "markdownDescription": "Denies the subtitle command without any pre-configured scope."
         },
         {
+          "description": "Enables the subtitleLift command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-subtitleLift",
+          "markdownDescription": "Enables the subtitleLift command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the subtitleLift command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-subtitleLift",
+          "markdownDescription": "Denies the subtitleLift command without any pre-configured scope."
+        },
+        {
           "description": "Enables the timing command without any pre-configured scope.",
           "type": "string",
           "const": "allow-timing",
@@ -497,6 +509,18 @@
           "type": "string",
           "const": "deny-timing",
           "markdownDescription": "Denies the timing command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the viewport command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-viewport",
+          "markdownDescription": "Enables the viewport command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the viewport command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-viewport",
+          "markdownDescription": "Denies the viewport command without any pre-configured scope."
         },
         {
           "description": "Enables the voice command without any pre-configured scope.",
@@ -511,10 +535,22 @@
           "markdownDescription": "Denies the voice command without any pre-configured scope."
         },
         {
-          "description": "Allows controlling the native player and listening to its events\n#### This default permission set includes:\n\n- `allow-capabilities`\n- `allow-deviceInfo`\n- `allow-frameRate`\n- `allow-restoreDisplay`\n- `allow-load`\n- `allow-play`\n- `allow-pause`\n- `allow-seek`\n- `allow-stop`\n- `allow-speed`\n- `allow-stats`\n- `allow-subtitle`\n- `allow-timing`\n- `allow-voice`\n- `allow-registerListener`\n- `allow-register-listener`\n- `allow-removeListener`\n- `allow-remove-listener`",
+          "description": "Enables the volume command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-volume",
+          "markdownDescription": "Enables the volume command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the volume command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-volume",
+          "markdownDescription": "Denies the volume command without any pre-configured scope."
+        },
+        {
+          "description": "Allows controlling the native player and listening to its events\n#### This default permission set includes:\n\n- `allow-capabilities`\n- `allow-deviceInfo`\n- `allow-frameRate`\n- `allow-restoreDisplay`\n- `allow-load`\n- `allow-play`\n- `allow-pause`\n- `allow-seek`\n- `allow-stop`\n- `allow-speed`\n- `allow-stats`\n- `allow-subtitle`\n- `allow-timing`\n- `allow-volume`\n- `allow-viewport`\n- `allow-subtitleLift`\n- `allow-voice`\n- `allow-registerListener`\n- `allow-register-listener`\n- `allow-removeListener`\n- `allow-remove-listener`",
           "type": "string",
           "const": "default",
-          "markdownDescription": "Allows controlling the native player and listening to its events\n#### This default permission set includes:\n\n- `allow-capabilities`\n- `allow-deviceInfo`\n- `allow-frameRate`\n- `allow-restoreDisplay`\n- `allow-load`\n- `allow-play`\n- `allow-pause`\n- `allow-seek`\n- `allow-stop`\n- `allow-speed`\n- `allow-stats`\n- `allow-subtitle`\n- `allow-timing`\n- `allow-voice`\n- `allow-registerListener`\n- `allow-register-listener`\n- `allow-removeListener`\n- `allow-remove-listener`"
+          "markdownDescription": "Allows controlling the native player and listening to its events\n#### This default permission set includes:\n\n- `allow-capabilities`\n- `allow-deviceInfo`\n- `allow-frameRate`\n- `allow-restoreDisplay`\n- `allow-load`\n- `allow-play`\n- `allow-pause`\n- `allow-seek`\n- `allow-stop`\n- `allow-speed`\n- `allow-stats`\n- `allow-subtitle`\n- `allow-timing`\n- `allow-volume`\n- `allow-viewport`\n- `allow-subtitleLift`\n- `allow-voice`\n- `allow-registerListener`\n- `allow-register-listener`\n- `allow-removeListener`\n- `allow-remove-listener`"
         }
       ]
     }

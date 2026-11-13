@@ -3,6 +3,7 @@
 
 use crate::{
     mpv::{Event, Mpv},
+    probe::{self, Rect},
     view,
 };
 use serde_json::{Value, json};
@@ -11,7 +12,7 @@ use std::{
     hash::{DefaultHasher, Hash, Hasher},
     path::{Path, PathBuf},
     sync::{
-        Arc, Condvar, Mutex,
+        Arc, Condvar, Mutex, OnceLock,
         atomic::{AtomicBool, Ordering},
     },
     thread,
@@ -33,6 +34,7 @@ pub struct Player {
     loading: Mutex<bool>,
     loaded: Condvar,
     direct: AtomicBool,
+    volume: Mutex<(f64, bool)>,
     fonts: PathBuf,
     subtitles: PathBuf,
 }
@@ -113,42 +115,64 @@ impl Player {
 /// cache stops reading when full, and an idle stretch would read as a slow link.
 struct Reads {
     start: Instant,
-    sum: f64,
-    samples: u32,
+    last: Instant,
+    bytes: f64,
     whole: bool,
 }
 
 impl Reads {
     fn new() -> Self {
+        let now = Instant::now();
         Reads {
-            start: Instant::now(),
-            sum: 0.0,
-            samples: 0,
+            start: now,
+            last: now,
+            bytes: 0.0,
             whole: true,
         }
     }
 
-    // ponytail: direct streams only. On HLS the demuxer reads segments as fast as the encoder
-    // makes them, which says nothing about the link; ExoPlayer's per-segment meter has no mpv
-    // counterpart here yet, so Auto on desktop HLS steps down on stalls but never back up.
+    // Direct streams report as "reads" and converted ones as "meter", the two sources the page
+    // tells apart. A converted stream's encoder may pace the demuxer below the link, so the
+    // reading is a floor there, which only makes Auto step up later.
     fn sample(&mut self, p: &Player) {
-        if !p.direct.load(Ordering::Relaxed) || p.mpv.flag("demuxer-cache-idle") {
+        let now = Instant::now();
+        let dt = now - self.last;
+        self.last = now;
+        if p.mpv.flag("demuxer-cache-idle") {
             self.whole = false;
         } else {
-            self.sum += p.mpv.number("cache-speed").unwrap_or(0.0);
-            self.samples += 1;
+            self.bytes += p.mpv.number("cache-speed").unwrap_or(0.0) * dt.as_secs_f64();
         }
         if self.start.elapsed() < READS_WINDOW {
             return;
         }
-        if self.whole && self.samples > 0 && self.sum > 0.0 {
-            let bits = self.sum / f64::from(self.samples) * 8.0;
-            p.emit(
-                "bandwidth",
-                json!({ "bitrate": bits as u64, "source": "reads" }),
-            );
+        if self.whole && self.bytes > 0.0 {
+            let source = if p.direct.load(Ordering::Relaxed) {
+                "reads"
+            } else {
+                "meter"
+            };
+            let bitrate = probe::bits_per_second(self.bytes, self.start.elapsed());
+            p.emit("bandwidth", json!({ "bitrate": bitrate, "source": source }));
         }
         *self = Reads::new();
+    }
+}
+
+impl Player {
+    /// Volume and mute as the page knows them (0..1), emitted when mpv's own differ from what
+    /// was last said: the page set them, or mpv changed them by itself.
+    fn emit_volume_changes(&self) {
+        let now = (
+            self.mpv.number("volume").unwrap_or(100.0),
+            self.mpv.flag("mute"),
+        );
+        let mut last = self.volume.lock().unwrap();
+        if *last != now {
+            *last = now;
+            drop(last);
+            self.emit("volume", json!({ "volume": now.0 / 100.0, "muted": now.1 }));
+        }
     }
 }
 
@@ -179,6 +203,7 @@ fn watch(p: Arc<Player>) {
             last_position = Instant::now();
         }
         reads.sample(&p);
+        p.emit_volume_changes();
     }
 }
 
@@ -206,12 +231,14 @@ pub fn setup<R: Runtime>(app: &tauri::AppHandle<R>) -> Result<(), Box<dyn std::e
         ("terminal", "yes"),
         ("msg-level", "all=warn"),
     ])?;
+    let initial = (mpv.number("volume").unwrap_or(100.0), mpv.flag("mute"));
     let player = Arc::new(Player {
         mpv: Arc::new(mpv),
         listeners: Mutex::default(),
         loading: Mutex::new(false),
         loaded: Condvar::new(),
         direct: AtomicBool::new(false),
+        volume: Mutex::new(initial),
         fonts,
         subtitles,
     });
@@ -237,31 +264,94 @@ pub fn attach<R: Runtime>(webview: Webview<R>) {
     }
 }
 
+fn hardware_codecs() -> &'static [(&'static str, Vec<&'static str>)] {
+    static CODECS: OnceLock<Vec<(&'static str, Vec<&'static str>)>> = OnceLock::new();
+    CODECS.get_or_init(
+        || match probe::va_decode_profiles().map(|p| probe::codecs_from_va(&p)) {
+            Some(found) if !found.is_empty() => found,
+            _ => probe::software_codecs(),
+        },
+    )
+}
+
 /// mpv decodes nearly everything and tone-maps HDR to the display itself, so it takes HDR as-is.
+/// Video codecs come from what VA-API decodes (software when there is none), bounded by the
+/// monitor the window is on.
 #[tauri::command]
 pub fn capabilities() -> Value {
-    // ponytail: a fixed 4K60 ceiling, not probed from VA-API or the monitors; mpv falls back to
-    // software decoding past what the GPU does.
-    let video = |codec: &str, profiles: &[&str]| {
-        json!({ "codec": codec, "profiles": profiles, "max_level": null,
-                "max_width": 3840, "max_height": 2160, "max_fps": 60 })
+    let display = view::on_gtk(view::display).unwrap_or_default();
+    probe::capabilities(hardware_codecs(), &display)
+}
+
+#[tauri::command]
+#[allow(non_snake_case)]
+pub fn deviceInfo(player: State<'_, Arc<Player>>) -> Value {
+    let read = |path: &str| {
+        std::fs::read_to_string(path)
+            .map(|s| s.trim().to_string())
+            .unwrap_or_default()
     };
+    let display = view::on_gtk(view::display).unwrap_or_default();
     json!({
-        "video": [
-            video("h264", &["baseline", "constrained baseline", "main", "high", "high 10"]),
-            video("hevc", &["main", "main 10"]),
-            video("av1", &["main"]),
-        ],
-        "hdr": { "formats": ["hdr10", "hdr10plus", "hlg"], "dv_profiles": [] },
-        "audio": {
-            "codecs": ["aac", "ac3", "dts", "eac3", "flac", "mp3", "opus", "truehd", "vorbis"],
-            "max_channels": 8,
-            "passthrough": [],
+        "name": read("/proc/sys/kernel/hostname"),
+        "model": read("/sys/devices/virtual/dmi/id/product_name"),
+        "platform": "Linux",
+        "player": player.mpv.get("mpv-version").unwrap_or_else(|| "mpv".into()),
+        "display": {
+            "name": display.name,
+            "width": display.width,
+            "height": display.height,
+            "refresh_hz": display.refresh_hz,
+            "hdr": [],
         },
-        "containers": ["mp4", "mkv"],
-        "subtitles": ["webvtt", "srt", "ass", "pgs"],
-        "hls_keyframe_exact": false,
     })
+}
+
+/// Desktop displays are not switched to the film's rate, so there is nothing to ask for or undo.
+#[tauri::command]
+#[allow(non_snake_case)]
+pub fn frameRate() {}
+
+#[tauri::command]
+#[allow(non_snake_case)]
+pub fn restoreDisplay() {}
+
+/// `volume` is 0..1 on the page and 0..100 in mpv.
+#[tauri::command]
+pub fn volume(player: State<'_, Arc<Player>>, volume: f64, muted: bool) -> Done {
+    player
+        .mpv
+        .set("volume", &(volume.clamp(0.0, 1.0) * 100.0).to_string())?;
+    player.mpv.set("mute", if muted { "yes" } else { "no" })?;
+    player.emit_volume_changes();
+    Ok(())
+}
+
+#[tauri::command]
+#[allow(non_snake_case)]
+pub fn subtitleLift(px: f64) {
+    let _ = view::on_gtk(move || view::lift(px));
+}
+
+/// The picture's rectangle in CSS pixels of the window, or the whole window with `full`.
+#[tauri::command]
+pub fn viewport(
+    x: Option<f64>,
+    y: Option<f64>,
+    width: Option<f64>,
+    height: Option<f64>,
+    full: Option<bool>,
+) {
+    let rect = match (x, y, width, height) {
+        (Some(x), Some(y), Some(width), Some(height)) if full != Some(true) => Some(Rect {
+            x,
+            y,
+            width,
+            height,
+        }),
+        _ => None,
+    };
+    let _ = view::on_gtk(move || view::place(rect));
 }
 
 #[tauri::command]

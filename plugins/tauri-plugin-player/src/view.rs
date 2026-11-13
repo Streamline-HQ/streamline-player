@@ -2,7 +2,10 @@
 //! GtkGLArea that libmpv draws into through its OpenGL render API. One window, one compositor
 //! surface, so the page's controls and panels blend over the picture.
 
-use crate::mpv::{self, RenderParam};
+use crate::{
+    mpv::{self, RenderParam},
+    probe::{self, Display, Rect},
+};
 use gtk::{glib, prelude::*};
 use std::{
     cell::{Cell, RefCell},
@@ -48,6 +51,9 @@ unsafe extern "C" {
 thread_local! {
     static AREA: RefCell<Option<gtk::GLArea>> = const { RefCell::new(None) };
     static RENDER: Cell<*mut c_void> = const { Cell::new(ptr::null_mut()) };
+    static PLAYER: RefCell<Option<Arc<mpv::Mpv>>> = const { RefCell::new(None) };
+    static RECT: Cell<Option<Rect>> = const { Cell::new(None) };
+    static LIFT: Cell<f64> = const { Cell::new(0.0) };
 }
 
 unsafe extern "C" fn proc_address(_: *mut c_void, name: *const c_char) -> *mut c_void {
@@ -173,6 +179,8 @@ pub fn attach(webview: webkit2gtk::WebView, player: Arc<mpv::Mpv>) {
     parent.remove(&webview);
     let overlay = gtk::Overlay::new();
     let area = gtk::GLArea::new();
+    PLAYER.with(|p| *p.borrow_mut() = Some(player.clone()));
+    area.connect_resize(|_, _, _| apply_layout());
     area.connect_realize(move |a| {
         create_render_context(a, &player);
         if let Some(hz) = refresh_rate(a) {
@@ -205,4 +213,74 @@ pub fn refresh_rate(widget: &impl IsA<gtk::Widget>) -> Option<f64> {
     let monitor = window.display().monitor_at_window(&window)?;
     let mhz = monitor.refresh_rate();
     (mhz > 0).then(|| f64::from(mhz) / 1000.0)
+}
+
+/// Runs `f` on the GTK thread and waits for it. Tauri runs a plain command there already, where
+/// this is a direct call; an async one hops over.
+pub fn on_gtk<T: Send + 'static>(f: impl FnOnce() -> T + Send + 'static) -> Option<T> {
+    let (tx, rx) = std::sync::mpsc::channel();
+    glib::MainContext::default().invoke(move || {
+        let _ = tx.send(f());
+    });
+    rx.recv_timeout(std::time::Duration::from_secs(2)).ok()
+}
+
+/// Puts the picture in `rect`, or back over the whole window.
+pub fn place(rect: Option<Rect>) {
+    RECT.with(|r| r.set(rect));
+    apply_layout();
+}
+
+/// Raises subtitles `px` CSS pixels above where mpv puts them.
+pub fn lift(px: f64) {
+    LIFT.with(|l| l.set(px));
+    apply_layout();
+}
+
+// The margins are ratios and a lift is in the window's own pixels, so both follow a resize.
+fn apply_layout() {
+    let Some(player) = PLAYER.with(|p| p.borrow().clone()) else {
+        return;
+    };
+    let Some((width, height, scale)) = AREA.with(|a| {
+        a.borrow().as_ref().map(|a| {
+            (
+                f64::from(a.allocated_width()),
+                f64::from(a.allocated_height()),
+                f64::from(a.scale_factor()),
+            )
+        })
+    }) else {
+        return;
+    };
+    let ratios = probe::margin_ratios(RECT.with(Cell::get), width, height);
+    for (side, ratio) in ["left", "right", "top", "bottom"].iter().zip(ratios) {
+        let _ = player.set(&format!("video-margin-ratio-{side}"), &ratio.to_string());
+    }
+    let margin = probe::sub_margin_y(LIFT.with(Cell::get), scale, height * scale);
+    // mpv takes whole pixels here and refuses a fraction.
+    let _ = player.set("sub-margin-y", &(margin.round() as i64).to_string());
+}
+
+/// The monitor the window is on, in device pixels.
+pub fn display() -> Display {
+    let area = AREA.with(|a| a.borrow().clone());
+    let monitor = area
+        .as_ref()
+        .and_then(|a| {
+            let window = a.window().or_else(|| a.toplevel()?.window())?;
+            a.display().monitor_at_window(&window)
+        })
+        .or_else(|| gdk::Display::default()?.primary_monitor());
+    let Some(m) = monitor else {
+        return Display::default();
+    };
+    let g = m.geometry();
+    let scale = m.scale_factor();
+    Display {
+        name: m.model().map(|s| s.to_string()).unwrap_or_default(),
+        width: (g.width() * scale).max(0) as u32,
+        height: (g.height() * scale).max(0) as u32,
+        refresh_hz: f64::from(m.refresh_rate()) / 1000.0,
+    }
 }

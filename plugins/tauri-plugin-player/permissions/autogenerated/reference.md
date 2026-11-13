@@ -17,6 +17,9 @@ Allows controlling the native player and listening to its events
 - `allow-stats`
 - `allow-subtitle`
 - `allow-timing`
+- `allow-volume`
+- `allow-viewport`
+- `allow-subtitleLift`
 - `allow-voice`
 - `allow-registerListener`
 - `allow-register-listener`
@@ -451,6 +454,32 @@ Denies the subtitle command without any pre-configured scope.
 <tr>
 <td>
 
+`player:allow-subtitleLift`
+
+</td>
+<td>
+
+Enables the subtitleLift command without any pre-configured scope.
+
+</td>
+</tr>
+
+<tr>
+<td>
+
+`player:deny-subtitleLift`
+
+</td>
+<td>
+
+Denies the subtitleLift command without any pre-configured scope.
+
+</td>
+</tr>
+
+<tr>
+<td>
+
 `player:allow-timing`
 
 </td>
@@ -477,6 +506,32 @@ Denies the timing command without any pre-configured scope.
 <tr>
 <td>
 
+`player:allow-viewport`
+
+</td>
+<td>
+
+Enables the viewport command without any pre-configured scope.
+
+</td>
+</tr>
+
+<tr>
+<td>
+
+`player:deny-viewport`
+
+</td>
+<td>
+
+Denies the viewport command without any pre-configured scope.
+
+</td>
+</tr>
+
+<tr>
+<td>
+
 `player:allow-voice`
 
 </td>
@@ -496,6 +551,32 @@ Enables the voice command without any pre-configured scope.
 <td>
 
 Denies the voice command without any pre-configured scope.
+
+</td>
+</tr>
+
+<tr>
+<td>
+
+`player:allow-volume`
+
+</td>
+<td>
+
+Enables the volume command without any pre-configured scope.
+
+</td>
+</tr>
+
+<tr>
+<td>
+
+`player:deny-volume`
+
+</td>
+<td>
+
+Denies the volume command without any pre-configured scope.
 
 </td>
 </tr>

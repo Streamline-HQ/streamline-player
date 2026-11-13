@@ -1,0 +1,13 @@
+# Automatically generated - DO NOT EDIT!
+
+"$schema" = "../../schemas/schema.json"
+
+[[permission]]
+identifier = "allow-volume"
+description = "Enables the volume command without any pre-configured scope."
+commands.allow = ["volume"]
+
+[[permission]]
+identifier = "deny-volume"
+description = "Denies the volume command without any pre-configured scope."
+commands.deny = ["volume"]

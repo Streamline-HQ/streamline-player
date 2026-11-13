@@ -8,6 +8,8 @@ mod desktop;
 #[cfg(target_os = "linux")]
 mod mpv;
 #[cfg(target_os = "linux")]
+mod probe;
+#[cfg(target_os = "linux")]
 mod view;
 
 /// The Kotlin side, for the commands only Rust may call (the device key vault).
@@ -36,6 +38,12 @@ pub fn init<R: Runtime>() -> TauriPlugin<R> {
     let builder = builder
         .invoke_handler(tauri::generate_handler![
             desktop::capabilities,
+            desktop::deviceInfo,
+            desktop::frameRate,
+            desktop::restoreDisplay,
+            desktop::volume,
+            desktop::viewport,
+            desktop::subtitleLift,
             desktop::load,
             desktop::stop,
             desktop::play,
