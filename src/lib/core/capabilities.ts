@@ -35,39 +35,3 @@ export function chips(c: Caps): Chip[] {
 			: []),
 	];
 }
-
-const VIDEO: Record<string, string> = {
-	h264: 'video/mp4; codecs="avc1.640028"',
-	hevc: 'video/mp4; codecs="hvc1.1.6.L120.90"',
-	av1: 'video/mp4; codecs="av01.0.08M.08"',
-	vp9: 'video/webm; codecs="vp09.00.40.08"',
-};
-const AUDIO: Record<string, string> = {
-	aac: 'audio/mp4; codecs="mp4a.40.2"',
-	ac3: 'audio/mp4; codecs="ac-3"',
-	eac3: 'audio/mp4; codecs="ec-3"',
-	dts: 'audio/mp4; codecs="dtsc"',
-	flac: 'audio/mp4; codecs="flac"',
-};
-
-/** What the browser itself reports it can decode, asked the way the server asks the player: of the running webview. */
-export function browserCaps(): Caps {
-	const can = (type: string) =>
-		typeof MediaSource !== "undefined" && MediaSource.isTypeSupported(type);
-	const hdr = matchMedia("(dynamic-range: high)").matches;
-	return {
-		video: Object.keys(VIDEO)
-			.filter((k) => can(VIDEO[k]!))
-			.map((codec) => ({ codec })),
-		hdr: {
-			formats: [
-				...(hdr ? ["hdr10"] : []),
-				...(can('video/mp4; codecs="dvh1.05.06"') ? ["dolby_vision"] : []),
-			],
-		},
-		audio: {
-			codecs: Object.keys(AUDIO).filter((k) => can(AUDIO[k]!)),
-			passthrough: [],
-		},
-	};
-}

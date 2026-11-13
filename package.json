@@ -23,7 +23,8 @@
 	},
 	"dependencies": {
 		"@lucide/svelte": "^1.67.0",
-		"@tauri-apps/api": "^2.12.4"
+		"@tauri-apps/api": "^2.12.4",
+		"shaka-player": "^5.3.4"
 	},
 	"imports": {
 		"#platform": {

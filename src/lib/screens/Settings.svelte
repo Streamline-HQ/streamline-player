@@ -8,7 +8,7 @@ import {
 	refusal,
 	validate,
 } from "#lib/core/account.ts";
-import { browserCaps, type Caps, chips } from "#lib/core/capabilities.ts";
+import { type Caps, chips } from "#lib/core/capabilities.ts";
 import { seen } from "#lib/core/devices.ts";
 import { lib, loadLibrary } from "#lib/core/library.svelte.ts";
 import { account, initialsOf, setMe } from "#lib/core/me.svelte.ts";
@@ -306,9 +306,7 @@ onMount(() => {
 	);
 	playerCapabilities().then(
 		(c) => (caps = c as Caps),
-		() => {
-			if (IS_WEB) caps = browserCaps();
-		},
+		() => {},
 	);
 	loadLibrary({ library, watchState, home, title: fetchTitle });
 	pingOnce();

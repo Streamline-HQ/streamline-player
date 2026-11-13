@@ -36,7 +36,7 @@ stdenvNoCC.mkDerivation (finalAttrs: {
     inherit (finalAttrs) version src;
     inherit pnpm;
     fetcherVersion = 4;
-    hash = "sha256-qhm9evabvgCGpZjAGIEba0nFj6KmkZJ5RggWhlVJVmM=";
+    hash = "sha256-QSzWnZY0F/4Iqgayp5nQa/OFI6n8umzUa1mF5yHv09M=";
   };
 
   # nixpkgs' pnpmConfigHook restores the store index without WAL mode, and
@@ -59,6 +59,7 @@ stdenvNoCC.mkDerivation (finalAttrs: {
     pnpm check
     node dev/auto-check.ts
     node dev/messages-check.ts
+    node dev/shaka-caps-check.ts
     node dev/web-build-check.ts
     runHook postCheck
   '';

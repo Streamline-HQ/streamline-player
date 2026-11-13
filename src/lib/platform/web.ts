@@ -1,6 +1,8 @@
 import { resolve } from "$app/paths";
 import { browserDeviceName, pkcePair, SignInError } from "#lib/core/auth.ts";
-import type { PlaybackPort, Session, Tracks } from "#lib/core/playback/port.ts";
+import type { PlaybackPort, PlayerEvent, Session, Tracks } from "#lib/core/playback/port.ts";
+import { browserCaps } from "./browser-caps.ts";
+import * as shaka from "./shaka.ts";
 import type {
 	AuthMethods,
 	AuthState,
@@ -22,7 +24,6 @@ const REFRESH = "auth:refresh";
 const DEVICE = "auth:device";
 const PENDING_SSO = "auth:sso";
 const LOCK = "auth-refresh";
-const NO_PLAYER = "no browser player before plan 4";
 
 type Tokens = {
 	access_token: string;
@@ -204,6 +205,43 @@ async function call<T = unknown>(method: string, path: string, body?: unknown): 
 	return (text ? JSON.parse(text) : null) as T;
 }
 
+/** A GET of a file Streamline serves under the bearer token, such as a subtitle; other hosts get no credential. */
+async function withToken(target: string): Promise<Response> {
+	await init();
+	if (!target.startsWith(`${streamline}/`)) return fetch(target);
+	if (!access && store.get(REFRESH)) await refresh(null);
+	const send = () => {
+		const sent = access;
+		return fetch(target, { headers: sent ? { Authorization: `Bearer ${sent}` } : {} }).then(
+			(res) => ({ res, sent }),
+		);
+	};
+	let { res, sent } = await send();
+	if (res.status === 401 && store.get(REFRESH) && (await refresh(sent))) ({ res } = await send());
+	return res;
+}
+
+let beating: string | null = null;
+
+// A closing tab cannot wait for the refresh lock or a retry: the last beat goes out as it is, with the token in hand.
+// `pagehide` alone is not enough: Firefox drops a preflighted request started that late, and `hidden` comes first.
+const finalBeat = () => {
+	if (!beating || !access) return;
+	fetch(url(`/playback/sessions/${beating}/progress`), {
+		method: "POST",
+		keepalive: true,
+		headers: { Authorization: `Bearer ${access}`, "Content-Type": "application/json" },
+		body: JSON.stringify({
+			position: shaka.position(),
+			paused: document.visibilityState === "hidden",
+		}),
+	}).catch(() => {});
+};
+window.addEventListener("pagehide", finalBeat);
+document.addEventListener("visibilitychange", () => {
+	if (document.visibilityState === "hidden") finalBeat();
+});
+
 const listOf = <T>(page: { items: T[] }) => page.items;
 
 export const library = (kind: Kind) => call<{ items: Title[] }>("GET", `/${kind}`).then(listOf);
@@ -297,8 +335,9 @@ export const deviceInfo = (): Promise<DeviceInfo> =>
 
 export const voice = (_language: string): Promise<{ text: string }> => notOnWeb();
 
+let capabilities: Promise<unknown> | null = null;
 export const PLAYER_NAME: string = "Shaka";
-export const playerCapabilities = (): Promise<unknown> => Promise.reject(new Error(NO_PLAYER));
+export const playerCapabilities = (): Promise<unknown> => (capabilities ??= browserCaps());
 
 export const decisions = async (mediaId: string, options: DecisionOption[]) =>
 	call<{ bit_rate: number; decisions: Decision[] }>("POST", "/playback/decisions", {
@@ -313,14 +352,15 @@ export const network = () =>
 		.catch(() => "away" as const);
 
 export const onPlayer = <T = undefined>(
-	_event: string,
-	_cb: (e: T) => void,
-): Promise<() => Promise<void>> => Promise.resolve(() => Promise.resolve());
+	event: string,
+	cb: (e: T) => void,
+): Promise<() => Promise<void>> =>
+	shaka.on<T>(event as PlayerEvent, cb).then((off) => async () => off());
 
 export const playbackPort: PlaybackPort = {
 	playerName: PLAYER_NAME,
-	command: () => Promise.reject(new Error(NO_PLAYER)),
-	on: () => Promise.resolve(() => {}),
+	command: shaka.command,
+	on: shaka.on,
 	capabilities: playerCapabilities,
 	decisions,
 	network,
@@ -331,15 +371,23 @@ export const playbackPort: PlaybackPort = {
 			capabilities,
 			position,
 			...tracks,
+		}).then((session) => {
+			beating = session.session_id;
+			return session;
 		}),
 	patchSession: (id, changes) => call<Session>("PATCH", `/playback/sessions/${id}`, changes),
 	sessionInfo: (id) => call<{ speed: number | null }>("GET", `/playback/sessions/${id}`),
-	stopSession: (id) => call("DELETE", `/playback/sessions/${id}`),
-	heartbeat: (id, position, paused) =>
-		call("POST", `/playback/sessions/${id}/progress`, { position, paused }),
+	stopSession: (id) => {
+		if (beating === id) beating = null;
+		return call("DELETE", `/playback/sessions/${id}`);
+	},
+	heartbeat: (id, position, paused) => {
+		beating = id;
+		return call("POST", `/playback/sessions/${id}/progress`, { position, paused });
+	},
 	mediaTracks: (mediaId) => call<Tracks>("GET", `/playback/media/${mediaId}/tracks`),
 	subtitleText: (subtitleUrl) =>
-		fetch(subtitleUrl).then((res) => (res.ok ? res.text() : fail(`${res.status}`))),
+		withToken(subtitleUrl).then((res) => (res.ok ? res.text() : fail(`${res.status}`))),
 };
 
 export const authMethods = (): Promise<AuthMethods> =>

@@ -1,4 +1,5 @@
 // One-shot walkthrough: node walk.mjs <browser> <scenario>. Saves screenshots and the scenario JSON to $SHOTS.
+import { execSync } from "node:child_process";
 import { mkdirSync, writeFileSync } from "node:fs";
 import { createRequire } from "node:module";
 import { fileURLToPath } from "node:url";
@@ -12,7 +13,16 @@ const [, , engine = "webkit", scenario = "home"] = process.argv;
 // the Tauri shim, "web" the browser build on :1430 with no shim, "tv" (the default) the TV build on :1420.
 const scenarioModule = await import(`./scenarios/${scenario}.mjs`);
 const target = scenarioModule.target ?? "tv";
-const browser = await pw[engine].launch({ headless: true });
+// Playwright's Firefox finds no AAC decoder of its own: a scenario that plays real media gets the dev shell's ffmpeg libraries.
+const ffmpegLibs = () => {
+  try {
+    const found = execSync('ldd "$(command -v ffmpeg)"', { encoding: "utf8" }).match(/libavcodec\S*\s=>\s(\S+)\//);
+    return found ? { ...process.env, LD_LIBRARY_PATH: [found[1], process.env.LD_LIBRARY_PATH].filter(Boolean).join(":") } : undefined;
+  } catch {
+    return undefined;
+  }
+};
+const browser = await pw[engine].launch({ headless: true, env: engine === "firefox" && scenarioModule.engine ? ffmpegLibs() : undefined });
 const ctx = await browser.newContext({ viewport: { width: 1920, height: 1080 } });
 const app = await ctx.newPage();
 if (target !== "web") {
@@ -39,6 +49,7 @@ const idle = async () => {
 // The page's timers run on a virtual clock that only moves while no request is in flight, so
 // timing does not depend on how fast the mock answers.
 const wait = async (ms) => {
+  if (scenarioModule.realClock) return app.waitForTimeout(ms);
   for (let left = ms; left > 0; left -= STEP) {
     await idle();
     await app.clock.runFor(Math.min(STEP, left));

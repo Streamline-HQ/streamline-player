@@ -16,6 +16,7 @@ let
     ../package.json
     ../pnpm-lock.yaml
     ../vite.config.ts
+    ../src-tauri/tauri.conf.json
     ../tsconfig.json
     ../project.inlang/settings.json
     ../messages
@@ -23,6 +24,7 @@ let
     ../static
     ../dev/auto-check.ts
     ../dev/messages-check.ts
+    ../dev/shaka-caps-check.ts
     ../dev/web-build-check.ts
   ];
   toSource =
