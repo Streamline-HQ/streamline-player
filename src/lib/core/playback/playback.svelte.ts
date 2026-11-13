@@ -30,6 +30,7 @@ import type {
 	SubTrack,
 	Tracks,
 } from "#lib/core/playback/port.ts";
+import { parseTrickplay, type Trickplay } from "#lib/core/trickplay.ts";
 import { type Choice, subsRule } from "#lib/core/playback/choice.ts";
 import {
 	autoForcedSub,
@@ -113,6 +114,8 @@ export class Playback {
 	buffering = $state(true);
 	ended = $state(false);
 	tracks = $state<Tracks | null>(null);
+	trickplay = $state<Trickplay | null>(null);
+	#trickplayUrl: string | null = null;
 	audioPick = $state<number | null>(null);
 	subPick = $state<number | null>(null);
 	burn = $state(false);
@@ -513,6 +516,20 @@ export class Playback {
 		this.#autoForced();
 		this.#watch();
 		await this.#refreshPreview();
+	}
+
+	/** Reads the thumbnail index once per URL; the screens that draw a preview ask for it, so the others never wait on the engine. */
+	async loadTrickplay() {
+		const url = this.tracks?.trickplay?.url ?? null;
+		if (url === this.#trickplayUrl) return;
+		this.#trickplayUrl = url;
+		this.trickplay = null;
+		if (!url) return;
+		const parsed = await this.#port
+			.mediaText(url)
+			.then((text) => parseTrickplay(url, text))
+			.catch(() => null);
+		if (this.#trickplayUrl === url) this.trickplay = parsed;
 	}
 
 	#clearHalt() {

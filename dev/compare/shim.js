@@ -115,7 +115,7 @@
     playback_status: () => call("GET", "/playback/status"),
     start_session: (a) => window.__holdStart ? new Promise((r) => { window.__releaseStart = r; }).then(() => startSession(a)) : startSession(a),
     decisions: ({ mediaId, capabilities, options }) => call("POST", "/playback/decisions", { media_id: mediaId, capabilities, options }),
-    media_tracks: ({ mediaId }) => call("GET", `/playback/media/${mediaId}/tracks`).then((t) => { if (t?.duration) window.__fakeDuration = t.duration; return { ...t, ...(window.__tracks || {}) }; }),
+    media_tracks: ({ mediaId }) => call("GET", `/playback/media/${mediaId}/tracks`).then((t) => { if (t?.duration) window.__fakeDuration = t.duration; return { ...t, ...(window.__tracks || {}), ...(localStorage.getItem("__noTrickplay") ? { trickplay: null } : {}) }; }),
     media_text: ({ url }) => /^fake:/.test(url) ? "WEBVTT\n\n00:00:01.000 --> 01:00:00.000\nHello there\n" : fetch(`${B}/raw/${url}`).then((r) => r.text()),
     patch_session: ({ id, changes }) => window.__failStart ? Promise.reject(window.__failStart) : call("PATCH", `/playback/sessions/${id}`, changes),
     session_info: ({ id }) => call("GET", `/playback/sessions/${id}`),

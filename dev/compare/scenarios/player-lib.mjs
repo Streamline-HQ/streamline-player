@@ -18,7 +18,7 @@ export async function prepare({ app }, { autoplay = true } = {}) {
       window.__picture = true;
       window.__fakeDuration = duration;
       const sub = (index, language) => ({ index, codec: "subrip", language, forced: false, sdh: false, files: { vtt: `fake:${language}` } });
-      window.__tracks = { chapters, preparing: false, subtitles: [sub(1, "eng"), sub(2, "fre")], markers: { intro: [30, 75], credits: [duration - 60, duration] } };
+      window.__tracks = { chapters, preparing: false, trickplay: null, subtitles: [sub(1, "eng"), sub(2, "fre")], markers: { intro: [30, 75], credits: [duration - 60, duration] } };
       if (!autoplay) localStorage.setItem("prefs", JSON.stringify({ autoplay: false }));
     },
     { chapters: CHAPTERS, duration: DURATION, autoplay },

@@ -1,5 +1,6 @@
 <script lang="ts">
 import { clock, hoverAt, type Segment } from "#lib/core/player-view.ts";
+import { type Trickplay, tileAt } from "#lib/core/trickplay.ts";
 import { hideBroken } from "#lib/ui/img.ts";
 
 type Chapter = { start: number; end: number; title: string };
@@ -11,6 +12,7 @@ let {
 	buffered,
 	duration,
 	still,
+	trickplay = null,
 	label,
 	onseek,
 	onhovering,
@@ -22,6 +24,7 @@ let {
 	buffered: number;
 	duration: number;
 	still: string;
+	trickplay?: Trickplay | null;
 	label: string;
 	onseek: (seconds: number) => void;
 	onhovering: (on: boolean) => void;
@@ -30,10 +33,27 @@ let {
 
 let hover = $state<number | null>(null);
 let drag = $state<number | null>(null);
+let failed = $state<string[]>([]);
+let frameWidth = $state(0);
+let frameHeight = $state(0);
 
 const shown = $derived(drag !== null ? drag * duration : position);
 const pct = $derived(duration > 0 ? Math.min(100, (shown / duration) * 100) : 0);
 const peek = $derived(hover === null ? null : hoverAt(hover, duration, chapters));
+const tile = $derived.by(() => {
+	if (!trickplay || !peek) return null;
+	const t = tileAt(trickplay, peek.time);
+	return failed.includes(t.sheet) ? null : t;
+});
+const scale = $derived(
+	trickplay && frameWidth && frameHeight
+		? Math.max(frameWidth / trickplay.tileWidth, frameHeight / trickplay.tileHeight)
+		: 0,
+);
+const inset = $derived({
+	x: trickplay ? (frameWidth - trickplay.tileWidth * scale) / 2 : 0,
+	y: trickplay ? (frameHeight - trickplay.tileHeight * scale) / 2 : 0,
+});
 const grown = $derived(hover !== null || drag !== null);
 
 const within = (at: number, s: Segment) =>
@@ -45,6 +65,14 @@ function ratio(e: PointerEvent) {
 	const r = (e.currentTarget as HTMLElement).getBoundingClientRect();
 	return Math.max(0, Math.min(1, (e.clientX - r.left) / r.width));
 }
+
+$effect(() => {
+	const sheet = tile?.sheet;
+	if (!sheet) return;
+	const img = new Image();
+	img.onerror = () => (failed = [...failed, sheet]);
+	img.src = sheet;
+});
 
 function setHover(v: number | null) {
 	hover = v;
@@ -95,13 +123,22 @@ function setHover(v: number | null) {
 	<div class="thumb" style:left="{pct}%"></div>
 	{#if peek && hover !== null}
 		<div class="peek" style:left="{Math.max(7, Math.min(93, hover * 100))}%">
-			<div class="frame">
-				<img
-					src={still}
-					alt=""
-					style:object-position="{Math.round(hover * 100)}% 50%"
-					onerror={hideBroken}
-				>
+			<div class="frame" bind:clientWidth={frameWidth} bind:clientHeight={frameHeight}>
+				{#if tile && trickplay}
+					<div
+						class="tile"
+						style:background-image="url({tile.sheet})"
+						style:background-size="{trickplay.cols * trickplay.tileWidth * scale}px auto"
+						style:background-position="{inset.x - tile.x * scale}px {inset.y - tile.y * scale}px"
+					></div>
+				{:else}
+					<img
+						src={still}
+						alt=""
+						style:object-position="{Math.round(hover * 100)}% 50%"
+						onerror={hideBroken}
+					>
+				{/if}
 			</div>
 			<div class="when">{clock(peek.time, duration)}{peek.chapter ? ` · ${peek.chapter}` : ""}</div>
 		</div>
@@ -179,6 +216,12 @@ function setHover(v: number | null) {
 	overflow: hidden;
 	box-shadow: 0 12px 32px rgba(0, 0, 0, 0.6);
 	border: 2px solid color-mix(in srgb, var(--player-ink) 90%, transparent);
+}
+
+.tile {
+	width: 100%;
+	height: 100%;
+	background-repeat: no-repeat;
 }
 
 .frame img {

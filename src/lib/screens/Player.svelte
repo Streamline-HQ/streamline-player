@@ -405,6 +405,10 @@ onMount(() => {
 	};
 });
 
+$effect(() => {
+	if (pb?.tracks) void pb.loadTrickplay();
+});
+
 // The player reports every 500 ms; between reports the bar moves on each frame at the playback speed.
 $effect(() => {
 	if (!pb?.playing || !controlsOn) return;
@@ -888,6 +892,7 @@ const labels = {
 					buffered={pb.buffered}
 					{duration}
 					still={view.still}
+					trickplay={pb.trickplay}
 					label={i18n.player_seek()}
 					onseek={(at) => pb.seekTo(at)}
 					onhovering={(on) => (hovering = on)}
