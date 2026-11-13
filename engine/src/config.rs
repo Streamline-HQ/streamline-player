@@ -76,6 +76,7 @@ pub struct Config {
     pub max_queued: usize,
     #[serde(with = "humantime_serde")]
     pub orphan_timeout: Duration,
+    /// How long a job's output may go unread before the sweep removes it; zero turns the sweep off.
     #[serde(with = "humantime_serde")]
     pub job_output_ttl: Duration,
     pub path_map: PathMap,

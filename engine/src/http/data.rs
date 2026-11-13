@@ -186,3 +186,16 @@ pub async fn download(
     let Ok(res) = ServeFile::new(path).oneshot(req).await;
     Ok(res.into_response())
 }
+
+pub async fn media(
+    State(s): State<AppState>,
+    Params((id, name)): Params<(String, String)>,
+    TokenQuery(q): TokenQuery,
+    req: Request,
+) -> Result<Response, ApiError> {
+    check_token(&s, Scope::Media, &id, &q)?;
+    let path = s.jobs.file(&id, &name)?;
+    s.jobs.touch(&id);
+    let Ok(res) = ServeFile::new(path).oneshot(req).await;
+    Ok(res.into_response())
+}

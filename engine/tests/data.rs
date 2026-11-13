@@ -271,3 +271,141 @@ async fn bytes_are_counted_as_sent() {
     assert_eq!(body.len(), 64 * 1024);
     assert_eq!(e.sessions.list()[0].bytes_served, 64 * 1024);
 }
+
+fn media_query(id: &str, exp: u64) -> String {
+    format!(
+        "exp={exp}&sig={}",
+        engine::token::sign(SECRET.as_bytes(), engine::token::Scope::Media, id, exp)
+    )
+}
+
+fn finished_job(e: &Env, n: u8) -> String {
+    let jid = id(n);
+    let dir = e.root.join("jobs").join(&jid);
+    std::fs::create_dir_all(dir.join("sub")).unwrap();
+    std::fs::write(dir.join("done.json"), r#"{"state":"done"}"#).unwrap();
+    std::fs::write(dir.join("2.vtt"), b"WEBVTT\n\n").unwrap();
+    std::fs::write(dir.join("sub/a.ttf"), b"font-bytes").unwrap();
+    jid
+}
+
+#[tokio::test]
+async fn media_serves_job_file() {
+    let e = env();
+    let jid = finished_job(&e, 7);
+    let q = media_query(&jid, now() + 3600);
+
+    let res = e.get(&format!("/media/{jid}/2.vtt?{q}")).await;
+    assert_eq!(res.status(), StatusCode::OK);
+    assert_eq!(body_bytes(res).await, b"WEBVTT\n\n");
+
+    let res = e.get(&format!("/media/{jid}/sub/a.ttf?{q}")).await;
+    assert_eq!(res.status(), StatusCode::OK);
+    assert_eq!(body_bytes(res).await, b"font-bytes");
+
+    let res = e
+        .send(
+            Request::get(format!("/media/{jid}/2.vtt?{q}"))
+                .header(header::RANGE, "bytes=0-3")
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await;
+    assert_eq!(res.status(), StatusCode::PARTIAL_CONTENT);
+    assert_eq!(body_bytes(res).await, b"WEBV");
+}
+
+#[tokio::test]
+async fn media_rejects_wrong_scope_or_job() {
+    let e = env();
+    let jid = finished_job(&e, 7);
+    let url = |q: String| format!("/media/{jid}/2.vtt?{q}");
+    for q in [
+        dl_query(&jid),
+        valid_query(&jid),
+        media_query(&id(8), now() + 3600),
+        media_query(&jid, now() - 10),
+        String::new(),
+    ] {
+        let res = e.get(&url(q.clone())).await;
+        assert_eq!(res.status(), StatusCode::FORBIDDEN, "{q}");
+    }
+}
+
+#[tokio::test]
+async fn media_hides_everything_else() {
+    let e = env();
+    let jid = finished_job(&e, 7);
+    let other = finished_job(&e, 9);
+    let q = media_query(&jid, now() + 3600);
+    for name in [
+        "done.json".to_string(),
+        format!("..%2F{other}%2F2.vtt"),
+        format!("../{other}/2.vtt"),
+        "%2e%2e/x".to_string(),
+        "a%5Cb".to_string(),
+        "%2Fetc%2Fpasswd".to_string(),
+        "missing.vtt".to_string(),
+    ] {
+        let res = e.get(&format!("/media/{jid}/{name}?{q}")).await;
+        assert_eq!(res.status(), StatusCode::NOT_FOUND, "{name}");
+    }
+    let res = e.get(&format!("/media/{jid}?{q}")).await;
+    assert_eq!(res.status(), StatusCode::NOT_FOUND);
+    let res = e.get(&format!("/media/{jid}/?{q}")).await;
+    assert_eq!(res.status(), StatusCode::NOT_FOUND);
+
+    let failed = id(10);
+    let dir = e.root.join("jobs").join(&failed);
+    std::fs::create_dir_all(&dir).unwrap();
+    std::fs::write(dir.join("done.json"), r#"{"state":"failed"}"#).unwrap();
+    std::fs::write(dir.join("2.vtt"), b"x").unwrap();
+    let res = e
+        .get(&format!(
+            "/media/{failed}/2.vtt?{}",
+            media_query(&failed, now() + 3600)
+        ))
+        .await;
+    assert_eq!(res.status(), StatusCode::NOT_FOUND);
+
+    let queued = id(11);
+    let dir = e.root.join("jobs").join(&queued);
+    std::fs::create_dir_all(&dir).unwrap();
+    std::fs::write(dir.join("2.vtt"), b"x").unwrap();
+    let res = e
+        .get(&format!(
+            "/media/{queued}/2.vtt?{}",
+            media_query(&queued, now() + 3600)
+        ))
+        .await;
+    assert_eq!(res.status(), StatusCode::NOT_FOUND);
+}
+
+#[tokio::test]
+async fn media_answers_cross_origin() {
+    let e = env();
+    let jid = finished_job(&e, 7);
+    let q = media_query(&jid, now() + 3600);
+    let res = e
+        .send(
+            Request::get(format!("/media/{jid}/2.vtt?{q}"))
+                .header(header::ORIGIN, "https://app.example")
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await;
+    assert_eq!(res.headers()[header::ACCESS_CONTROL_ALLOW_ORIGIN], "*");
+    let res = e
+        .send(
+            Request::builder()
+                .method("OPTIONS")
+                .uri(format!("/media/{jid}/2.vtt"))
+                .header(header::ORIGIN, "https://app.example")
+                .header(header::ACCESS_CONTROL_REQUEST_METHOD, "GET")
+                .header(header::ACCESS_CONTROL_REQUEST_HEADERS, "range")
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await;
+    assert_eq!(res.headers()[header::ACCESS_CONTROL_ALLOW_ORIGIN], "*");
+}

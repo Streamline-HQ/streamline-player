@@ -40,6 +40,7 @@ pub fn router(state: AppState) -> Router {
         .route("/hls/{id}/{file}", get(data::hls))
         .route("/file/{id}", get(data::file))
         .route("/dl/{id}", get(data::download))
+        .route("/media/{id}/{*name}", get(data::media))
         .method_not_allowed_fallback(method_not_allowed)
         .layer(
             CorsLayer::new()

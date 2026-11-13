@@ -5,6 +5,7 @@ use sha2::Sha256;
 pub enum Scope {
     Hls,
     Dl,
+    Media,
 }
 
 impl Scope {
@@ -12,6 +13,7 @@ impl Scope {
         match self {
             Scope::Hls => "hls",
             Scope::Dl => "dl",
+            Scope::Media => "media",
         }
     }
 }
@@ -58,6 +60,13 @@ mod tests {
         assert_eq!(dl, DL_VECTOR);
         assert!(verify(SECRET, Scope::Dl, ID, EXP, &dl, EXP));
         assert!(!verify(SECRET, Scope::Hls, ID, EXP, &dl, EXP));
+        let media = sign(SECRET, Scope::Media, ID, EXP);
+        assert_ne!(media, HLS_VECTOR);
+        assert_ne!(media, dl);
+        assert!(verify(SECRET, Scope::Media, ID, EXP, &media, EXP));
+        assert!(!verify(SECRET, Scope::Hls, ID, EXP, &media, EXP));
+        assert!(!verify(SECRET, Scope::Dl, ID, EXP, &media, EXP));
+        assert!(!verify(SECRET, Scope::Media, ID, EXP, HLS_VECTOR, EXP));
     }
 
     #[test]

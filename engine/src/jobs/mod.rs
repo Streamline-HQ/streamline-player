@@ -268,6 +268,9 @@ impl Shared {
     }
 
     fn sweep_ttl(&self) {
+        if self.cfg.job_output_ttl.is_zero() {
+            return;
+        }
         let Ok(entries) = std::fs::read_dir(&self.cfg.jobs_dir) else {
             return;
         };
@@ -409,6 +412,17 @@ impl Jobs {
         } else {
             Err(ApiError::not_found("no such file"))
         }
+    }
+
+    /// Reading an output counts as using it: the age sweep goes by this file's mtime.
+    pub fn touch(&self, id: &str) {
+        if check_id(id).is_err() {
+            return;
+        }
+        let _ = std::fs::File::options()
+            .write(true)
+            .open(self.0.dir(id).join(DONE_FILE))
+            .and_then(|f| f.set_modified(SystemTime::now()));
     }
 
     pub fn download_path(&self, id: &str) -> Result<PathBuf, ApiError> {
@@ -747,6 +761,38 @@ mod tests {
         f.jobs().sweep_ttl_once();
         assert!(!old.exists());
         assert!(fresh.exists());
+    }
+
+    fn aged_done_job(f: &Fixture, n: u8) -> PathBuf {
+        let dir = f.cfg.jobs_dir.join(id(n));
+        std::fs::create_dir_all(&dir).unwrap();
+        std::fs::write(dir.join(DONE_FILE), r#"{"state":"done"}"#).unwrap();
+        let eight_days = Duration::from_secs(8 * 24 * 3600);
+        filetime::set_file_mtime(
+            dir.join(DONE_FILE),
+            filetime::FileTime::from_system_time(SystemTime::now() - eight_days),
+        )
+        .unwrap();
+        dir
+    }
+
+    #[tokio::test]
+    async fn touch_keeps_output_alive() {
+        let f = Fixture::new(|_| {});
+        let used = aged_done_job(&f, 1);
+        let unused = aged_done_job(&f, 2);
+        f.jobs().touch(&id(1));
+        f.jobs().sweep_ttl_once();
+        assert!(used.exists());
+        assert!(!unused.exists());
+    }
+
+    #[tokio::test]
+    async fn zero_ttl_never_sweeps() {
+        let f = Fixture::new(|c| c.job_output_ttl = Duration::ZERO);
+        let old = aged_done_job(&f, 1);
+        f.jobs().sweep_ttl_once();
+        assert!(old.exists());
     }
 
     #[tokio::test]

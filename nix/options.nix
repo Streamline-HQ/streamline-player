@@ -47,6 +47,11 @@ in
             type = lib.types.str;
             description = "Directory for background job output (analysis, downloads).";
           };
+          job_output_ttl = lib.mkOption {
+            type = lib.types.str;
+            default = "168h";
+            description = "How long a job's output may go unread before the sweep removes it. Reading a file resets the clock. `0s` turns the sweep off.";
+          };
         };
       };
       default = { };
