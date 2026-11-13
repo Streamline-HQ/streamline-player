@@ -5,6 +5,7 @@ import type {
 	AuthState,
 	Decision,
 	DecisionOption,
+	ActivityEvent,
 	Device,
 	DeviceInfo,
 	HomeFeed,
@@ -112,6 +113,8 @@ export const setPicture = async (file: Blob) =>
 export const removePicture = () => invoke<void>("remove_picture");
 export const revokeDevice = (id: string) => invoke<void>("revoke_device", { id });
 export const devices = () => invoke<{ items: Device[] }>("devices").then(listOf);
+export const activity = () => invoke<{ items: ActivityEvent[] }>("activity").then(listOf);
+export const markActivityRead = (ids: string[]) => invoke<void>("activity_read", { ids });
 export const playbackStatus = () => invoke<{ network?: string }>("playback_status");
 export const serverHost = () => invoke<string>("server_host");
 export const deviceInfo = () => invoke<DeviceInfo>("plugin:player|deviceInfo");

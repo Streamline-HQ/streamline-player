@@ -55,6 +55,7 @@ p.add_argument("--access-ttl", type=int, default=900, help="seconds a browser's 
 p.add_argument("--refresh-ttl", type=int, default=2592000, help="seconds a browser's refresh token lasts")
 p.add_argument("--password", default="streamline", help="password of the email sign-in")
 p.add_argument("--empty", action="store_true", help="serve a library with no titles in it")
+p.add_argument("--demo-activity", nargs="?", const="all", choices=["all", "no-downloads"], help="serve the design's eleven activity events instead of the library's arrivals; no-downloads leaves out the download")
 p.add_argument("--demo-progress", action="store_true", help="start with Dune: Part Two and Severance S2 E4 partly watched")
 p.add_argument("--sso-deny", action="store_true", help="have the SSO provider refuse every sign-in")
 p.add_argument("--player-url", help="the player web app's URL; pairing links then point at its /pair page")
@@ -201,6 +202,43 @@ def home():
     for added, item in sorted(arrivals, key=lambda a: a[0], reverse=True):
         days.setdefault(added.date().isoformat(), []).append(item)
     return {"featured": featured[:3], "arrivals": [{"date": d, "items": items} for d, items in days.items()]}
+
+
+def activity_events():
+    """The feed, newest first: the design's sample events, or one per arrival in the library, all read."""
+    if args.empty:
+        return []
+    if args.demo_activity:
+        now = shown_now()
+        at = lambda seconds: datetime.datetime.fromtimestamp(now - seconds, datetime.UTC).isoformat()
+        minute, hour, day = 60, 3600, 86400
+        events = [
+            {"id": "a1", "kind": "episodes", "at": at(10 * minute), "read": False, "title": {"kind": "series", "id": 1}, "season": 2, "episodes": [8, 9]},
+            {"id": "a2", "kind": "download", "at": at(52 * minute), "read": False, "title": {"kind": "series", "id": 2}, "season": 1, "episodes": [10]},
+            {"id": "a4", "kind": "movie", "at": at(2 * hour + 25 * minute), "read": True, "title": {"kind": "movies", "id": 2}, "file": {"resolution": "2160p", "hdr": "HDR10", "audio": "Atmos"}},
+            {"id": "a3", "kind": "upgrade", "at": at(5 * hour + 45 * minute), "read": False, "title": {"kind": "movies", "id": 3}, "file": {"resolution": "2160p", "hdr": "Dolby Vision"}, "previous": {"resolution": "1080p"}},
+            {"id": "a7", "kind": "movie", "at": at(14 * hour + 30 * minute), "read": True, "title": {"kind": "movies", "id": 4}, "file": {"resolution": "1080p", "audio": "EAC3", "channels": "5.1"}},
+            {"id": "a5", "kind": "device", "at": at(17 * hour), "read": True, "device": {"name": "iPhone 16 Pro", "platform": "ios", "location": "Lyon, France"}},
+            {"id": "a6", "kind": "season", "at": at(19 * hour), "read": True, "title": {"kind": "series", "id": 2}, "season": 1, "episode_count": 10},
+            {"id": "a8", "kind": "server", "at": at(33 * hour), "read": True, "server": {"version": "2.4.1", "restart_seconds": 12}},
+            {"id": "a9", "kind": "movie", "at": at(4 * day), "read": True, "title": {"kind": "movies", "id": 6}, "file": {"resolution": "2160p", "hdr": "Dolby Vision"}},
+            {"id": "a10", "kind": "season", "at": at(5 * day), "read": True, "title": {"kind": "series", "id": 3}, "season": 1, "episode_count": 8},
+            {"id": "a11", "kind": "scan", "at": at(6 * day), "read": True, "scan": {"added": 4, "upgraded": 2, "errors": 0}},
+        ]
+        return [e for e in events if not (args.demo_activity == "no-downloads" and e["id"] == "a2")]
+    arrivals = []
+    for movie in MOVIES:
+        arrivals.append((movie["added_at"], {"id": f"m{movie['id']}", "kind": "movie", "at": movie["added_at"], "read": True,
+                                             "title": {"kind": "movies", "id": movie["id"]},
+                                             **({"file": {k: v for k, v in movie["file_summary"].items() if k != "file_count"}} if movie.get("file_summary") else {})}))
+    for show in SERIES:
+        latest = show["seasons"][-1]
+        arrivals.append((show["added_at"], {"id": f"s{show['id']}", "kind": "season", "at": show["added_at"], "read": True,
+                                            "title": {"kind": "series", "id": show["id"]}, "season": latest["number"], "episode_count": len(latest["episodes"])}))
+    return [e for _, e in sorted(arrivals, key=lambda a: a[0], reverse=True)][:100]
+
+
+ACTIVITY = activity_events()
 
 
 def summary(item):
@@ -563,6 +601,8 @@ class Handler(BaseHTTPRequestHandler):
             return self.authorize(urllib.parse.parse_qs(url.query))
         if self.path == "/api/v1/me":
             return self.reply(200, profile())
+        if self.path == "/api/v1/activity":
+            return self.reply(200, {"items": ACTIVITY})
         if self.path == "/api/v1/devices":
             now = shown_now()
             ago = lambda s: time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime(now - s))
@@ -616,6 +656,18 @@ class Handler(BaseHTTPRequestHandler):
                 return self.reply(404, {"error": {"code": "no_pending_pairing"}})
             found["status"] = "approved" if m[1] == "approve" else "denied"
             return self.reply(200, {"user_code": found["user_code"], "name": found["name"]})
+        if self.path == "/dev/activity/unread":
+            for event in ACTIVITY:
+                event["read"] = False
+            return self.reply(204)
+        if self.path == "/api/v1/activity/read":
+            ids = self.body().get("ids")
+            if not isinstance(ids, list) or not 1 <= len(ids) <= 100 or not all(isinstance(i, str) for i in ids):
+                return self.reply(400, {"error": {"code": "invalid_request"}})
+            for event in ACTIVITY:
+                if event["id"] in ids:
+                    event["read"] = True
+            return self.reply(204)
         m = re.fullmatch(r"/dev/art/(on|off)", self.path)
         if m:
             ART_ON["on"] = m[1] == "on"

@@ -122,6 +122,32 @@ export type Device = {
 	streaming: boolean;
 	current: boolean;
 };
+export type ActivityKind =
+	| "episodes"
+	| "season"
+	| "movie"
+	| "upgrade"
+	| "download"
+	| "device"
+	| "server"
+	| "scan";
+export type ActivityEvent = {
+	id: string;
+	kind: ActivityKind;
+	/** ISO 8601, UTC. */
+	at: string;
+	read: boolean;
+	title?: { kind: Kind; id: number };
+	season?: number;
+	/** The numbers added; a download's is the one episode. */
+	episodes?: number[];
+	episode_count?: number;
+	file?: FileSummary;
+	previous?: FileSummary;
+	device?: { name: string; platform: string; location?: string };
+	server?: { version: string; restart_seconds?: number };
+	scan?: { added: number; upgraded: number; errors: number };
+};
 export type DeviceInfo = {
 	name: string;
 	model: string;

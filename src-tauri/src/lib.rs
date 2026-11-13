@@ -300,6 +300,22 @@ async fn devices(api: tauri::State<'_, Api>) -> Result<Value, String> {
 }
 
 #[tauri::command]
+async fn activity(api: tauri::State<'_, Api>) -> Result<Value, String> {
+    api.call(reqwest::Method::GET, "/activity", None).await
+}
+
+#[tauri::command]
+async fn activity_read(api: tauri::State<'_, Api>, ids: Vec<String>) -> Result<(), String> {
+    api.call(
+        reqwest::Method::POST,
+        "/activity/read",
+        Some(json!({ "ids": ids })),
+    )
+    .await
+    .map(drop)
+}
+
+#[tauri::command]
 async fn playback_status(api: tauri::State<'_, Api>) -> Result<Value, String> {
     api.call(reqwest::Method::GET, "/playback/status", None)
         .await
@@ -536,6 +552,8 @@ pub fn run() {
             remove_picture,
             revoke_device,
             devices,
+            activity,
+            activity_read,
             playback_status,
             decisions,
             media_tracks,

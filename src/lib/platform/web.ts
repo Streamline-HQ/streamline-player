@@ -8,6 +8,7 @@ import type {
 	AuthState,
 	Decision,
 	DecisionOption,
+	ActivityEvent,
 	Device,
 	DeviceInfo,
 	HomeFeed,
@@ -283,6 +284,8 @@ export const removePicture = () => call<void>("DELETE", "/me/picture");
 export const revokeDevice = (id: string) =>
 	call<void>("DELETE", `/devices/${encodeURIComponent(id)}`);
 export const devices = () => call<{ items: Device[] }>("GET", "/devices").then(listOf);
+export const activity = () => call<{ items: ActivityEvent[] }>("GET", "/activity").then(listOf);
+export const markActivityRead = (ids: string[]) => call<void>("POST", "/activity/read", { ids });
 export const playbackStatus = () => call<{ network?: string }>("GET", "/playback/status");
 export const serverHost = () => Promise.resolve(streamline.replace(/^[a-z]+:\/\//, ""));
 

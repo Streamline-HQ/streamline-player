@@ -112,6 +112,8 @@
     remove_picture: () => call("DELETE", "/me/picture"),
     revoke_device: ({ id }) => call("DELETE", `/devices/${encodeURIComponent(id)}`),
     devices: () => call("GET", "/devices"),
+    activity: () => call("GET", "/activity"),
+    activity_read: ({ ids }) => call("POST", "/activity/read", { ids }),
     playback_status: () => call("GET", "/playback/status"),
     start_session: (a) => window.__holdStart ? new Promise((r) => { window.__releaseStart = r; }).then(() => startSession(a)) : startSession(a),
     decisions: ({ mediaId, capabilities, options }) => call("POST", "/playback/decisions", { media_id: mediaId, capabilities, options }),
