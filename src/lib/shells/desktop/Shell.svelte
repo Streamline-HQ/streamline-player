@@ -1,6 +1,8 @@
 <script lang="ts">
 import { goto } from "#lib/ui/nav.ts";
 import { page } from "$app/state";
+import { loadActivity, resetActivity, unread } from "#lib/core/activity.svelte.ts";
+import { bellLabel } from "#lib/core/activity-view.ts";
 import { account, clearMe, initialsOf, setMe } from "#lib/core/me.svelte.ts";
 import { activeToast, toast } from "#lib/core/toast.svelte.ts";
 import { nowPlaying, stop, toFull } from "#lib/core/playback/now-playing.svelte.ts";
@@ -15,16 +17,18 @@ import Kbd from "#lib/ui/Kbd.svelte";
 import Menu from "#lib/ui/Menu.svelte";
 import MiniPlayer from "#lib/ui/MiniPlayer.svelte";
 import ShortcutList from "#lib/ui/ShortcutList.svelte";
+import { activityWords } from "#lib/ui/activity-words.ts";
 import { presence } from "#lib/ui/presence.svelte.ts";
 import { provideScroll } from "#lib/ui/scroll.ts";
-import { me, myPicture, playbackPort, signOut } from "#platform";
+import { activity, markActivityRead, me, myPicture, playbackPort, signOut } from "#platform";
 import type { Snippet } from "svelte";
-import { onMount } from "svelte";
+import { onMount, untrack } from "svelte";
 
 const MIN_WIDTH = 900;
 const STAGE_WIDTH = 1920;
 const G_WINDOW_MS = 900;
 const FULLSCREEN_HINT_MS = 2600;
+const ACTIVITY_PORT = { activity, markActivityRead };
 const AVATAR_COLOR = "var(--kind-album)";
 
 let { web, children }: { web: boolean; children: Snippet } = $props();
@@ -69,6 +73,7 @@ const toastTop = $derived((showBar ? 64 : 0) + 16);
 const name = $derived(account.me?.name ?? "");
 const initials = $derived(initialsOf(name));
 const picture = $derived(account.me?.picture ? myPicture(account.version) : undefined);
+const bell = $derived(bellLabel(unread(), activityWords()));
 const modifier = mac ? "⌘" : "Ctrl";
 
 const tabs = $derived([
@@ -82,6 +87,7 @@ const PATHS: Record<string, string> = {
 	shows: "/library/series",
 	search: "/search",
 	settings: "/settings",
+	activity: "/activity",
 };
 
 const kb = (keys: string[], label: string) => ({ keys, label });
@@ -183,7 +189,10 @@ function onKey(e: KeyboardEvent) {
 }
 
 $effect(() => {
-	if (onboarding) clearMe();
+	if (onboarding) {
+		clearMe();
+		resetActivity();
+	} else untrack(() => loadActivity(ACTIVITY_PORT));
 });
 
 $effect(() => {
@@ -268,10 +277,15 @@ onMount(() => {
 		fullscreenHint = web && !!document.fullscreenElement;
 		if (fullscreenHint) hint = setTimeout(() => (fullscreenHint = false), FULLSCREEN_HINT_MS);
 	};
+	const onVisible = () => {
+		if (document.visibilityState === "visible" && !onboarding) loadActivity(ACTIVITY_PORT);
+	};
+	document.addEventListener("visibilitychange", onVisible);
 	window.addEventListener("resize", zoom);
 	window.addEventListener("keydown", onKey, true);
 	document.addEventListener("fullscreenchange", onFullscreen);
 	return () => {
+		document.removeEventListener("visibilitychange", onVisible);
 		window.removeEventListener("resize", zoom);
 		window.removeEventListener("keydown", onKey, true);
 		document.removeEventListener("fullscreenchange", onFullscreen);
@@ -311,7 +325,9 @@ const toastNow = $derived(activeToast());
 					scrolled={solidBar}
 					searchLabel={i18n.nav_search()}
 					searchKbd={mac ? "⌘K" : "Ctrl K"}
-					activityLabel={i18n.shell_activity()}
+					activityLabel={bell}
+					activityDot={unread() > 0}
+					activityOn={route === "/activity"}
 					downloadsLabel={i18n.shell_downloads()}
 					showDownloads={!web}
 					account={{ name, email: account.me?.email ?? "", initials, color: AVATAR_COLOR, picture }}
@@ -320,7 +336,7 @@ const toastNow = $derived(activeToast());
 					onhome={() => go("home")}
 					ontab={go}
 					onsearch={search}
-					onactivity={() => {}}
+					onactivity={() => go("activity")}
 					ondownloads={() => {}}
 					onmenu={() => (menuOpen = !menuOpen)}
 				/>

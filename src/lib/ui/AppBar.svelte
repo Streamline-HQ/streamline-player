@@ -16,6 +16,8 @@ let {
 	searchLabel,
 	searchKbd,
 	activityLabel,
+	activityDot,
+	activityOn,
 	downloadsLabel,
 	showDownloads,
 	account,
@@ -35,6 +37,8 @@ let {
 	searchLabel: string;
 	searchKbd: string;
 	activityLabel: string;
+	activityDot: boolean;
+	activityOn: boolean;
 	downloadsLabel: string;
 	showDownloads: boolean;
 	account: { name: string; email: string; initials: string; color: string; picture?: string };
@@ -74,6 +78,8 @@ let {
 			icon="bell"
 			label={activityLabel}
 			title={activityLabel}
+			dot={activityDot}
+			active={activityOn}
 			onclick={onactivity}
 		/>
 		{#if showDownloads}
@@ -202,6 +208,11 @@ nav {
 	display: flex;
 	align-items: center;
 	gap: 6px;
+}
+
+.actions :global(.sl-btn.on) {
+	background: var(--accent-soft);
+	color: var(--accent-text);
 }
 
 .sl-searchbtn {

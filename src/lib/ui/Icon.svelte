@@ -1,5 +1,6 @@
 <script lang="ts" module>
 import {
+	ArrowDownToLine,
 	ArrowLeft,
 	ArrowUpDown,
 	Bell,
@@ -32,12 +33,15 @@ import {
 	Monitor,
 	MonitorSmartphone,
 	Play,
+	Plus,
+	RefreshCw,
 	RotateCcw,
 	Search,
 	Server,
 	Settings,
 	SlidersHorizontal,
 	Smartphone,
+	Sparkles,
 	Square,
 	Tablet,
 	Tv,
@@ -47,6 +51,7 @@ import {
 } from "@lucide/svelte";
 
 const ICONS = {
+	"arrow-down-to-line": ArrowDownToLine,
 	"arrow-left": ArrowLeft,
 	"arrow-up-down": ArrowUpDown,
 	bell: Bell,
@@ -78,12 +83,15 @@ const ICONS = {
 	monitor: Monitor,
 	"monitor-smartphone": MonitorSmartphone,
 	play: Play,
+	plus: Plus,
+	"refresh-cw": RefreshCw,
 	"rotate-ccw": RotateCcw,
 	search: Search,
 	server: Server,
 	settings: Settings,
 	sliders: SlidersHorizontal,
 	smartphone: Smartphone,
+	sparkles: Sparkles,
 	square: Square,
 	tablet: Tablet,
 	tick: Check,
