@@ -90,6 +90,7 @@ export type Tracks = {
 	audio: AudioTrack[];
 	subtitles: SubTrack[];
 	fonts: string[];
+	trickplay: { url: string } | null;
 };
 export type SubKind = "text" | "styled" | "image";
 export type Cue = { start: number; end: number; text: string };
@@ -117,5 +118,5 @@ export type PlaybackPort = {
 	stopSession(id: string): Promise<unknown>;
 	heartbeat(id: string, position: number, paused: boolean): Promise<unknown>;
 	mediaTracks(mediaId: string): Promise<Tracks>;
-	subtitleText(url: string): Promise<string>;
+	mediaText(url: string): Promise<string>;
 };

@@ -467,7 +467,7 @@ export class Playback {
 				await this.#cmd("subtitle", {});
 			} else if (info.kind === "text") {
 				await this.#cmd("subtitle", {});
-				this.#cues = parseCues(await this.#port.subtitleText(t.files.vtt as string));
+				this.#cues = parseCues(await this.#port.mediaText(t.files.vtt as string));
 			} else if (info.kind === "styled") {
 				await this.#cmd("subtitle", {
 					kind: "ass",

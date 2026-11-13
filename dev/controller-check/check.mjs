@@ -27,6 +27,7 @@ const tracks = (markers) => ({
 	audio: [{ index: 0, codec: "aac", channels: 2, language: "eng", default: true }],
 	subtitles: [],
 	fonts: [],
+	trickplay: null,
 });
 
 // Back while media_tracks is in flight: when it lands, the unmounted player must not auto-play or auto-skip.
@@ -53,7 +54,7 @@ async function backDuringTracks(item, markers) {
 		stopSession: async () => {},
 		heartbeat: async () => {},
 		mediaTracks: () => pending,
-		subtitleText: async () => "",
+		mediaText: async () => "",
 	};
 	const pb = new Playback(port, { mediaId: "m", titleName: "T", anime: false, ...item });
 	const end = pb.begin();

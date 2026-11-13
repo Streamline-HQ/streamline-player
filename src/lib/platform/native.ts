@@ -141,5 +141,5 @@ export const playbackPort: PlaybackPort = {
 	stopSession: (id) => invoke("stop_session", { id }),
 	heartbeat: (id, position, paused) => invoke("heartbeat", { id, position, paused }),
 	mediaTracks: (mediaId) => invoke<Tracks>("media_tracks", { mediaId }),
-	subtitleText: (url) => invoke<string>("subtitle_text", { url }),
+	mediaText: (url) => invoke<string>("media_text", { url }),
 };

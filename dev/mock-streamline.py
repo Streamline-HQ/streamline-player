@@ -4,7 +4,7 @@ Proxies /api/v1/playback/* to the engine's control plane and mints the HLS
 token like Streamline will (HMAC-SHA256 over "hls|<id>|<exp>"). Pairing hands out
 device keys; a request with an unknown key gets 401, one with no key passes (the
 headless harness sends none). Approve, deny and revoke from the command line:
-POST /dev/approve, /dev/deny, /dev/revoke. Watch state lives in memory. Files are analyzed and their subtitles extracted at start,
+POST /dev/approve, /dev/deny, /dev/revoke. Watch state lives in memory. Files are analyzed, their subtitles extracted and their trickplay sheets built at start,
 as Streamline does at import; a session opened before that finishes probes instead,
 and its tracks read as still preparing.
 
@@ -37,6 +37,7 @@ import urllib.request
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 TOKEN_TTL = 6 * 3600
+MEDIA_TTL = 12 * 3600
 
 p = argparse.ArgumentParser()
 p.add_argument("--listen", default="0.0.0.0:8080")
@@ -83,6 +84,7 @@ FILES = dict(m.split("=", 1) for m in args.media)
 MEDIA = dict(FILES)
 ANALYSIS = {}
 SUBTITLES = {}
+TRICKPLAY = {}
 MARKERS = {}
 SESSIONS = {}
 LAST_BEAT = {}
@@ -267,9 +269,17 @@ def engine(method, path, body=None):
         return e.code, json.loads(e.read() or b"null")
 
 
-def run_job(kind, **params):
-    job = secrets.token_hex(16)
-    engine("POST", "/v1/jobs", {"job_id": job, "type": kind, "priority": "background", **params})
+def job_id(kind, path):
+    st = os.stat(path)
+    return hashlib.md5(f"{kind}|{path}|{st.st_size}|{st.st_mtime_ns}".encode()).hexdigest()
+
+
+def run_job(kind, job=None, **params):
+    job = job or secrets.token_hex(16)
+    st, resp = engine("POST", "/v1/jobs", {"job_id": job, "type": kind, "priority": "background", **params})
+    if st >= 400 and (resp or {}).get("code") != "job_exists":
+        print(f"{kind} {params}: {st} {resp}", flush=True)
+        return None
     while True:
         st, status = engine("GET", f"/v1/jobs/{job}")
         if st != 200 or status["state"] == "failed":
@@ -285,9 +295,12 @@ def prepare(path):
     done = run_job("analyze", path=path)
     if done:
         ANALYSIS[path] = done[1]
-    done = run_job("subtitles", path=path)
+    done = run_job("subtitles", job=job_id("subtitles", path), path=path)
     if done:
         SUBTITLES[path] = done
+    done = run_job("trickplay", job=job_id("trickplay", path), path=path)
+    if done:
+        TRICKPLAY[path] = done
 
 
 def prepare_season(paths):
@@ -304,10 +317,17 @@ def markers(media_id, path):
     return {"intro": found.get("intro"), "credits": found.get("credits")}
 
 
-def tracks(media_id, path, base):
+def media_url(job, name):
+    exp = int(time.time()) + MEDIA_TTL
+    sig = hmac.new(args.secret.encode(), f"media|{job}|{exp}".encode(), hashlib.sha256).hexdigest()
+    return f"{args.public}/media/{job}/{urllib.parse.quote(name)}?exp={exp}&sig={sig}"
+
+
+def tracks(media_id, path):
     analysis = ANALYSIS.get(path, {})
     job, result = SUBTITLES.get(path, (None, {"tracks": [], "fonts": []}))
-    url = lambda name: f"{base}/api/v1/playback/media/{media_id}/subtitles/{urllib.parse.quote(name)}"
+    url = lambda name: media_url(job, name)
+    trickplay = TRICKPLAY.get(path)
     files = {t["index"]: {f.rsplit(".", 1)[1]: url(f) for f in t["files"]} for t in result["tracks"]}
     return {
         "preparing": job is None,
@@ -318,6 +338,7 @@ def tracks(media_id, path, base):
         "audio": analysis.get("audio", []),
         "subtitles": [{**s, "files": files.get(s["index"], {})} for s in analysis.get("subtitles", [])],
         "fonts": [url(f) for f in result["fonts"]],
+        "trickplay": {"url": media_url(trickplay[0], "trickplay.json")} if trickplay else None,
     }
 
 
@@ -561,21 +582,7 @@ class Handler(BaseHTTPRequestHandler):
             ]})
         m = re.fullmatch(r"/api/v1/playback/media/([^/]+)/tracks", self.path)
         if m and m[1] in MEDIA:
-            return self.reply(200, tracks(m[1], MEDIA[m[1]], f"http://{self.headers['Host']}"))
-        m = re.fullmatch(r"/api/v1/playback/media/([^/]+)/subtitles/(.+)", self.path)
-        if m and MEDIA.get(m[1]) in SUBTITLES:
-            job = SUBTITLES[MEDIA[m[1]]][0]
-            req = urllib.request.Request(
-                f"{args.engine}/v1/jobs/{job}/files/{m[2]}",
-                headers={"Authorization": f"Bearer {args.secret}"},
-            )
-            with urllib.request.urlopen(req, timeout=120) as r:
-                data = r.read()
-            self.send_response(200)
-            self.send_header("Content-Length", str(len(data)))
-            self.end_headers()
-            self.wfile.write(data)
-            return None
+            return self.reply(200, tracks(m[1], MEDIA[m[1]]))
         m = re.fullmatch(r"/api/v1/playback/sessions/([0-9a-f]{32})", self.path)
         if m:
             _, resp = engine("GET", "/v1/sessions")

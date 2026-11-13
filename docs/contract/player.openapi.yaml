@@ -586,27 +586,10 @@ paths:
       description: The Player's audio and subtitle menus, chapters, and the intro and credits cards.
       responses:
         "200":
-          description: What the file holds, and where its subtitles are served.
+          description: What the file holds, and the engine URLs of its subtitles, fonts and trickplay.
           content:
             application/json:
               schema: { $ref: "#/components/schemas/Tracks" }
-        default: { $ref: "#/components/responses/Error" }
-  /playback/media/{mediaId}/subtitles/{name}:
-    parameters:
-      - $ref: "#/components/parameters/MediaId"
-      - name: name
-        in: path
-        required: true
-        schema: { type: string }
-    get:
-      operationId: getSubtitle
-      description: A subtitle or font file of a media file; the Player draws text subtitles from it.
-      responses:
-        "200":
-          description: The file, as extracted.
-          content:
-            "*/*":
-              schema: { type: string, format: binary }
         default: { $ref: "#/components/responses/Error" }
 
 components:
@@ -1053,7 +1036,7 @@ components:
         sdh: { type: boolean }
         files:
           type: object
-          description: Subtitle format to url.
+          description: Subtitle format to the absolute engine URL, carrying `exp` and `sig`; the client fetches it without a credential.
           additionalProperties: { type: string }
     Span:
       type: array
@@ -1063,7 +1046,7 @@ components:
       nullable: true
     Tracks:
       type: object
-      required: [preparing, container, video, chapters, markers, audio, subtitles, fonts]
+      required: [preparing, container, video, chapters, markers, audio, subtitles, fonts, trickplay]
       properties:
         preparing: { type: boolean }
         container: { type: string }
@@ -1101,4 +1084,14 @@ components:
           items: { $ref: "#/components/schemas/SubtitleTrack" }
         fonts:
           type: array
+          description: Absolute engine URLs carrying `exp` and `sig`.
           items: { type: string }
+        trickplay:
+          type: object
+          nullable: true
+          description: Null until the sheets are built, or when the file has no video.
+          required: [url]
+          properties:
+            url:
+              type: string
+              description: The signed engine URL of `trickplay.json`; a sheet's URL is this one with its last path segment replaced by the sheet's name.

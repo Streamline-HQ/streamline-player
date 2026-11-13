@@ -61,6 +61,7 @@ const tracks = (over = {}) => ({
 	audio: [audio(1, "eng"), audio(2, "fra", "dts", 6)],
 	subtitles: [sub(3), sub(4, { language: "fra", codec: "hdmv_pgs_subtitle" })],
 	fonts: [],
+	trickplay: null,
 	...over,
 });
 

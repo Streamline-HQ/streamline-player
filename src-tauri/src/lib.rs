@@ -404,14 +404,21 @@ async fn media_tracks(api: tauri::State<'_, Api>, media_id: String) -> Result<Va
     .await
 }
 
-#[tauri::command]
-async fn subtitle_text(api: tauri::State<'_, Api>, url: String) -> Result<String, String> {
-    let resp = api.http.get(url).send().await.map_err(|e| e.to_string())?;
-    resp.error_for_status()
+/// The engine authorises a media file by its signed URL alone; the device key stays out of this request.
+async fn fetch_text(http: &reqwest::Client, url: &str) -> Result<String, String> {
+    http.get(url)
+        .send()
+        .await
+        .and_then(|r| r.error_for_status())
         .map_err(|e| e.to_string())?
         .text()
         .await
         .map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+async fn media_text(api: tauri::State<'_, Api>, url: String) -> Result<String, String> {
+    fetch_text(&api.http, &url).await
 }
 
 #[tauri::command]
@@ -532,7 +539,7 @@ pub fn run() {
             playback_status,
             decisions,
             media_tracks,
-            subtitle_text,
+            media_text,
             start_session,
             patch_session,
             session_info,
@@ -541,4 +548,32 @@ pub fn run() {
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::io::{Read, Write};
+
+    #[test]
+    fn media_text_sends_no_credential() {
+        let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+        let url = format!("http://{}/media/job/2.vtt", listener.local_addr().unwrap());
+        let server = std::thread::spawn(move || {
+            let (mut conn, _) = listener.accept().unwrap();
+            let mut buf = [0u8; 4096];
+            let n = conn.read(&mut buf).unwrap();
+            conn.write_all(
+                b"HTTP/1.1 200 OK\r\nContent-Length: 6\r\nConnection: close\r\n\r\nWEBVTT",
+            )
+            .unwrap();
+            String::from_utf8_lossy(&buf[..n]).to_lowercase()
+        });
+        let text = tauri::async_runtime::block_on(fetch_text(&reqwest::Client::new(), &url));
+        assert_eq!(text.unwrap(), "WEBVTT");
+        let request = server.join().unwrap();
+        assert!(request.starts_with("get /media/job/2.vtt"), "{request}");
+        assert!(!request.contains("authorization"), "{request}");
+        assert!(!request.contains("x-api-key"), "{request}");
+    }
 }

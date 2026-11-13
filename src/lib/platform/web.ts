@@ -205,22 +205,6 @@ async function call<T = unknown>(method: string, path: string, body?: unknown): 
 	return (text ? JSON.parse(text) : null) as T;
 }
 
-/** A GET of a file Streamline serves under the bearer token, such as a subtitle; other hosts get no credential. */
-async function withToken(target: string): Promise<Response> {
-	await init();
-	if (!target.startsWith(`${streamline}/`)) return fetch(target);
-	if (!access && store.get(REFRESH)) await refresh(null);
-	const send = () => {
-		const sent = access;
-		return fetch(target, { headers: sent ? { Authorization: `Bearer ${sent}` } : {} }).then(
-			(res) => ({ res, sent }),
-		);
-	};
-	let { res, sent } = await send();
-	if (res.status === 401 && store.get(REFRESH) && (await refresh(sent))) ({ res } = await send());
-	return res;
-}
-
 let beating: string | null = null;
 
 // A closing tab cannot wait for the refresh lock or a retry: the last beat goes out as it is, with the token in hand.
@@ -386,8 +370,8 @@ export const playbackPort: PlaybackPort = {
 		return call("POST", `/playback/sessions/${id}/progress`, { position, paused });
 	},
 	mediaTracks: (mediaId) => call<Tracks>("GET", `/playback/media/${mediaId}/tracks`),
-	subtitleText: (subtitleUrl) =>
-		withToken(subtitleUrl).then((res) => (res.ok ? res.text() : fail(`${res.status}`))),
+	mediaText: (mediaUrl) =>
+		fetch(mediaUrl).then((res) => (res.ok ? res.text() : fail(`${res.status}`))),
 };
 
 export const authMethods = (): Promise<AuthMethods> =>

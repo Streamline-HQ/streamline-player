@@ -28,6 +28,7 @@ const tracks = {
 	audio: [],
 	subtitles: [],
 	fonts: [],
+	trickplay: null,
 };
 
 let log: string[] = [];
@@ -56,7 +57,7 @@ const port = {
 	},
 	heartbeat: async () => {},
 	mediaTracks: async () => tracks,
-	subtitleText: async () => "",
+	mediaText: async () => "",
 };
 const view = {
 	kind: "movies" as const,
