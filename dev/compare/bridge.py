@@ -13,6 +13,7 @@ class H(http.server.BaseHTTPRequestHandler):
         path = self.path
         if path.startswith("/raw/"): path = path[len("/raw/"):]
         elif path.startswith("/artwork/"): path = "/api/v1/posters/" + path[len("/artwork/"):]
+        path = path.replace("http://10.0.2.2:8097", "http://127.0.0.1:8097")
         n = int(self.headers.get("Content-Length") or 0)
         body = self.rfile.read(n) if n else None
         req = urllib.request.Request(MOCK + path if path.startswith("/") else path, data=body, method=self.command, headers={"Content-Type": self.headers.get("Content-Type", "application/json")} if body else {})

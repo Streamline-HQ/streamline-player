@@ -29,6 +29,8 @@ if (target !== "web") {
   await app.addInitScript({ path: fileURLToPath(new URL("./qrcode-init.js", import.meta.url)) });
   await app.addInitScript({ path: fileURLToPath(new URL("./shim.js", import.meta.url)) });
 }
+// The mock names the engine by the emulator's alias; on this machine the same engine is on loopback.
+await ctx.route("http://10.0.2.2:8097/**", (route) => route.continue({ url: route.request().url().replace("//10.0.2.2:", "//127.0.0.1:") }));
 // A scenario that exports realClock = true runs on the page's own timers, to catch code that only works on a fake one.
 if (!scenarioModule.realClock) await app.clock.install({ time: new Date("2026-11-09T12:00:00Z") });
 const log = [];

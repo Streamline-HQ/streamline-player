@@ -19,7 +19,9 @@ import {
 import { Playback, UP_NEXT_SECS } from "#lib/core/playback/playback.svelte.ts";
 import type { Reason, Session, SubKind } from "#lib/core/playback/port.ts";
 import { DEFAULT_SIZE_PX, SIZE_PX } from "#lib/core/playback/rules.ts";
+import { clock as clockWithin } from "#lib/core/player-view.ts";
 import { prefs, setPref as savePref } from "#lib/core/prefs.svelte.ts";
+import { tileAt } from "#lib/core/trickplay.ts";
 import type { Decision } from "#lib/core/types.ts";
 import { onPlayer, PLAYER_NAME, playbackPort } from "#platform";
 import { focusDefault as focusStageDefault, move } from "#lib/tv/focus.ts";
@@ -202,6 +204,30 @@ const isEpisode = $derived(/ S\d+ E\d+$/.test(eyebrow));
 const controlsOn = $derived(controls || (!pb.playing && !pb.buffering) || menu);
 const cardBottom = $derived(controlsOn ? 220 : 50);
 const pct = $derived(pb.duration > 0 ? (shownPosition / pb.duration) * 100 : 0);
+let scrubFocus = $state(false);
+let scrubWidth = $state(0);
+let peekWidth = $state(0);
+let frameWidth = $state(0);
+let frameHeight = $state(0);
+let failedSheets = $state<string[]>([]);
+const tile = $derived.by(() => {
+	const tp = pb.trickplay;
+	if (!tp || !scrubFocus || pb.duration <= 0) return null;
+	const t = tileAt(tp, shownPosition);
+	return failedSheets.includes(t.sheet) ? null : t;
+});
+const peek = $derived({
+	when: clockWithin(shownPosition, pb.duration),
+	chapter: pb.tracks?.chapters.findLast((c) => shownPosition >= c.start)?.title ?? "",
+});
+const peekScale = $derived(
+	pb.trickplay
+		? Math.max(frameWidth / pb.trickplay.tileWidth, frameHeight / pb.trickplay.tileHeight)
+		: 0,
+);
+const peekLeft = $derived(
+	Math.max(peekWidth / 2, Math.min(scrubWidth - peekWidth / 2, (pct / 100) * scrubWidth)),
+);
 $effect(() => {
 	if (!pb.playing || !controlsOn) return;
 	let raf = requestAnimationFrame(function tick(t) {
@@ -688,6 +714,22 @@ function onKey(e: KeyboardEvent) {
 	}
 }
 
+$effect(() => {
+	if (pb.tracks) void pb.loadTrickplay();
+});
+
+$effect(() => {
+	if (!controlsOn) scrubFocus = false;
+});
+
+$effect(() => {
+	const sheet = tile?.sheet;
+	if (!sheet) return;
+	const img = new Image();
+	img.onerror = () => (failedSheets = [...failedSheets, sheet]);
+	img.src = sheet;
+});
+
 onMount(() => {
 	const endPlayback = pb.begin();
 	const listeners = [
@@ -918,6 +960,9 @@ onMount(() => {
 					data-scrub="1"
 					class="scrub"
 					aria-label={i18n.player_seek()}
+					bind:clientWidth={scrubWidth}
+					onfocus={() => (scrubFocus = true)}
+					onblur={() => (scrubFocus = false)}
 				>
 					<div class="track">
 						{#each segs as g}
@@ -928,6 +973,28 @@ onMount(() => {
 						{/each}
 					</div>
 					<div class="thumb" style:left="{pct}%"></div>
+					{#if tile && pb.trickplay}
+						<div class="scrub-peek" style:left="{peekLeft}px" bind:clientWidth={peekWidth}>
+							<div
+								class="scrub-frame"
+								bind:clientWidth={frameWidth}
+								bind:clientHeight={frameHeight}
+							>
+								<div
+									class="scrub-tile"
+									style:background-image="url({tile.sheet})"
+									style:background-size="{pb.trickplay.cols *
+										pb.trickplay.tileWidth *
+										peekScale}px auto"
+									style:background-position="{(frameWidth - pb.trickplay.tileWidth * peekScale) /
+										2 -
+										tile.x * peekScale}px {(frameHeight - pb.trickplay.tileHeight * peekScale) / 2 -
+										tile.y * peekScale}px"
+								></div>
+							</div>
+							<div class="scrub-when">{peek.when}{peek.chapter ? ` · ${peek.chapter}` : ""}</div>
+						</div>
+					{/if}
 				</button>
 				<div class="times">
 					<span class="cur">{clock(pb.position)}</span><span>{pb.chapterName}</span
@@ -1623,6 +1690,41 @@ onMount(() => {
 	border-radius: 50%;
 	background: var(--player-ink);
 	box-shadow: 0 0 0 8px color-mix(in srgb, var(--player-accent) 45%, transparent);
+}
+
+.scrub-peek {
+	position: absolute;
+	bottom: 60px;
+	transform: translateX(-50%);
+	display: flex;
+	flex-direction: column;
+	align-items: center;
+	gap: 12px;
+	pointer-events: none;
+}
+
+.scrub-frame {
+	width: 368px;
+	aspect-ratio: 16 / 9;
+	box-sizing: border-box;
+	border-radius: 16px;
+	overflow: hidden;
+	box-shadow: 0 24px 64px rgba(0, 0, 0, 0.6);
+	border: 4px solid color-mix(in srgb, var(--player-ink) 90%, transparent);
+}
+
+.scrub-tile {
+	width: 100%;
+	height: 100%;
+	background-repeat: no-repeat;
+}
+
+.scrub-when {
+	font: 500 24px var(--font-mono);
+	padding: 6px 16px;
+	border-radius: var(--radius-sm);
+	background: var(--player-scrim);
+	white-space: nowrap;
 }
 
 .times {

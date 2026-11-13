@@ -24,7 +24,7 @@ node dev/contract/proxy.ts --listen 127.0.0.1:8098 --upstream http://127.0.0.1:8
 proxy=$!
 trap 'kill $mock $proxy' EXIT
 sleep 2
-for s in pages nav panels halts french french2 play flows search settings welcome cast person4 submenu ending backstart; do
+for s in pages nav panels halts french french2 play flows search settings welcome cast person4 submenu ending backstart scrub-preview; do
   echo "== $s"
   SHOTS=$out timeout 150 node dev/compare/walk.mjs webkit "$s" || echo "FAILED: $s"
 done
