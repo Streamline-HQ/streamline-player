@@ -1250,6 +1250,7 @@ components:
             started_at: { type: string }
             config_path: { type: string }
             public_url: { type: string }
+            player_url: { type: string, description: "Where the player's web app runs, when it is hosted. The desktop app sends an admin there to approve a pairing; absent when there is none." }
             https: { type: boolean }
             bind_address: { type: string }
             trusted_proxies: { type: array, items: { type: string } }

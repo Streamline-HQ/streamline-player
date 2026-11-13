@@ -57,7 +57,15 @@ export type Row =
 			restart: boolean;
 	  }
 	| { t: "kv"; label: string; value: string; desc?: string; pill?: [string, Tone] }
-	| { t: "action"; label: string; desc: string; button: string; act: Act; tone: "ghost" | "danger" }
+	| {
+			t: "action";
+			label: string;
+			desc: string;
+			button: string;
+			act: Act;
+			tone: "ghost" | "danger";
+			disabled?: boolean;
+	  }
 	| {
 			t: "item";
 			icon: string;
@@ -89,7 +97,7 @@ export type Row =
 			playing: boolean;
 	  }
 	| { t: "pair"; code: string; device: string; icon: string; sub: string }
-	| { t: "note"; tone: Tone; text: string; button?: [string, Act] }
+	| { t: "note"; tone: Tone; text: string; button?: [string, Act]; disabled?: boolean }
 	| { t: "tiles"; tiles: Tile[] }
 	| { t: "logs" };
 
@@ -125,6 +133,8 @@ export type AdminData = {
 	web: boolean;
 	/** Seconds since the streams were last fetched. */
 	tick: number;
+	/** Names of devices approved from this screen, which wear the "New" pill. */
+	fresh?: string[];
 };
 
 type Section_ = `sec_${SectionKey}` | `sec_${SectionKey}_intro`;
@@ -209,6 +219,7 @@ export type TextId =
 	| "pill_not_found"
 	| "pill_this_device"
 	| "pill_this_browser"
+	| "pill_new"
 	| "note_nobody"
 	| "note_no_apps"
 	| "note_no_browsers"
@@ -358,7 +369,14 @@ const KIND_TEXT = {
 	desktop: "kind_desktop",
 } as const;
 
-export function sections(d: AdminData, find: Find, now: Date, locale: string, w: Words): Section[] {
+export function sections(
+	d: AdminData,
+	find: Find,
+	now: Date,
+	locale: string,
+	w: Words,
+	restarting = false,
+): Section[] {
 	const s = d.settings;
 	const v = (key: string) => s.values[key];
 	const hwOff = v("transcoding.hw_accel") === "none";
@@ -372,8 +390,14 @@ export function sections(d: AdminData, find: Find, now: Date, locale: string, w:
 	const restartAct: Act = { do: "restart" };
 	const kv = (label: string, value: string, extra: { pill?: [string, Tone]; desc?: string } = {}) =>
 		({ t: "kv", label, value, ...extra }) as const;
-	const note = (tone: Tone, text: string, button?: [string, Act]) =>
-		({ t: "note", tone, text, ...(button ? { button } : {}) }) as const;
+	const note = (tone: Tone, text: string, button?: [string, Act], disabled?: boolean) =>
+		({
+			t: "note",
+			tone,
+			text,
+			...(button ? { button } : {}),
+			...(disabled ? { disabled } : {}),
+		}) as const;
 	const block = (b: Partial<Block> & { rows: Row[] }): Block => ({
 		bare: false,
 		danger: false,
@@ -414,7 +438,10 @@ export function sections(d: AdminData, find: Find, now: Date, locale: string, w:
 				note(
 					"warn",
 					w.restartNote(pending.length, pending.join(", ")),
-					restartable ? [w.t("btn_restart_now"), restartAct] : undefined,
+					restartable
+						? [w.t(restarting ? "status_restarting" : "btn_restart_now"), restartAct]
+						: undefined,
+					restarting,
 				),
 			]
 		: [];
@@ -651,9 +678,10 @@ export function sections(d: AdminData, find: Find, now: Date, locale: string, w:
 									t: "action",
 									label: w.t("act_restart_title"),
 									desc: w.t("act_restart_desc"),
-									button: w.t("act_restart"),
+									button: w.t(restarting ? "status_restarting" : "act_restart"),
 									act: restartAct,
 									tone: "danger",
+									...(restarting ? { disabled: true } : {}),
 								},
 							],
 						}),
@@ -695,7 +723,11 @@ export function sections(d: AdminData, find: Find, now: Date, locale: string, w:
 			icon: deviceIcon(x.platform, x.name, browser),
 			title: x.name,
 			meta: meta.filter(Boolean).join(" · "),
-			pills: own ? [[w.t(d.web ? "pill_this_browser" : "pill_this_device"), "accent"]] : [],
+			pills: own
+				? [[w.t(d.web ? "pill_this_browser" : "pill_this_device"), "accent"]]
+				: d.fresh?.includes(x.name)
+					? [[w.t("pill_new"), "ok"]]
+					: [],
 			buttons: own
 				? []
 				: [

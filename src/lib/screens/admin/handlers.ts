@@ -9,4 +9,5 @@ export type Handlers = {
 	save?: (key: string, value: string | number | boolean) => void;
 	draft?: (key: string, raw: string) => void;
 	commit?: (row: Editable) => void;
+	busy?: (key: string) => boolean;
 };

@@ -24,7 +24,9 @@ const tone = $derived(TONES[row.tone]);
 	<Icon name={ICONS[row.tone]!} size={15} stroke={2} />
 	<span class="text">{row.text}</span>
 	{#if row.button}
-		<button type="button" onclick={() => onact?.(row.button![1])}>{row.button[0]}</button>
+		<button type="button" disabled={row.disabled} onclick={() => onact?.(row.button![1])}>
+			{row.button[0]}
+		</button>
 	{/if}
 </div>
 
@@ -63,5 +65,10 @@ button {
 	font-size: 12.5px;
 	font-weight: 600;
 	cursor: pointer;
+}
+
+button:disabled {
+	opacity: 0.5;
+	cursor: not-allowed;
 }
 </style>

@@ -110,6 +110,7 @@ const EN: Record<TextId, string> = {
 	pill_not_found: "Not found",
 	pill_this_device: "This device",
 	pill_this_browser: "This browser",
+	pill_new: "New",
 	note_nobody: "Nobody is watching right now.",
 	note_no_apps: "No apps are paired.",
 	note_no_browsers: "No browser sessions.",
@@ -769,6 +770,25 @@ const bothAll = build(locked);
 for (const r of bothAll.flatMap(rows)) if ("locked" in r) eq(r.locked, true);
 eq(canRestart(locked.settings), false);
 eq(hasRestart(bothAll), false);
+
+const during = sections(one, find, now, "en", words, true);
+const duringNote = section(during, "overview").blocks[1]!.rows[0] as {
+	button: [string, unknown];
+	disabled?: boolean;
+};
+same([duringNote.button[0], duringNote.disabled], ["Restarting…", true]);
+const duringAct = kinds(rows(section(during, "overview")), "action")[0]!;
+same([duringAct.button, duringAct.disabled], ["Restarting…", true]);
+const idleAct = kinds(rows(section(build(), "overview")), "action")[0]!;
+same([idleAct.button, idleAct.disabled], ["Restart", undefined]);
+
+const approved = demo();
+approved.fresh = [approved.devices.find((d) => !d.current && d.kind === "app")!.name];
+const freshRows = kinds(rows(section(build(approved), "devices")), "item").filter((r) =>
+	r.pills.some((p) => p[0] === "New"),
+);
+eq(freshRows.length, 1);
+eq(freshRows[0]!.pills[0]![1], "ok");
 
 eq(commitNumber("abc", 1, 8), null);
 eq(commitNumber("999", 1, 8), 8);

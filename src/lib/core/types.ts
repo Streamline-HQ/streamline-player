@@ -204,6 +204,7 @@ export type AdminOverview = {
 		started_at: string;
 		config_path: string;
 		public_url: string;
+		player_url?: string;
 		https: boolean;
 		bind_address: string;
 		trusted_proxies: string[];

@@ -2,13 +2,17 @@
 import Icon from "#lib/ui/Icon.svelte";
 import type { Snippet } from "svelte";
 
-let { children, pressed, onclick }: { children: Snippet; pressed?: boolean; onclick?: () => void } =
-	$props();
+let {
+	children,
+	pressed,
+	tick = true,
+	onclick,
+}: { children: Snippet; pressed?: boolean; tick?: boolean; onclick?: () => void } = $props();
 </script>
 
 {#if onclick}
 	<button type="button" class="toggle" aria-pressed={pressed} {onclick}>
-		{#if pressed}
+		{#if pressed && tick}
 			<Icon name="tick" size={13} stroke={2} />
 		{/if}
 		{@render children()}

@@ -160,6 +160,10 @@ try {
 	eq((await get(`${a}/overview`)).storage.cache.size, 0);
 
 	eq((await send(`${a}/restart`, "POST", {})).status, 202);
+	const down = await send(`${a}/overview`, "GET");
+	eq(down.status, 503);
+	eq((await errorOf(down)).code, "server_restarting");
+	eq((await send(`${demo.dev}/admin/restart/finish`, "POST")).status, 204);
 	eq((await get(`${a}/settings`)).pending.length, 0);
 	ok((await get(`${a}/overview`)).server.started_at > started, "started_at moved");
 

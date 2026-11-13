@@ -17,10 +17,15 @@ own file. --art points at p/<slug>.jpg and b/<slug>.jpg artwork, and c/<person>.
 
 Server settings (/api/v1/admin) answers 403 to a member (--role member, or POST /dev/role/member|admin).
 --demo-admin serves the design's sample; --read-only[=streamline|engine] locks settings; --restart-hangs
-keeps an admin restart from ever returning; --engine-settings forwards the engine's three keys and the
+keeps an admin restart from ever returning (until then every admin call answers 503 server_restarting, and the
+settings that wait for a restart apply and started_at moves only when it ends); --engine-settings forwards the engine's three keys and the
 restart to the engine. POST /dev/admin/fail/save|action makes every admin write of that kind answer 500
 until /dev/admin/fail/off, POST /dev/admin/scan/finish ends running scans at once, and POST
-/dev/admin/read-only/both|engine|streamline|off switches the lock while it runs.
+/dev/admin/read-only/both|engine|streamline|off switches the lock while it runs, and POST /dev/admin/log
+{level, source, message} adds a log line. POST /dev/admin/logs/drop-errors, /dev/admin/streams/clear,
+/dev/admin/pairing (the demo request again), /dev/admin/pairing/expire, /dev/admin/player-url/off and
+/dev/admin/restart-hangs/on|off and /dev/admin/restart/finish
+reshape the demo while it runs.
 
 The public URL defaults to 10.0.2.2, the Android emulator's alias for the host.
 """
@@ -106,7 +111,7 @@ SESSIONS = {}
 LAST_BEAT = {}
 # What an admin did, for the next heartbeat to tell: sid -> (by, message), and a restart's end time.
 STOPPED = {}
-RESTART = {"until": 0.0, "by": "", "message": ""}
+RESTART = {"until": 0.0, "by": "", "message": "", "admin": False}
 ADMIN = "Antoine Langlois"
 PAIRINGS = {}
 KEYS = {}
@@ -745,6 +750,7 @@ def overview():
     return {
         "server": {"version": "2.4.1", "go": "go1.25.3", "platform": "linux/amd64", "commit": "b74309c", "built_at": "2026-10-30T18:12:00Z",
                    "started_at": iso(STARTED["at"]), "config_path": "/etc/streamline/config.yaml", "public_url": "https://streamline.home.arpa", "https": True,
+                   **({"player_url": args.player_url.rstrip("/")} if args.player_url else {}),
                    "bind_address": "0.0.0.0:8080", "trusted_proxies": ["10.0.0.0/8"], "session_secret": "/run/secrets/streamline-session"},
         "storage": {"media": {"free": 4_500_000_000_000, "total": 8_000_000_000_000},
                     "data": {"path": "/var/lib/streamline", "free": 620_000_000_000, "total": 1_000_000_000_000},
@@ -937,6 +943,13 @@ class Handler(BaseHTTPRequestHandler):
         """Server settings: /api/v1/admin/*, for an admin only."""
         if ME["role"] != "Admin":
             return self.reply(403, {"error": {"code": "forbidden"}})
+        if RESTART["admin"]:
+            if time.monotonic() < RESTART["until"]:
+                return self.reply(503, {"error": {"code": "server_restarting"}})
+            RESTART["admin"] = False
+            BOOTED.update(SETTINGS)
+            STARTED["at"] = shown_now()
+            note("info", "server", "started")
         url = urllib.parse.urlsplit(self.path)
         try:
             return self.admin_route(method, url.path[len("/api/v1/admin"):], urllib.parse.parse_qs(url.query))
@@ -989,8 +1002,7 @@ class Handler(BaseHTTPRequestHandler):
                 except OSError:
                     pass
             RESTART.update(until=math.inf if args.restart_hangs else time.monotonic() + 10, message=message)
-            BOOTED.update(SETTINGS)
-            STARTED["at"] = shown_now()
+            RESTART["admin"] = True
             note("info", "config", f"restart requested · {ME['name']}")
             return self.reply(202)
         m = re.fullmatch(r"/streams/([\w-]+)/stop", path)
@@ -1008,7 +1020,6 @@ class Handler(BaseHTTPRequestHandler):
                     return not_found()
                 STOPPED[m[1]] = message
                 LAST_BEAT.pop(m[1], None)
-                engine("DELETE", f"/v1/sessions/{m[1]}")
             note("info", "session", f"stream {m[1]} stopped · {ME['name']}")
             return self.reply(204)
         m = re.fullmatch(r"/devices/([\w-]+)", path)
@@ -1151,6 +1162,33 @@ class Handler(BaseHTTPRequestHandler):
         if m:
             args.read_only = None if m[1] == "off" else m[1]
             return self.reply(204)
+        if self.path == "/dev/admin/log":
+            b = self.body()
+            note(b.get("level", "info"), b.get("source", "dev"), b.get("message", "a line from the harness"))
+            return self.reply(204)
+        if self.path == "/dev/admin/logs/drop-errors":
+            LOGS[:] = [line for line in LOGS if line["level"] != "error"]
+            return self.reply(204)
+        if self.path == "/dev/admin/streams/clear":
+            DEMO_STREAMS.clear()
+            return self.reply(204)
+        if self.path == "/dev/admin/pairing":
+            PAIRINGS["demo-ipad-code"] = {**DEMO_PAIRING, "status": "pending", "expires": time.monotonic() + PAIR_TTL - 120}
+            return self.reply(204)
+        if self.path == "/dev/admin/pairing/expire":
+            for pairing in PAIRINGS.values():
+                pairing["expires"] = time.monotonic() - 1
+            return self.reply(204)
+        if self.path == "/dev/admin/restart/finish":
+            RESTART["until"] = 0.0
+            return self.reply(204)
+        if self.path == "/dev/admin/player-url/off":
+            args.player_url = None
+            return self.reply(204)
+        m = re.fullmatch(r"/dev/admin/restart-hangs/(on|off)", self.path)
+        if m:
+            args.restart_hangs = m[1] == "on"
+            return self.reply(204)
         if self.path == "/dev/admin/scan/finish":
             for scan in SCANS.values():
                 scan["t0"] -= scan["dur"]
@@ -1237,6 +1275,11 @@ class Handler(BaseHTTPRequestHandler):
         m = re.fullmatch(r"/api/v1/playback/sessions/([0-9a-f]{32})/progress", self.path)
         if m:
             if m[1] in STOPPED:
+                # An admin stop lets the player learn of it on this call; killing the engine session earlier makes it recover instead.
+                try:
+                    engine("DELETE", f"/v1/sessions/{m[1]}")
+                except OSError:
+                    pass
                 return self.reply(410, {"error": {"code": "session_stopped", "message": STOPPED.pop(m[1]), "by": ADMIN}})
             if m[1] in LAST_BEAT:
                 LAST_BEAT[m[1]] = time.monotonic()

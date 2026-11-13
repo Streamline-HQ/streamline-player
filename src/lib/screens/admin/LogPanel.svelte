@@ -4,6 +4,7 @@ import type { LogLevel, LogLine } from "#lib/core/types.ts";
 import { m as i18n } from "#lib/paraglide/messages.js";
 import { getLocale } from "#lib/paraglide/runtime.js";
 import ChoicePills from "#lib/ui/ChoicePills.svelte";
+import { untrack } from "svelte";
 
 type Level = "all" | "warn" | "error";
 
@@ -27,7 +28,33 @@ const COLOR: Record<LogLevel, string> = {
 	warn: "var(--status-warning)",
 	error: "var(--status-failed)",
 };
+const TINT_MS = 1600;
 const shown = $derived(logFilter(lines, level));
+let known: Set<number> | null = null;
+let knownLevel: Level | null = null;
+let tinted = $state<number[]>([]);
+
+// A line that arrives while the panel is open is tinted for a moment; the first fill and a level change are not news.
+$effect(() => {
+	const ids = lines.map((l) => l.id);
+	const at = level;
+	untrack(() => {
+		if (at !== knownLevel) {
+			known = null;
+			knownLevel = at;
+		}
+		if (!known) {
+			if (ids.length) known = new Set(ids);
+			return;
+		}
+		const seen = known;
+		const added = ids.filter((id) => !seen.has(id));
+		for (const id of ids) seen.add(id);
+		if (!added.length) return;
+		tinted = [...tinted, ...added];
+		setTimeout(() => (tinted = tinted.filter((id) => !added.includes(id))), TINT_MS);
+	});
+});
 const locale = getLocale();
 const options: [string, string][] = $derived([
 	["all", i18n.library_all()],
@@ -58,7 +85,7 @@ const options: [string, string][] = $derived([
 	</div>
 	<div class="list">
 		{#each shown as l (l.id)}
-			<div class="line">
+			<div class="line" class:fresh={tinted.includes(l.id)}>
 				<span class="time">{logTime(l.at, locale)}</span>
 				<span style:color={COLOR[l.level]} class="lv">{l.level}</span>
 				<span class="msg"><span class="src">{l.source}</span> {l.message}</span>
@@ -130,6 +157,13 @@ const options: [string, string][] = $derived([
 	grid-template-columns: 62px 44px minmax(0, 1fr);
 	gap: 10px;
 	padding: 1px 14px;
+	background: transparent;
+	transition: background var(--dur-slow, 400ms) var(--ease, ease);
+}
+
+.line.fresh {
+	background: color-mix(in srgb, var(--accent) 10%, transparent);
+	transition: none;
 }
 
 .time {

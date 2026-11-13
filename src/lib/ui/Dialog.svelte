@@ -69,6 +69,7 @@ let {
 	position: absolute;
 	inset: 0;
 	display: grid;
+	grid-template-columns: minmax(0, 1fr);
 	place-items: center;
 	padding: 24px;
 	pointer-events: none;

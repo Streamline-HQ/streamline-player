@@ -28,6 +28,11 @@ export type AdminPort = {
 	adminLogsDownload(): Promise<string>;
 };
 
+export type PairPort = {
+	approvePairing(code: string): Promise<unknown>;
+	denyPairing(code: string): Promise<unknown>;
+};
+
 export type LogLevelFilter = "all" | "warn" | "error";
 export type SaveResult = "ok" | "failed" | "invalid" | "read_only";
 
@@ -65,12 +70,18 @@ export const admin: {
 	drafts: {},
 });
 
+/** Keys whose save is on its way: their controls stay disabled until the server answers. */
+export const busy: { keys: string[] } = $state({ keys: [] });
+
 export const pendingPairs: { n: number } = $state({ n: 0 });
 
 let inflight: Promise<void> | null = null;
 let generation = 0;
 const saving = new Map<string, SettingValue>();
 let saveEpoch = 0;
+const resolving = new Set<string>();
+let localFresh: AdminDevice[] = [];
+let freshNames: string[] = [];
 
 /** Servers answer `{ error: { code } }`; the platform layer throws that body as text. */
 function errorOf(e: unknown): { code?: string; owner?: string } {
@@ -91,6 +102,14 @@ function withSaving(s: AdminSettings): AdminSettings {
 	return { ...s, values: { ...s.values, ...Object.fromEntries(saving) } };
 }
 
+/** A device approved here is listed before the server's own list knows it. */
+function withFresh(devices: AdminDevice[]): AdminDevice[] {
+	localFresh = localFresh.filter(
+		(f) => !devices.some((d) => d.name === f.name && d.platform === f.platform),
+	);
+	return [...localFresh, ...devices];
+}
+
 function load(port: AdminPort, reset: boolean) {
 	if (inflight) return inflight;
 	const run = generation;
@@ -102,23 +121,26 @@ function load(port: AdminPort, reset: boolean) {
 		port.adminPairings(),
 		port.adminDevices(),
 		port.adminLibrary(),
-		port.adminLogs(admin.level),
+		reset ? port.adminLogs(admin.level) : Promise.resolve(null),
 	])
 		.then(
 			([overview, settings, streams, pairings, devices, library, logs]) => {
 				if (run !== generation) return;
+				const ended = scansEnded(admin.data?.library, library);
 				admin.data = {
 					overview,
 					settings: epoch === saveEpoch ? withSaving(settings) : (admin.data?.settings ?? settings),
 					streams,
 					pairings,
-					devices,
+					devices: withFresh(devices),
 					library,
 					cacheCleared: !!admin.data?.cacheCleared && overview.storage.cache.size === 0,
 					web: devices.find((d) => d.current)?.kind === "browser",
 					tick: 0,
+					fresh: freshNames,
 				};
-				admin.logs = logs.slice(0, LOG_LINES);
+				if (ended) scanDone.report = ended;
+				if (logs) admin.logs = logs.slice(0, LOG_LINES);
 				admin.loaded = true;
 				admin.error = null;
 				admin.forbidden = false;
@@ -184,15 +206,18 @@ export async function save(port: AdminPort, key: string, value: SettingValue): P
 	if (before === value) return "ok";
 	settings.values[key] = value;
 	saving.set(key, value);
+	busy.keys = [...busy.keys, key];
 	saveEpoch++;
 	try {
 		const saved = await port.saveAdminSettings({ [key]: value });
 		saving.delete(key);
+		busy.keys = busy.keys.filter((k) => k !== key);
 		saveEpoch++;
 		if (admin.data) admin.data.settings = withSaving(saved);
 		return "ok";
 	} catch (e) {
 		saving.delete(key);
+		busy.keys = busy.keys.filter((k) => k !== key);
 		saveEpoch++;
 		const now = admin.data?.settings;
 		if (now && now.values[key] === value && before !== undefined) now.values[key] = before;
@@ -277,6 +302,88 @@ export async function scan(port: AdminPort, folder?: string) {
 	}
 }
 
+export async function resolvePairing(
+	port: PairPort,
+	code: string,
+	approve: boolean,
+	by: string,
+): Promise<"ok" | "gone" | "failed"> {
+	const d = admin.data;
+	const found = d?.pairings.find((p) => p.user_code === code);
+	if (!d || !found) return "gone";
+	if (resolving.has(code)) return "failed";
+	resolving.add(code);
+	const drop = () => {
+		const now = admin.data;
+		if (!now) return;
+		now.pairings = now.pairings.filter((p) => p.user_code !== code);
+		pendingPairs.n = now.pairings.length;
+	};
+	try {
+		await (approve ? port.approvePairing(code) : port.denyPairing(code));
+	} catch (e) {
+		if (errorOf(e).code === "no_pending_pairing") {
+			drop();
+			return "gone";
+		}
+		return "failed";
+	} finally {
+		resolving.delete(code);
+	}
+	drop();
+	if (approve && admin.data) {
+		const row: AdminDevice = {
+			id: `new-${code}`,
+			kind: "app",
+			name: found.name,
+			platform: found.platform,
+			last_seen: new Date().toISOString(),
+			streaming: false,
+			current: false,
+			user: { name: by },
+		};
+		localFresh = [row, ...localFresh];
+		freshNames = [...freshNames, found.name];
+		admin.data.devices = [row, ...admin.data.devices];
+		admin.data.fresh = freshNames;
+	}
+	return "ok";
+}
+
+export type ScanReport = { finished: string[]; added: number; errors: number };
+
+/** The last scan that ended while the screen was open; the screen takes it and clears it. */
+export const scanDone: { report: ScanReport | null } = $state({ report: null });
+
+function scansEnded(before: AdminLibrary | undefined, after: AdminLibrary): ScanReport | null {
+	const done = before?.folders.filter(
+		(f) => f.scan && !after.folders.find((g) => g.id === f.id)?.scan,
+	);
+	if (!done?.length) return null;
+	return {
+		finished: done.map((f) => f.name),
+		added: after.last_scan?.added ?? 0,
+		errors: after.last_scan?.errors ?? 0,
+	};
+}
+
+/** Reads the library alone, for the one-second poll while a scan runs. */
+export async function refreshLibrary(port: AdminPort) {
+	if (!admin.data) return;
+	const run = generation;
+	let fresh: AdminLibrary;
+	try {
+		fresh = await port.adminLibrary();
+	} catch {
+		return;
+	}
+	const now = admin.data;
+	if (run !== generation || !now) return;
+	const report = scansEnded(now.library, fresh);
+	now.library = fresh;
+	if (report) scanDone.report = report;
+}
+
 export async function clearCache(port: AdminPort) {
 	const d = admin.data;
 	if (!d) return false;
@@ -330,6 +437,11 @@ export function resetAdmin() {
 	generation++;
 	inflight = null;
 	saving.clear();
+	busy.keys = [];
+	localFresh = [];
+	freshNames = [];
+	resolving.clear();
+	scanDone.report = null;
 	saveEpoch++;
 	admin.data = null;
 	admin.logs = [];

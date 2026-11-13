@@ -272,7 +272,7 @@
 }
 
 .sl-dialog {
-	width: min(92%, 32rem);
+	width: min(92%, 512px);
 	border: 1px solid var(--border);
 	border-radius: var(--radius-xl);
 	background: var(--bg-elevated);

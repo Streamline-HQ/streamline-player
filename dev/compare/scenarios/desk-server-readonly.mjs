@@ -43,10 +43,7 @@ export default async (ctx) => {
       expect("streamline: the rest", names.includes("Acceleration") || names.includes("Conversions at once"), false);
       expect("streamline: restart stays", restartBlock, 1);
     }
-    for (const sel of ['.server .std [role="switch"]:not(:disabled)', ".server .std input:not(:disabled)"]) {
-      const el = app.locator(sel).first();
-      if (await el.count()) await el.click({ trial: false }).catch(() => {});
-    }
+    await app.locator('.server .std:has(.lock) [role="switch"], .server .std:has(.lock) input, .server .std:has(.lock) fieldset button').evaluateAll((els) => els.forEach((e) => e.click()));
     await app.keyboard.press("Tab");
     await app.reload();
     await wait(1500);

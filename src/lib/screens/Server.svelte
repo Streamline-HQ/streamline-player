@@ -1,17 +1,39 @@
 <script lang="ts">
-import { lib, loadLibrary } from "#lib/core/library.svelte.ts";
-import { setMe } from "#lib/core/me.svelte.ts";
 import {
 	admin,
+	busy,
+	clearCache,
+	commit,
+	draft,
 	loadAdmin,
 	refreshAdmin,
+	refreshLibrary,
 	refreshLogs,
 	resetAdmin,
+	resolvePairing,
+	restart,
+	scanDone,
+	revoke,
+	save,
+	scan,
 	setLevel,
+	stop,
 	tickStreams,
 } from "#lib/core/admin.svelte.ts";
-import { type SectionKey, sections, status } from "#lib/core/server-view.ts";
-import type { Kind } from "#lib/core/types.ts";
+import { ask, countdown } from "#lib/core/ask.svelte.ts";
+import { lib, loadLibrary } from "#lib/core/library.svelte.ts";
+import { account, setMe } from "#lib/core/me.svelte.ts";
+import {
+	type Act,
+	commitNumber,
+	commitText,
+	type SectionKey,
+	sections,
+	sizeText,
+	status,
+} from "#lib/core/server-view.ts";
+import { toast } from "#lib/core/toast.svelte.ts";
+import type { Kind, SettingValue } from "#lib/core/types.ts";
 import { m as i18n } from "#lib/paraglide/messages.js";
 import { getLocale } from "#lib/paraglide/runtime.js";
 import type { Handlers } from "#lib/screens/admin/handlers.ts";
@@ -19,6 +41,7 @@ import { adminPort } from "#lib/screens/admin/port.ts";
 import ServerBlock from "#lib/screens/admin/ServerBlock.svelte";
 import ServerNav from "#lib/screens/admin/ServerNav.svelte";
 import { TONES } from "#lib/screens/admin/tone.ts";
+import { IS_WEB } from "#lib/platform/target.ts";
 import Button from "#lib/ui/Button.svelte";
 import EmptyState from "#lib/ui/EmptyState.svelte";
 import Icon from "#lib/ui/Icon.svelte";
@@ -26,9 +49,12 @@ import { goto } from "#lib/ui/nav.ts";
 import { useScroll } from "#lib/ui/scroll.ts";
 import { serverWords } from "#lib/ui/server-words.ts";
 import {
+	approvePairing,
+	denyPairing,
 	home,
 	library,
 	me as whoAmI,
+	openExternal,
 	serverHost,
 	title as fetchTitle,
 	watchState,
@@ -39,6 +65,7 @@ const PAD_X = 56;
 const TOP = 92;
 const SPY_OFFSET = 120;
 const REFRESH_MS = 10_000;
+const SCAN_POLL_MS = 1_000;
 const LOGS_MS = 3000;
 const TICK_MS = 1000;
 const libraryPort = { library, watchState, home, title: fetchTitle };
@@ -55,7 +82,7 @@ const find = (kind: Kind, id: number) =>
 	(kind === "movies" ? lib.movies : lib.shows).find((t) => t.id === id);
 const words = $derived(serverWords());
 const data = $derived(admin.data);
-const secs = $derived(data ? sections(data, find, now, getLocale(), words) : []);
+const secs = $derived(data ? sections(data, find, now, getLocale(), words, admin.restarting) : []);
 const health = $derived(data ? status(data, admin.restarting, words) : null);
 const readOnly = $derived(
 	!!data && (data.settings.read_only.streamline || data.settings.read_only.engine),
@@ -91,7 +118,244 @@ function spy() {
 	active = current;
 }
 
-const handlers: Handlers = { go: jump };
+const fail = () => toast(i18n.settings_err_unknown(), { icon: "wifi", warning: true });
+const first = (name: string) => name.split(" ")[0] ?? name;
+const countText = (one: () => string, other: () => string, n: number) =>
+	n === 1 ? one() : other();
+
+async function saveKey(key: string, value: SettingValue) {
+	const before = admin.data?.settings.values[key];
+	if (before === value) return;
+	const result = await save(adminPort, key, value);
+	report(result, key, before);
+}
+
+function report(
+	result: Awaited<ReturnType<typeof save>>,
+	key: string,
+	before: SettingValue | undefined,
+) {
+	const settings = admin.data?.settings;
+	if (result === "ok") {
+		if (settings && settings.values[key] !== before)
+			toast(
+				settings.pending.includes(key) ? i18n.server_toast_saved_restart() : i18n.settings_saved(),
+			);
+	} else if (result === "invalid") toast(i18n.server_toast_invalid(), { warning: true });
+	else if (result === "failed") fail();
+}
+
+async function commitRow(row: Parameters<typeof commit>[1]) {
+	const raw = admin.drafts[row.key];
+	if (raw === undefined) return;
+	const valid =
+		row.t === "num"
+			? commitNumber(
+					raw,
+					row.min ?? Number.MIN_SAFE_INTEGER,
+					row.max ?? Number.MAX_SAFE_INTEGER,
+				) !== null
+			: commitText(raw, row.allowEmpty ?? false) !== null;
+	const before = admin.data?.settings.values[row.key];
+	const result = await commit(adminPort, row);
+	if (valid) report(result, row.key, before);
+}
+
+function askStop(id: string) {
+	const st = data?.streams.find((x) => x.id === id);
+	if (!st) return;
+	const t = find(st.title.kind, st.title.id)?.title ?? "—";
+	const what = st.season !== undefined ? `${t} · S${st.season} E${st.episode}` : t;
+	const name = first(st.user.name);
+	const device = st.device.name;
+	const you = st.user.you;
+	ask({
+		title: you ? i18n.server_ask_stop_title_you() : i18n.server_ask_stop_title({ name }),
+		body: you
+			? i18n.server_ask_stop_body_you({ what, device })
+			: i18n.server_ask_stop_body({ what, device, name }),
+		input: {
+			label: you
+				? i18n.server_ask_stop_label_you({ device })
+				: i18n.server_ask_stop_label({ name }),
+			placeholder: you ? i18n.server_ask_stop_ph_you() : i18n.server_ask_stop_ph(),
+			presets: [
+				i18n.server_preset_restarting(),
+				i18n.server_preset_bandwidth(),
+				i18n.server_preset_too_many(),
+			],
+		},
+		confirm: i18n.server_ask_stop_confirm(),
+		onconfirm: async (message) => {
+			if (!(await stop(adminPort, id, message || undefined))) return fail();
+			toast(
+				you
+					? i18n.server_toast_stopped_you()
+					: message
+						? i18n.server_toast_stopped_msg({ name })
+						: i18n.server_toast_stopped({ name }),
+			);
+		},
+	});
+}
+
+async function pair(code: string, approve: boolean) {
+	const found = data?.pairings.find((p) => p.user_code === code);
+	if (!found || !data) return;
+	if (!IS_WEB) {
+		const player = data.overview.server.player_url;
+		if (!player) return toast(i18n.server_toast_no_player());
+		openExternal(`${player.replace(/\/$/, "")}/pair?code=${encodeURIComponent(code)}`).catch(
+			() => {},
+		);
+		return toast(i18n.welcome_finish_in_browser());
+	}
+	const who = account.me?.name ?? "";
+	const result = await resolvePairing({ approvePairing, denyPairing }, code, approve, who);
+	if (result === "ok")
+		toast(
+			approve
+				? i18n.server_toast_paired({ device: found.name, name: who })
+				: i18n.server_toast_denied({ code }),
+		);
+	else if (result === "gone") toast(i18n.approve_not_found(), { warning: true });
+	else fail();
+}
+
+function askRestart() {
+	const n = data?.streams.length ?? 0;
+	const run = async (message: string) => {
+		try {
+			await restart(adminPort, message || undefined);
+			toast(i18n.server_status_restarting());
+		} catch {
+			fail();
+		}
+	};
+	const schedule = (message: string) =>
+		countdown({
+			title: i18n.server_cd_title(),
+			seconds: 10,
+			note: n
+				? countText(
+						() => i18n.server_cd_streams_one({ count: n }),
+						() => i18n.server_cd_streams_other({ count: n }),
+						n,
+					)
+				: i18n.server_cd_nobody(),
+			ondone: () => void run(message),
+			abortToast: i18n.server_cd_aborted(),
+		});
+	ask({
+		title: i18n.server_ask_restart_title(),
+		body: n
+			? countText(
+					() => i18n.server_ask_restart_body_one({ count: n }),
+					() => i18n.server_ask_restart_body_other({ count: n }),
+					n,
+				)
+			: i18n.server_ask_restart_body_none(),
+		...(n
+			? {
+					input: {
+						label: i18n.server_ask_restart_label(),
+						placeholder: i18n.server_ask_restart_ph(),
+						presets: [i18n.server_preset_update(), i18n.server_preset_minute()],
+					},
+				}
+			: {}),
+		confirm: i18n.server_act_restart(),
+		onconfirm: schedule,
+	});
+}
+
+async function startScan(folder: string | undefined) {
+	const folders = data?.library.folders ?? [];
+	if (!folders.some((f) => (folder === undefined || f.id === folder) && !f.scan)) return;
+	const name = folders.find((f) => f.id === folder)?.name;
+	if (!(await scan(adminPort, folder))) return fail();
+	toast(name ? i18n.server_toast_scanning({ folder: name }) : i18n.server_toast_scanning_all());
+}
+
+async function cache() {
+	const size = data?.overview.storage.cache.size ?? 0;
+	if (!(await clearCache(adminPort))) return fail();
+	toast(i18n.server_toast_cache({ size: sizeText(size, getLocale(), words) }));
+}
+
+async function download() {
+	try {
+		toast(i18n.server_toast_downloaded({ name: await adminPort.adminLogsDownload() }));
+	} catch {
+		fail();
+	}
+}
+
+async function act(a: Act) {
+	if (a.do === "go") jump(a.to);
+	else if (a.do === "stop") askStop(a.id);
+	else if (a.do === "approve" || a.do === "deny") await pair(a.code, a.do === "approve");
+	else if (a.do === "revoke" || a.do === "end") {
+		if (await revoke(adminPort, a.id))
+			toast(a.do === "end" ? i18n.server_toast_ended() : i18n.server_toast_revoked());
+		else fail();
+	} else if (a.do === "restart") askRestart();
+	else if (a.do === "clearcache") await cache();
+	else if (a.do === "scan") await startScan(a.folder);
+	else if (a.do === "download") await download();
+}
+
+const handlers: Handlers = {
+	go: jump,
+	act: (a) => void act(a),
+	save: (key, value) => void saveKey(key, value),
+	draft,
+	commit: (row) => void commitRow(row),
+	busy: (key) => busy.keys.includes(key),
+};
+
+let wasRestarting = false;
+$effect(() => {
+	const now = admin.restarting;
+	if (wasRestarting && !now && admin.data) toast(i18n.server_toast_back());
+	wasRestarting = now;
+});
+
+let polling = false;
+async function pollScans() {
+	if (polling || !data?.library.folders.some((f) => f.scan)) return;
+	polling = true;
+	try {
+		await refreshLibrary(adminPort);
+	} finally {
+		polling = false;
+	}
+}
+
+$effect(() => {
+	const done = scanDone.report;
+	if (!done) return;
+	scanDone.report = null;
+	toast(
+		i18n.server_toast_scan_done({
+			folders: new Intl.ListFormat(getLocale(), { type: "conjunction" }).format(done.finished),
+		}),
+		{
+			text: i18n.server_toast_scan_text({
+				added: countText(
+					() => i18n.server_new_files_one({ count: done.added }),
+					() => i18n.server_new_files_other({ count: done.added }),
+					done.added,
+				),
+				errors: countText(
+					() => i18n.activity_errors_one({ count: done.errors }),
+					() => i18n.activity_errors_other({ count: done.errors }),
+					done.errors,
+				),
+			}),
+		},
+	);
+});
 
 // A 403 means the role is gone: the account is read again so Settings stops offering this screen.
 $effect(() => {
@@ -114,12 +378,14 @@ onMount(() => {
 		now = new Date();
 		refreshAdmin(adminPort);
 	}, REFRESH_MS);
+	const scans = setInterval(() => visible() && pollScans(), SCAN_POLL_MS);
 	const logs = setInterval(() => visible() && refreshLogs(adminPort), LOGS_MS);
 	const tick = setInterval(tickStreams, TICK_MS);
 	const box = getScroll?.();
 	box?.addEventListener("scroll", spy, { passive: true });
 	return () => {
 		clearInterval(refresh);
+		clearInterval(scans);
 		clearInterval(logs);
 		clearInterval(tick);
 		box?.removeEventListener("scroll", spy);
@@ -156,6 +422,14 @@ onMount(() => {
 			onopen={jump}
 		/>
 		<main>
+			{#if admin.restarting && admin.lateRestart}
+				<div class="strip late" role="status">
+					<span class="line">
+						<Icon name="triangle-alert" size={15} stroke={2} />
+						<span class="text">{i18n.server_late()}</span>
+					</span>
+				</div>
+			{/if}
 			{#if readOnly}
 				<div class="strip">
 					<span class="line">
@@ -244,6 +518,12 @@ main {
 	color: var(--fg-muted);
 	font-size: 12.5px;
 	line-height: 1.5;
+}
+
+.strip.late {
+	color: var(--status-warning);
+	border-color: color-mix(in srgb, var(--status-warning) 30%, transparent);
+	background: color-mix(in srgb, var(--status-warning) 8%, transparent);
 }
 
 .line {

@@ -47,6 +47,7 @@ let message = $state("");
 				{#each spec.input.presets as preset (preset)}
 					<Chip
 						pressed={message === preset}
+						tick={false}
 						onclick={() => (message = message === preset ? "" : preset)}
 					>
 						{preset}

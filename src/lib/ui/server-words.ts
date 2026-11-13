@@ -93,6 +93,7 @@ const TEXT: Record<TextId, () => string> = {
 	pill_not_found: i18n.server_pill_not_found,
 	pill_this_device: i18n.settings_this_device,
 	pill_this_browser: i18n.settings_this_browser,
+	pill_new: i18n.home_new,
 	note_nobody: i18n.server_note_nobody,
 	note_no_apps: i18n.server_note_no_apps,
 	note_no_browsers: i18n.server_note_no_browsers,

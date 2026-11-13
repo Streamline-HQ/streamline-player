@@ -22,7 +22,9 @@ let {
 const editable = $derived(
 	row.t === "toggle" || row.t === "choice" || row.t === "text" || row.t === "num" ? row : null,
 );
-const off = $derived(!!editable && (editable.disabled || editable.locked));
+const off = $derived(
+	!!editable && (editable.disabled || editable.locked || !!h.busy?.(editable.key)),
+);
 const on = $derived(row.t === "toggle" && row.value === true);
 const blurOnEnter = (e: KeyboardEvent) => {
 	if (e.key === "Enter") (e.currentTarget as HTMLElement).blur();
@@ -114,6 +116,7 @@ const blurOnEnter = (e: KeyboardEvent) => {
 		<Button
 			variant={row.tone === "danger" ? "destructive" : "secondary"}
 			size="sm"
+			disabled={row.disabled}
 			onclick={() => h.act?.(row.act as Act)}
 		>
 			{row.button}

@@ -100,7 +100,7 @@ function port() {
 		},
 		async adminPairings() {
 			await p.hit("adminPairings");
-			return [{ user_code: "R4W-X9P" }] as never;
+			return [{ user_code: "R4W-X9P", name: "iPad mini", platform: "iPadOS" }] as never;
 		},
 		async adminDevices() {
 			await p.hit("adminDevices");
@@ -388,6 +388,84 @@ eq(pendingPairs.n, 1);
 p.fail.adminPairings = failure("forbidden");
 await S.loadPendingPairs(p);
 eq(pendingPairs.n, 0);
+
+S.resetAdmin();
+p = port();
+await S.loadAdmin(p);
+const sent: string[] = [];
+const pairs = {
+	fail: undefined as Error | undefined,
+	async approvePairing(code: string) {
+		sent.push(`approve ${code}`);
+		if (pairs.fail) throw pairs.fail;
+	},
+	async denyPairing(code: string) {
+		sent.push(`deny ${code}`);
+		if (pairs.fail) throw pairs.fail;
+	},
+};
+pairs.fail = new Error("down");
+eq(await S.resolvePairing(pairs, "R4W-X9P", true, "Antoine"), "failed");
+eq(admin.data?.pairings.length, 1);
+pairs.fail = failure("no_pending_pairing");
+eq(await S.resolvePairing(pairs, "R4W-X9P", true, "Antoine"), "gone");
+eq(admin.data?.pairings.length, 0);
+eq(pendingPairs.n, 0);
+await S.refreshAdmin(p);
+pairs.fail = undefined;
+eq(await S.resolvePairing(pairs, "R4W-X9P", false, "Antoine"), "ok");
+eq(
+	admin.data?.devices.some((d) => d.id === "new-R4W-X9P"),
+	false,
+);
+await S.refreshAdmin(p);
+eq(await S.resolvePairing(pairs, "R4W-X9P", true, "Antoine"), "ok");
+same(sent, ["approve R4W-X9P", "approve R4W-X9P", "deny R4W-X9P", "approve R4W-X9P"]);
+eq(admin.data?.devices[0]?.name, "iPad mini");
+same(admin.data?.fresh, ["iPad mini"]);
+await S.refreshAdmin(p);
+eq(admin.data?.devices[0]?.name, "iPad mini");
+same(admin.data?.fresh, ["iPad mini"]);
+
+let busyGate!: () => void;
+p.gate = new Promise<void>((done) => {
+	busyGate = done;
+});
+const saving = S.save(p, "stream.max_live", 4);
+same(S.busy.keys, ["stream.max_live"]);
+busyGate();
+p.gate = null;
+await saving;
+same(S.busy.keys, []);
+
+S.resetAdmin();
+p = port();
+const running = {
+	folders: [
+		{ id: "movies", name: "Movies", scan: { progress: 0.5, eta_seconds: 8 } },
+		{ id: "series", name: "Series", scan: { progress: 0.2, eta_seconds: 20 } },
+	],
+};
+const quiet = {
+	folders: [
+		{ id: "movies", name: "Movies" },
+		{ id: "series", name: "Series" },
+	],
+	last_scan: { at: "2026-11-09T12:00:00Z", added: 3, replaced: 0, errors: 1 },
+};
+p.adminLibrary = async () => running as never;
+await S.loadAdmin(p);
+p.adminLibrary = async () =>
+	({ ...running, folders: running.folders.slice(0, 1).concat(quiet.folders.slice(1)) }) as never;
+await S.refreshLibrary(p);
+same(S.scanDone.report, { finished: ["Series"], added: 0, errors: 0 });
+S.scanDone.report = null;
+p.adminLibrary = async () => quiet as never;
+await S.refreshLibrary(p);
+same(S.scanDone.report, { finished: ["Movies"], added: 3, errors: 1 });
+S.scanDone.report = null;
+await S.refreshLibrary(p);
+eq(S.scanDone.report, null);
 
 function ok(v: unknown) {
 	eq(!!v, true);
