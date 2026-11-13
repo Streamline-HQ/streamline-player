@@ -277,7 +277,7 @@ export const home = () => call<HomeFeed>("GET", "/home");
 export const updateMe = (patch: { name?: string; email?: string }) =>
 	call<Me>("PATCH", "/me", {
 		...(patch.name === undefined ? {} : { display_name: patch.name }),
-		...(patch.email === undefined ? {} : { device_email: patch.email }),
+		...(patch.email === undefined ? {} : { email: patch.email }),
 	});
 export const setPicture = (file: Blob) => call<void>("PUT", "/me/picture", file);
 export const removePicture = () => call<void>("DELETE", "/me/picture");

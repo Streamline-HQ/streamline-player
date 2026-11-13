@@ -770,8 +770,8 @@ class Handler(BaseHTTPRequestHandler):
             return
         if self.path == "/api/v1/me":
             b = self.body()
-            email = b.get("device_email")
-            if email is not None and email != "":
+            email = b.get("email")
+            if email is not None:
                 if not re.fullmatch(r"[^@\s]+@[^@\s]+\.[^@\s]+", email):
                     return self.reply(422, {"error": {"code": "invalid_email", "message": "That is not an email address."}})
                 if email == TAKEN_EMAIL:

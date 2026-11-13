@@ -853,7 +853,7 @@ components:
       type: object
       properties:
         display_name: { type: string }
-        device_email: { type: string, description: Empty string clears it. }
+        email: { type: string, description: The account email. }
     Kind:
       type: string
       enum: [movies, series]

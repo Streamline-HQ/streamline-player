@@ -115,10 +115,10 @@ try {
 	);
 	eq((await json("/me")).name, "A. Langlois");
 	const before = (await json("/me")).email;
-	const taken = await patch({ device_email: "taken@example.net" });
+	const taken = await patch({ email: "taken@example.net" });
 	eq(taken.status, 409);
 	eq(((await taken.json()) as any).error.code, "email_taken");
-	const invalid = await patch({ device_email: "nope" });
+	const invalid = await patch({ email: "nope" });
 	eq(invalid.status, 422);
 	eq(((await invalid.json()) as any).error.code, "invalid_email");
 	eq((await json("/me")).email, before);

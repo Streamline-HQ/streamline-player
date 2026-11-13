@@ -244,7 +244,7 @@ async fn update_me(
         body.insert("display_name".into(), name.into());
     }
     if let Some(email) = email {
-        body.insert("device_email".into(), email.into());
+        body.insert("email".into(), email.into());
     }
     api.call(reqwest::Method::PATCH, "/me", Some(body.into()))
         .await

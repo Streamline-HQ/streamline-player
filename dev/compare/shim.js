@@ -107,7 +107,7 @@
     set_watched: ({ mediaId, watched }) => call("PUT", `/watchstate/${mediaId}`, { watched }),
     me: () => call("GET", "/me"),
     home: () => call("GET", "/home"),
-    update_me: ({ name, email }) => call("PATCH", "/me", { ...(name === undefined ? {} : { display_name: name }), ...(email === undefined ? {} : { device_email: email }) }),
+    update_me: ({ name, email }) => call("PATCH", "/me", { ...(name === undefined ? {} : { display_name: name }), ...(email === undefined ? {} : { email: email }) }),
     set_picture: (bytes, options) => fetch(`${B}/api/v1/me/picture`, { method: "PUT", headers: { "Content-Type": options.headers["x-picture-type"] }, body: bytes }).then(async (r) => { if (!r.ok) throw await r.text(); return null; }),
     remove_picture: () => call("DELETE", "/me/picture"),
     revoke_device: ({ id }) => call("DELETE", `/devices/${encodeURIComponent(id)}`),
