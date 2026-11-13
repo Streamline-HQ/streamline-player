@@ -22,7 +22,7 @@ in
   );
 
   serviceConfig = {
-    Restart = "on-failure";
+    Restart = "always";
     RestartSec = 5;
 
     LockPersonality = true;

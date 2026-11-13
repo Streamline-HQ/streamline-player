@@ -33,6 +33,11 @@ pub fn router(state: AppState) -> Router {
             get(control::job_status).delete(control::cancel_job),
         )
         .route("/jobs/{id}/files/{*name}", get(control::job_file))
+        .route(
+            "/settings",
+            get(control::get_settings).patch(control::patch_settings),
+        )
+        .route("/restart", post(control::restart))
         .method_not_allowed_fallback(method_not_allowed)
         .layer(middleware::from_fn_with_state(state.clone(), bearer));
 

@@ -9,6 +9,7 @@ pub mod hw;
 pub mod jobs;
 pub mod playlist;
 pub mod session;
+pub mod settings;
 pub mod telemetry;
 pub mod token;
 
@@ -20,6 +21,7 @@ use config::Config;
 use hw::Hw;
 use jobs::Jobs;
 use session::Sessions;
+use settings::Settings;
 
 #[derive(Clone)]
 pub struct AppState {
@@ -29,6 +31,7 @@ pub struct AppState {
     pub ffmpeg_version: Option<String>,
     pub sessions: Sessions,
     pub jobs: Jobs,
+    pub settings: Arc<Settings>,
 }
 
 pub fn app(state: AppState) -> Router {

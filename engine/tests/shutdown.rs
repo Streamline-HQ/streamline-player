@@ -191,3 +191,28 @@ fn second_signal_exits_immediately() {
         "second signal did not exit"
     );
 }
+
+#[test]
+fn restart_request_exits_with_status_zero() {
+    let (mut engine, _pidfile) = start_engine("restart");
+    let mut s = TcpStream::connect(engine.addr).unwrap();
+    write!(
+        s,
+        "POST /v1/restart HTTP/1.1\r\nhost: engine\r\nauthorization: Bearer {SECRET}\r\n\
+         content-length: 0\r\nconnection: close\r\n\r\n"
+    )
+    .unwrap();
+    let mut reply = String::new();
+    s.read_to_string(&mut reply).unwrap();
+    assert!(reply.starts_with("HTTP/1.1 202"), "{reply}");
+
+    assert!(
+        until(Duration::from_secs(5), || engine
+            .child
+            .try_wait()
+            .unwrap()
+            .is_some()),
+        "engine did not exit"
+    );
+    assert!(engine.child.wait().unwrap().success());
+}

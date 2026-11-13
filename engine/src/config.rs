@@ -3,9 +3,9 @@ use std::path::{Path, PathBuf};
 use std::time::Duration;
 
 use anyhow::{Context, bail};
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize, Serialize)]
 #[serde(rename_all = "lowercase")]
 pub enum HwAccel {
     Auto,
@@ -80,6 +80,8 @@ pub struct Config {
     #[serde(with = "humantime_serde")]
     pub job_output_ttl: Duration,
     pub path_map: PathMap,
+    /// Refuses every settings write through the API, for a config managed from outside.
+    pub read_only: bool,
 }
 
 impl Default for Config {
@@ -100,6 +102,7 @@ impl Default for Config {
             orphan_timeout: Duration::from_secs(30 * 60),
             job_output_ttl: Duration::from_secs(168 * 3600),
             path_map: PathMap::default(),
+            read_only: false,
         }
     }
 }
@@ -116,7 +119,7 @@ impl Config {
         Ok(cfg)
     }
 
-    fn parse(text: &str) -> anyhow::Result<Config> {
+    pub(crate) fn parse(text: &str) -> anyhow::Result<Config> {
         let mut cfg: Config = serde_yaml_ng::from_str(text)?;
         let defaults = Config::default();
         if cfg.tmp_dir.as_os_str().is_empty() {
@@ -124,6 +127,9 @@ impl Config {
         }
         if cfg.jobs_dir.as_os_str().is_empty() {
             cfg.jobs_dir = defaults.jobs_dir;
+        }
+        if cfg.max_transcodes < 1 {
+            bail!("max_transcodes must be at least 1");
         }
         match (&cfg.secret, &cfg.secret_file) {
             (Some(_), Some(_)) => bail!("set exactly one of `secret` and `secret_file`, not both"),

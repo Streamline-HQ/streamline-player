@@ -17,6 +17,7 @@ use crate::jobs::{JobRequest, JobSpec, JobState, JobStatus, Priority};
 use crate::session::{
     DecisionsRequest, DecisionsResponse, PatchRequest, SessionInfo, SessionResponse, StartRequest,
 };
+use crate::settings::SettingsView;
 
 fn parse<T: DeserializeOwned>(body: &Bytes) -> Result<T, ApiError> {
     serde_json::from_slice(body).map_err(|e| ApiError::invalid_request(e.to_string()))
@@ -168,4 +169,21 @@ pub async fn list_jobs(State(s): State<AppState>) -> Json<JobList> {
             })
             .collect(),
     })
+}
+
+pub async fn get_settings(State(s): State<AppState>) -> Result<Json<SettingsView>, ApiError> {
+    Ok(Json(s.settings.view()?))
+}
+
+pub async fn patch_settings(
+    State(s): State<AppState>,
+    body: Bytes,
+) -> Result<Json<SettingsView>, ApiError> {
+    let body = parse(&body).map_err(|e| ApiError::invalid_setting(e.message))?;
+    Ok(Json(s.settings.patch(body).await?))
+}
+
+pub async fn restart(State(s): State<AppState>) -> StatusCode {
+    s.settings.request_restart();
+    StatusCode::ACCEPTED
 }

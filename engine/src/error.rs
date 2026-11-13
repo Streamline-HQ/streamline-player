@@ -142,6 +142,18 @@ impl ApiError {
         )
     }
 
+    pub fn read_only() -> Self {
+        Self::new(StatusCode::CONFLICT, "read_only", "the config is read-only")
+    }
+
+    pub fn invalid_setting(message: impl Into<String>) -> Self {
+        Self::new(StatusCode::BAD_REQUEST, "invalid_setting", message)
+    }
+
+    pub fn internal(message: impl Into<String>) -> Self {
+        Self::new(StatusCode::INTERNAL_SERVER_ERROR, "internal", message)
+    }
+
     pub fn ffmpeg_failed(message: impl Into<String>) -> Self {
         Self::new(StatusCode::SERVICE_UNAVAILABLE, "ffmpeg_failed", message)
     }

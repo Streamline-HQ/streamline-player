@@ -14,6 +14,7 @@ use engine::decision::EncoderSet;
 use engine::hw::{Backend, Hw};
 use engine::jobs::Jobs;
 use engine::session::Sessions;
+use engine::settings::Settings;
 use engine::token::{Scope, sign};
 use engine::{AppState, app};
 use serde_json::{Value, json};
@@ -27,6 +28,8 @@ pub struct Env {
     pub root: PathBuf,
     pub router: Router,
     pub sessions: Sessions,
+    pub settings: Arc<Settings>,
+    pub config_file: PathBuf,
 }
 
 impl Drop for Env {
@@ -52,6 +55,30 @@ pub fn env() -> Env {
 }
 
 pub fn env_with_hw(hw: Hw) -> Env {
+    build_env(hw, None)
+}
+
+/// An env whose settings endpoint reads and writes `yaml`, a config file in the env's root.
+pub fn env_with_config(yaml: &str) -> Env {
+    build_env(
+        Hw::new(
+            Backend::Cpu,
+            String::new(),
+            EncoderSet {
+                h264: true,
+                hevc: true,
+                av1: true,
+                hevc_first: false,
+                dovi_tool: true,
+                av1_pads: false,
+            },
+            false,
+        ),
+        Some(yaml),
+    )
+}
+
+fn build_env(hw: Hw, yaml: Option<&str>) -> Env {
     let root = std::env::temp_dir().join(format!(
         "engine-http-{}-{}",
         std::process::id(),
@@ -79,12 +106,29 @@ pub fn env_with_hw(hw: Hw) -> Env {
         .unwrap();
         std::fs::write(bin.join("fake.env"), "").unwrap();
     }
+    let config_file = root.join("engine.yaml");
+    let (base, path) = match yaml {
+        Some(text) => {
+            std::fs::write(&config_file, text).unwrap();
+            (
+                Config::load(&config_file).unwrap(),
+                Some(config_file.clone()),
+            )
+        }
+        None => (
+            Config {
+                secret: Some(SECRET.into()),
+                ..Config::default()
+            },
+            None,
+        ),
+    };
+    let settings = Arc::new(Settings::new(path, &base));
     let cfg = Arc::new(Config {
-        secret: Some(SECRET.into()),
         tmp_dir: root.join("live"),
         jobs_dir: root.join("jobs"),
         ffmpeg_dir: bin,
-        ..Config::default()
+        ..base
     });
     let hw = Arc::new(hw);
     let sessions = Sessions::new(cfg.clone(), hw.clone());
@@ -96,11 +140,14 @@ pub fn env_with_hw(hw: Hw) -> Env {
         ffmpeg_version: Some("test".into()),
         sessions: sessions.clone(),
         jobs,
+        settings: settings.clone(),
     });
     Env {
         root,
         router,
         sessions,
+        settings,
+        config_file,
     }
 }
 

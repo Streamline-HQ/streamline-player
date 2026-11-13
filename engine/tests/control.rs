@@ -369,3 +369,168 @@ async fn trickplay_type_is_accepted() {
         .await;
     assert_eq!(status, StatusCode::ACCEPTED);
 }
+
+const SETTINGS_YAML: &str = "secret: test-secret-0123456789\nlisten: 127.0.0.1:9\nhw_accel: vaapi\n# a comment\npath_map:\n  - { from: /data, to: /mnt }\n";
+
+#[tokio::test]
+async fn settings_read_the_file() {
+    let e = env_with_config(SETTINGS_YAML);
+    let (status, v) = e.api("GET", "/v1/settings", None).await;
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(v["read_only"], false);
+    assert_eq!(v["values"]["hw_accel"], "vaapi");
+    assert_eq!(v["values"]["hw_device"], "");
+    assert_eq!(v["values"]["max_transcodes"], 4);
+    assert_eq!(v["pending"], json!([]));
+    assert_eq!(
+        v["restart_keys"],
+        json!(["hw_accel", "hw_device", "max_transcodes"])
+    );
+}
+
+#[tokio::test]
+async fn settings_patch_writes_and_keeps_the_rest() {
+    let e = env_with_config(SETTINGS_YAML);
+    let (status, v) = e
+        .api(
+            "PATCH",
+            "/v1/settings",
+            Some(json!({ "max_transcodes": 2 })),
+        )
+        .await;
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(v["values"]["max_transcodes"], 2);
+
+    let written: serde_yaml_ng::Value =
+        serde_yaml_ng::from_str(&std::fs::read_to_string(&e.config_file).unwrap()).unwrap();
+    assert_eq!(written["max_transcodes"], 2);
+    assert_eq!(written["secret"], "test-secret-0123456789");
+    assert_eq!(written["listen"], "127.0.0.1:9");
+    assert_eq!(written["hw_accel"], "vaapi");
+    assert_eq!(written["path_map"][0]["to"], "/mnt");
+
+    let (_, v) = e.api("GET", "/v1/settings", None).await;
+    assert_eq!(v["pending"], json!(["max_transcodes"]));
+
+    let (status, v) = e
+        .api(
+            "PATCH",
+            "/v1/settings",
+            Some(json!({ "max_transcodes": 4 })),
+        )
+        .await;
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(v["pending"], json!([]));
+    let leftovers = std::fs::read_dir(&e.root)
+        .unwrap()
+        .filter(|f| {
+            f.as_ref()
+                .unwrap()
+                .file_name()
+                .to_string_lossy()
+                .ends_with(".tmp")
+        })
+        .count();
+    assert_eq!(leftovers, 0);
+}
+
+#[tokio::test]
+async fn settings_patch_refuses_bad_values_and_writes_nothing() {
+    let e = env_with_config(SETTINGS_YAML);
+    let before = std::fs::read(&e.config_file).unwrap();
+    for body in [
+        json!({ "max_transcodes": 0 }),
+        json!({ "max_transcodes": "two" }),
+        json!({ "hw_accel": "nope" }),
+        json!({ "listen": "0.0.0.0:1" }),
+        json!({ "max_transcodes": 2, "listen": "0.0.0.0:1" }),
+        json!([1]),
+    ] {
+        let (status, v) = e.api("PATCH", "/v1/settings", Some(body.clone())).await;
+        assert_eq!(status, StatusCode::BAD_REQUEST, "{body}");
+        assert_eq!(v["code"], "invalid_setting", "{body}");
+        assert_eq!(std::fs::read(&e.config_file).unwrap(), before, "{body}");
+    }
+}
+
+#[tokio::test]
+async fn settings_are_read_only_when_the_config_says_so() {
+    let e = env_with_config(&format!("{SETTINGS_YAML}read_only: true\n"));
+    let before = std::fs::read(&e.config_file).unwrap();
+    let (_, v) = e.api("GET", "/v1/settings", None).await;
+    assert_eq!(v["read_only"], true);
+    let (status, v) = e
+        .api(
+            "PATCH",
+            "/v1/settings",
+            Some(json!({ "max_transcodes": 2 })),
+        )
+        .await;
+    assert_eq!(status, StatusCode::CONFLICT);
+    assert_eq!(v["code"], "read_only");
+    assert_eq!(std::fs::read(&e.config_file).unwrap(), before);
+}
+
+#[cfg(unix)]
+#[tokio::test]
+async fn settings_are_read_only_when_the_directory_is() {
+    use std::os::unix::fs::PermissionsExt;
+
+    let e = env_with_config(SETTINGS_YAML);
+    let dir = e.root.join("locked");
+    std::fs::create_dir(&dir).unwrap();
+    let file = dir.join("engine.yaml");
+    std::fs::copy(&e.config_file, &file).unwrap();
+    let locked = engine::config::Config::load(&file).unwrap();
+    let settings = engine::settings::Settings::new(Some(file.clone()), &locked);
+    std::fs::set_permissions(&dir, std::fs::Permissions::from_mode(0o555)).unwrap();
+    let before = std::fs::read(&file).unwrap();
+
+    let writable = std::fs::File::create(dir.join("probe")).is_ok();
+    let view = settings.view().unwrap();
+    let patch = settings
+        .patch(serde_json::from_value(json!({ "max_transcodes": 2 })).unwrap())
+        .await;
+    std::fs::set_permissions(&dir, std::fs::Permissions::from_mode(0o755)).unwrap();
+
+    if writable {
+        return;
+    }
+    assert!(view.read_only);
+    assert_eq!(patch.unwrap_err().code, "read_only");
+    assert_eq!(std::fs::read(&file).unwrap(), before);
+}
+
+#[tokio::test]
+async fn settings_and_restart_need_the_bearer() {
+    let e = env_with_config(SETTINGS_YAML);
+    for (method, uri) in [
+        ("GET", "/v1/settings"),
+        ("PATCH", "/v1/settings"),
+        ("POST", "/v1/restart"),
+    ] {
+        let res = e
+            .send(
+                Request::builder()
+                    .method(method)
+                    .uri(uri)
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await;
+        assert_eq!(res.status(), StatusCode::UNAUTHORIZED, "{method} {uri}");
+    }
+}
+
+#[tokio::test]
+async fn restart_answers_202_and_fires_the_shutdown() {
+    let e = env_with_config(SETTINGS_YAML);
+    let (status, _) = e.api("POST", "/v1/restart", None).await;
+    assert_eq!(status, StatusCode::ACCEPTED);
+    tokio::time::timeout(
+        std::time::Duration::from_secs(1),
+        e.settings.restart_requested(),
+    )
+    .await
+    .expect("the restart signal never fired");
+}

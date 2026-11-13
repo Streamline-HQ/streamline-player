@@ -11,6 +11,7 @@ use axum::http::{Request, StatusCode};
 use common::{body_bytes, caps, id, valid_query};
 use engine::config::{Config, HwAccel};
 use engine::session::Sessions;
+use engine::settings::Settings;
 use engine::{AppState, app, hw, jobs::Jobs};
 use serde_json::{Value, json};
 use tower::ServiceExt;
@@ -207,7 +208,8 @@ async fn env() -> Env {
         hw: hw.clone(),
         ffmpeg_version: None,
         sessions: Sessions::new(cfg.clone(), hw.clone()),
-        jobs: Jobs::new(cfg, hw.clone()),
+        jobs: Jobs::new(cfg.clone(), hw.clone()),
+        settings: Arc::new(Settings::new(None, &cfg)),
     });
     Env { root, router }
 }

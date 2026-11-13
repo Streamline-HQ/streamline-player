@@ -8,6 +8,7 @@ use engine::config::{Config, HwAccel};
 use engine::hw::{self, Backend};
 use engine::jobs::Jobs;
 use engine::session::Sessions;
+use engine::settings::Settings;
 use engine::{AppState, app, telemetry};
 use opentelemetry::global;
 use opentelemetry::trace::TracerProvider as _;
@@ -81,7 +82,8 @@ fn init_tracing() -> Option<Otel> {
     }
 }
 
-async fn serve(cfg: Config, secret: Vec<u8>) -> anyhow::Result<()> {
+async fn serve(cfg: Config, secret: Vec<u8>, config_path: PathBuf) -> anyhow::Result<()> {
+    let settings = Arc::new(Settings::new(Some(config_path), &cfg));
     let cfg = Arc::new(cfg);
     let ffmpeg_version = hw::ffmpeg_version(&cfg.ffmpeg()).await;
     match &ffmpeg_version {
@@ -124,6 +126,7 @@ async fn serve(cfg: Config, secret: Vec<u8>) -> anyhow::Result<()> {
         ffmpeg_version,
         sessions: sessions.clone(),
         jobs: jobs.clone(),
+        settings: settings.clone(),
     };
     let listener = tokio::net::TcpListener::bind(cfg.listen)
         .await
@@ -142,6 +145,7 @@ async fn serve(cfg: Config, secret: Vec<u8>) -> anyhow::Result<()> {
     tokio::select! {
         result = &mut server => return Ok(result?),
         () = signals.recv() => {}
+        () = settings.restart_requested() => tracing::info!("restart requested"),
     }
     tracing::info!("shutting down");
     drain.notify_one();
@@ -214,7 +218,7 @@ fn run(cli: Cli) -> anyhow::Result<()> {
     let runtime = tokio::runtime::Runtime::new()?;
     let result = runtime.block_on(async {
         let otel = init_tracing();
-        let result = serve(cfg, secret).await;
+        let result = serve(cfg, secret, cli.config).await;
         if let Some(otel) = otel {
             otel.shutdown();
         }
