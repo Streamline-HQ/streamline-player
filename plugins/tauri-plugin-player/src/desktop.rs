@@ -459,18 +459,18 @@ pub async fn subtitle(
     Ok(())
 }
 
+/// The query is left out of the name: it carries a signature that changes on every tracks call.
+fn cache_name(url: &str) -> String {
+    let stable = url.split('?').next().unwrap_or_default();
+    let mut hash = DefaultHasher::new();
+    stable.hash(&mut hash);
+    let last = stable.rsplit('/').next().unwrap_or_default();
+    format!("{:x}-{last}", hash.finish())
+}
+
 /// Downloads `url` into `dir` once, named by a hash of the URL and its last path segment.
 async fn fetch_cached(url: &str, dir: &Path) -> Result<PathBuf, String> {
-    let mut hash = DefaultHasher::new();
-    url.hash(&mut hash);
-    let last = url
-        .rsplit('/')
-        .next()
-        .unwrap_or_default()
-        .split('?')
-        .next()
-        .unwrap_or_default();
-    let file = dir.join(format!("{:x}-{last}", hash.finish()));
+    let file = dir.join(cache_name(url));
     if file.exists() {
         return Ok(file);
     }
@@ -515,5 +515,18 @@ pub fn register_listener(player: State<'_, Arc<Player>>, event: String, handler:
 pub fn remove_listener(player: State<'_, Arc<Player>>, event: String, channel_id: u32) {
     if let Some(channels) = player.listeners.lock().unwrap().get_mut(&event) {
         channels.retain(|c| c.id() != channel_id);
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::cache_name;
+
+    #[test]
+    fn a_new_signature_reuses_the_cached_file() {
+        let a = cache_name("http://e/media/j1/fonts/A.ttf?exp=1&sig=aa");
+        assert_eq!(a, cache_name("http://e/media/j1/fonts/A.ttf?exp=2&sig=bb"));
+        assert!(a.ends_with("-A.ttf"));
+        assert_ne!(a, cache_name("http://e/media/j2/fonts/A.ttf?exp=1&sig=aa"));
     }
 }

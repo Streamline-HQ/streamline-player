@@ -426,8 +426,14 @@ impl Jobs {
         if self.status(id)?.state != JobState::Done || !name_ok(name) || name == DONE_FILE {
             return Err(ApiError::not_found("no such file"));
         }
-        let path = self.0.dir(id).join(name);
-        if path.is_file() {
+        let dir = self.0.dir(id);
+        let path = dir.join(name);
+        // Resolved first: a link in a job directory, file or folder, must not serve what lies outside it.
+        let inside = match (path.canonicalize(), dir.canonicalize()) {
+            (Ok(real), Ok(dir)) => real.starts_with(dir) && real.is_file(),
+            _ => false,
+        };
+        if inside {
             Ok(path)
         } else {
             Err(ApiError::not_found("no such file"))

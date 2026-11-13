@@ -67,7 +67,17 @@ fn square_pixels(a: &Analysis) -> bool {
         .is_none_or(|v| v.sar.0 == 0 || v.sar.1 == 0 || v.sar.0 == v.sar.1)
 }
 
-fn args(input: &Path, a: &Analysis, _hw: &Hw, tonemap: Tonemap, out: &Path) -> Vec<String> {
+fn tile_count(a: &Analysis) -> u32 {
+    ((a.duration / f64::from(INTERVAL)).ceil() as u32).max(1)
+}
+
+fn args(
+    input: &Path,
+    a: &Analysis,
+    tonemap: Tonemap,
+    keyframes_only: bool,
+    out: &Path,
+) -> Vec<String> {
     let th = tile_height(a).unwrap_or(2);
     let scale = if square_pixels(a) {
         format!("scale={TILE_WIDTH}:-2")
@@ -75,7 +85,12 @@ fn args(input: &Path, a: &Analysis, _hw: &Hw, tonemap: Tonemap, out: &Path) -> V
         format!("scale={TILE_WIDTH}:{th}")
     };
     // eof_action=pass: plain fps drops the last frame, so a clip with one keyframe got no sheet.
-    let mut vf = format!("fps=1/{INTERVAL}:eof_action=pass,{scale}");
+    // tpad then trim: the last picture repeats up to the index's count, so the slots after the
+    // last keyframe are not left black.
+    let mut vf = format!(
+        "fps=1/{INTERVAL}:eof_action=pass,tpad=stop_mode=clone:stop=-1,trim=end_frame={},{scale}",
+        tile_count(a)
+    );
     match tonemap {
         Tonemap::None => {}
         Tonemap::Libplacebo => {
@@ -94,7 +109,10 @@ fn args(input: &Path, a: &Analysis, _hw: &Hw, tonemap: Tonemap, out: &Path) -> V
     let mut args: Vec<String> = ["-nostdin", "-y", "-hide_banner", "-loglevel", "error"]
         .map(ToOwned::to_owned)
         .into();
-    args.extend(["-skip_frame".into(), "nokey".into(), "-i".into()]);
+    if keyframes_only {
+        args.extend(["-skip_frame".into(), "nokey".into()]);
+    }
+    args.push("-i".into());
     args.push(input.to_string_lossy().into_owned());
     args.extend(
         [
@@ -104,8 +122,10 @@ fn args(input: &Path, a: &Analysis, _hw: &Hw, tonemap: Tonemap, out: &Path) -> V
             "-sn",
             "-vf",
             &vf,
+            // mjpeg refuses the limited-range nv12 the tonemap chains end in.
             "-pix_fmt",
             "yuvj420p",
+            // Without it the muxer re-times the single tiled frame and can drop it.
             "-fps_mode",
             "passthrough",
             "-q:v",
@@ -123,7 +143,7 @@ fn index(a: &Analysis, tile_height: u32) -> Result<Value, JobError> {
     if a.video.is_empty() {
         return Err(JobError::NoVideo);
     }
-    let count = ((a.duration / f64::from(INTERVAL)).ceil() as u32).max(1);
+    let count = tile_count(a);
     let per_sheet = COLS * ROWS;
     let sheets: Vec<String> = (0..count.div_ceil(per_sheet))
         .map(|i| format!("sheet_{i:03}.jpg"))
@@ -172,11 +192,20 @@ pub async fn run(
     let mut value = index(a, th)?;
     let video = a.video.first().map_or(0, |v| v.index);
     let mut tonemap = tonemap_for(hw, a);
-    let mut result = run_quiet(ffmpeg_bin, &args(input, a, hw, tonemap, out)).await?;
+    let mut result = run_quiet(ffmpeg_bin, &args(input, a, tonemap, true, out)).await?;
     if !result.0 && tonemap == Tonemap::Libplacebo {
         clear_sheets(out);
         tonemap = Tonemap::Cpu;
-        result = run_quiet(ffmpeg_bin, &args(input, a, hw, tonemap, out)).await?;
+        result = run_quiet(ffmpeg_bin, &args(input, a, tonemap, true, out)).await?;
+    }
+    let first_sheet = out.join("sheet_000.jpg");
+    // Some streams hand their keyframes back out of order under -skip_frame nokey: ffmpeg then
+    // filters no frame, writes nothing and still exits 0. Decoding every frame is slow but works.
+    if result.0 && !first_sheet.is_file() {
+        result = run_quiet(ffmpeg_bin, &args(input, a, tonemap, false, out)).await?;
+        if result.0 && !first_sheet.is_file() {
+            result = (false, "ffmpeg wrote no sheet".into());
+        }
     }
     if !result.0 {
         clear_sheets(out);
@@ -236,8 +265,8 @@ mod tests {
         &args[i + 1]
     }
 
-    fn build(hw: &Hw, a: &Analysis, tonemap: Tonemap) -> Vec<String> {
-        args(Path::new("/m/in.mkv"), a, hw, tonemap, Path::new("/o"))
+    fn build(_hw: &Hw, a: &Analysis, tonemap: Tonemap) -> Vec<String> {
+        args(Path::new("/m/in.mkv"), a, tonemap, true, Path::new("/o"))
     }
 
     #[test]
@@ -251,14 +280,14 @@ mod tests {
         assert!(!args.iter().any(|a| a.starts_with("-hwaccel")));
         assert_eq!(
             vf(&args),
-            "fps=1/10:eof_action=pass,scale=320:-2,tile=10x10"
+            "fps=1/10:eof_action=pass,tpad=stop_mode=clone:stop=-1,trim=end_frame=6,scale=320:-2,tile=10x10"
         );
     }
 
     #[test]
     fn hdr_uses_libplacebo_when_probed() {
         let want = format!(
-            "fps=1/10:eof_action=pass,scale=320:-2,format=p010le,{},tile=10x10",
+            "fps=1/10:eof_action=pass,tpad=stop_mode=clone:stop=-1,trim=end_frame=6,scale=320:-2,format=p010le,{},tile=10x10",
             placebo_filter(320, 180, HdrOut::Tonemap)
         );
         for a in [
@@ -275,7 +304,9 @@ mod tests {
 
     #[test]
     fn hdr_uses_cpu_without_libplacebo() {
-        let want = format!("fps=1/10:eof_action=pass,scale=320:-2,{CPU_TONEMAP},tile=10x10");
+        let want = format!(
+            "fps=1/10:eof_action=pass,tpad=stop_mode=clone:stop=-1,trim=end_frame=6,scale=320:-2,{CPU_TONEMAP},tile=10x10"
+        );
         for a in [
             analysis(Hdr::Hdr10, false, 60.0),
             analysis(Hdr::Hlg, false, 60.0),
@@ -298,6 +329,10 @@ for a in "$@"; do last=$a; done
 out=$(dirname "$last")
 case "$*" in
   *libplacebo*) : > "$out/sheet_000.jpg"; : > "$out/sheet_007.jpg"; echo boom >&2; exit 1 ;;
+esac
+[ -e "$d/never" ] && exit 0
+case "$*" in
+  *skip_frame*) [ -e "$d/nokey-empty" ] && exit 0 ;;
 esac
 : > "$out/sheet_000.jpg"
 "#,
@@ -323,6 +358,42 @@ esac
         assert!(out.join("sheet_000.jpg").is_file());
         assert!(!out.join("sheet_007.jpg").exists());
         assert!(out.join("trickplay.json").is_file());
+        std::fs::remove_dir_all(root).ok();
+    }
+
+    #[tokio::test]
+    async fn no_sheet_from_keyframes_decodes_every_frame() {
+        let root = std::env::temp_dir().join(format!("engine-trickplay-ns-{}", std::process::id()));
+        let bin = fake_ffmpeg(&root.join("bin"));
+        std::fs::write(root.join("bin/nokey-empty"), "").unwrap();
+        let out = root.join("out");
+        std::fs::create_dir_all(&out).unwrap();
+        let a = analysis(Hdr::Sdr, false, 25.0);
+        run(&bin, &hw(false), Path::new("/m/in.mkv"), &a, &out)
+            .await
+            .unwrap();
+        let runs = std::fs::read_to_string(root.join("bin/runs.txt")).unwrap();
+        let runs: Vec<&str> = runs.lines().collect();
+        assert_eq!(runs.len(), 2);
+        assert!(runs[0].contains("-skip_frame nokey"));
+        assert!(!runs[1].contains("-skip_frame"));
+        assert!(out.join("sheet_000.jpg").is_file());
+        std::fs::remove_dir_all(root).ok();
+    }
+
+    #[tokio::test]
+    async fn no_sheet_at_all_fails_the_job() {
+        let root = std::env::temp_dir().join(format!("engine-trickplay-nn-{}", std::process::id()));
+        let bin = fake_ffmpeg(&root.join("bin"));
+        std::fs::write(root.join("bin/never"), "").unwrap();
+        let out = root.join("out");
+        std::fs::create_dir_all(&out).unwrap();
+        let a = analysis(Hdr::Sdr, false, 25.0);
+        let err = run(&bin, &hw(false), Path::new("/m/in.mkv"), &a, &out)
+            .await
+            .unwrap_err();
+        assert!(matches!(err, JobError::Ffmpeg { .. }));
+        assert!(!out.join("trickplay.json").exists());
         std::fs::remove_dir_all(root).ok();
     }
 

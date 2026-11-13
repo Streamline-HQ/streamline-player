@@ -47,12 +47,19 @@ const listening = await new Promise<string>((resolve, reject) => {
 try {
 	for (const path of Object.keys(replies))
 		await fetch(`http://${listening}${path}`).then((r) => r.text());
-	const lines = existsSync(report)
-		? readFileSync(report, "utf8")
-				.split("\n")
-				.filter(Boolean)
-				.map((l) => JSON.parse(l))
-		: [];
+	const read = () =>
+		existsSync(report)
+			? readFileSync(report, "utf8")
+					.split("\n")
+					.filter(Boolean)
+					.map((l) => JSON.parse(l))
+			: [];
+	// The proxy answers before it appends to the report.
+	let lines = read();
+	for (let i = 0; i < 40 && lines.length < 2; i++) {
+		await new Promise((r) => setTimeout(r, 50));
+		lines = read();
+	}
 	eq(lines.length, 2);
 	ok(lines.some((l) => l.path === "/api/v1/me" && l.where === "response"));
 	ok(lines.some((l) => l.path === "/api/v1/nowhere" && l.where === "undocumented"));

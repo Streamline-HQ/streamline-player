@@ -332,6 +332,24 @@ async fn media_rejects_wrong_scope_or_job() {
     }
 }
 
+#[cfg(unix)]
+#[tokio::test]
+async fn media_does_not_follow_links_out_of_the_job() {
+    let e = env();
+    let jid = finished_job(&e, 7);
+    let outside = e.root.join("secret");
+    std::fs::create_dir_all(&outside).unwrap();
+    std::fs::write(outside.join("x.vtt"), b"secret").unwrap();
+    let dir = e.root.join("jobs").join(&jid);
+    std::os::unix::fs::symlink(outside.join("x.vtt"), dir.join("link.vtt")).unwrap();
+    std::os::unix::fs::symlink(&outside, dir.join("linked")).unwrap();
+    let q = media_query(&jid, now() + 3600);
+    for name in ["link.vtt", "linked/x.vtt"] {
+        let res = e.get(&format!("/media/{jid}/{name}?{q}")).await;
+        assert_eq!(res.status(), StatusCode::NOT_FOUND, "{name}");
+    }
+}
+
 #[tokio::test]
 async fn media_hides_everything_else() {
     let e = env();
