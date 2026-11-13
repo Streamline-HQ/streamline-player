@@ -1,5 +1,6 @@
 import { m as i18n } from "#lib/paraglide/messages.js";
 import { getLocale } from "#lib/paraglide/runtime.js";
+import { dateLocale } from "#lib/core/date-locale.ts";
 import { prefs } from "#lib/core/prefs.svelte.ts";
 import type { FileSummary, Kind, Title, Watch } from "#lib/core/types.ts";
 
@@ -85,8 +86,6 @@ const STILL_POS = ["50% 45%", "22% 40%", "78% 55%", "35% 30%", "64% 70%", "12% 6
 export const stillPos = (episode: number, season: number) =>
 	STILL_POS[(episode + season) % STILL_POS.length] ?? "50% 50%";
 
-const DATE_LOCALE: Record<string, string> = { en: "en-GB" };
-
 export const sizeText = (bytes?: number) => {
 	if (!bytes) return "";
 	const gb = bytes / 1e9;
@@ -101,7 +100,7 @@ export const addedText = (iso: string, now: Date) => {
 	if (at.toISOString().slice(0, 10) === now.toISOString().slice(0, 10))
 		return i18n.library_added_today();
 	return at.toLocaleDateString(
-		DATE_LOCALE[getLocale()] ?? getLocale(),
+		dateLocale(getLocale()),
 		at.getFullYear() === now.getFullYear()
 			? { day: "numeric", month: "short" }
 			: { month: "short", year: "numeric" },
