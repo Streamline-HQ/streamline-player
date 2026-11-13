@@ -30,6 +30,8 @@ tasks:
       - node --import ./dev/controller-check/register.mjs dev/now-playing-check.ts
       - node --import ./dev/controller-check/register.mjs dev/player-view-check.ts
       - node dev/player-panels-check.ts
+      - node dev/server-view-check.ts
+      - node --import ./dev/controller-check/register.mjs dev/server-store-check.ts
       - node dev/shaka-caps-check.ts
       - node dev/trickplay-check.ts
       - node dev/messages-check.ts
