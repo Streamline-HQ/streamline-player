@@ -147,7 +147,7 @@ export function tickStreams() {
 	if (admin.data) admin.data.tick++;
 }
 
-export async function loadPendingPairs(port: AdminPort) {
+export async function loadPendingPairs(port: Pick<AdminPort, "adminPairings">) {
 	try {
 		pendingPairs.n = (await port.adminPairings()).length;
 	} catch (e) {

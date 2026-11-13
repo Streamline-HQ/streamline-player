@@ -23,6 +23,7 @@ let {
 	account,
 	accountLabel,
 	menuOpen,
+	accountOn = false,
 	onhome,
 	ontab,
 	onsearch,
@@ -44,6 +45,7 @@ let {
 	account: { name: string; email: string; initials: string; color: string; picture?: string };
 	accountLabel: string;
 	menuOpen: boolean;
+	accountOn?: boolean;
 	onhome: () => void;
 	ontab: (id: string) => void;
 	onsearch: () => void;
@@ -99,7 +101,7 @@ let {
 			aria-expanded={menuOpen}
 			onclick={onmenu}
 		>
-			<Avatar {...account} size={32} ring={menuOpen} />
+			<Avatar {...account} size={32} ring={menuOpen || accountOn} />
 		</button>
 	</div>
 </div>

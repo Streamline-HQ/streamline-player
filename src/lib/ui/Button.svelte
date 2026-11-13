@@ -15,7 +15,14 @@ let {
 	onclick,
 	children,
 }: {
-	variant?: "primary" | "secondary" | "ghost" | "icon" | "danger" | "danger-outline";
+	variant?:
+		| "primary"
+		| "secondary"
+		| "ghost"
+		| "icon"
+		| "danger"
+		| "danger-outline"
+		| "destructive";
 	size?: "sm" | "md";
 	icon?: IconName;
 	label?: string;

@@ -8,6 +8,7 @@ export type MenuItem = {
 	icon?: IconName;
 	label: string;
 	keys?: string[];
+	badge?: string;
 	separator?: boolean;
 	onclick: () => void;
 };
@@ -50,6 +51,9 @@ let {
 				<Icon name={it.icon} />
 			{/if}
 			<span class="sl-acct__label">{it.label}</span>
+			{#if it.badge}
+				<span class="sl-acct__badge">{it.badge}</span>
+			{/if}
 			{#if it.keys?.length}
 				<span class="sl-acct__keys">
 					{#each it.keys as k (k)}

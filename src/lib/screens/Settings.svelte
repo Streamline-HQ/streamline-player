@@ -14,6 +14,7 @@ import { lib, loadLibrary } from "#lib/core/library.svelte.ts";
 import { account, initialsOf, setMe } from "#lib/core/me.svelte.ts";
 import { type ChoiceKey, prefs, setPref, type ToggleKey } from "#lib/core/prefs.svelte.ts";
 import { QUALITIES, shown } from "#lib/core/prefs-labels.ts";
+import { pendingPairs } from "#lib/core/admin.svelte.ts";
 import { toast } from "#lib/core/toast.svelte.ts";
 import type { Device, DeviceInfo } from "#lib/core/types.ts";
 import { m as i18n } from "#lib/paraglide/messages.js";
@@ -351,7 +352,26 @@ onMount(() => {
 				<h1>{i18n.settings_title()}</h1>
 				<span class="mono">{me?.name} · {me?.email} · {me?.role}</span>
 			</span>
-			{#if ping}
+			{#if me?.role === "Admin"}
+				<button
+					type="button"
+					class="server"
+					title={i18n.server_open()}
+					onclick={() => goto("/admin")}
+				>
+					{#key beat}
+						<span class="dot"></span>
+					{/key}
+					<span>{i18n.settings_server()}</span>
+					{#if ping}
+						<span class="ms">{i18n.settings_ping_ms({ ms: ping })}</span>
+					{/if}
+					{#if pendingPairs.n}
+						<span class="badge">{pendingPairs.n}</span>
+					{/if}
+					<Icon name="chevron-right" size={14} stroke={2} />
+				</button>
+			{:else if ping}
 				<span class="ping">
 					{#key beat}
 						<span class="dot"></span>
@@ -864,6 +884,51 @@ h1 {
 	font-variant-numeric: tabular-nums;
 	color: var(--status-available);
 	white-space: nowrap;
+}
+
+.server {
+	flex: none;
+	height: 36px;
+	display: flex;
+	align-items: center;
+	gap: 9px;
+	padding: 0 10px 0 12px;
+	border-radius: var(--radius-full);
+	background: color-mix(in srgb, var(--status-available) 8%, transparent);
+	border: 1px solid color-mix(in srgb, var(--status-available) 25%, transparent);
+	color: var(--fg);
+	font: inherit;
+	font-size: 13px;
+	font-weight: 500;
+	white-space: nowrap;
+	cursor: pointer;
+}
+
+.server:hover {
+	background: color-mix(in srgb, var(--status-available) 14%, transparent);
+}
+
+.server .ms {
+	font: 500 11.5px var(--font-mono);
+	font-variant-numeric: tabular-nums;
+	color: var(--status-available);
+}
+
+.server .badge {
+	min-width: 18px;
+	height: 18px;
+	padding: 0 5px;
+	display: grid;
+	place-items: center;
+	border-radius: var(--radius-full);
+	background: var(--accent);
+	color: var(--fg-on-accent);
+	font: 500 10.5px var(--font-mono);
+}
+
+.server :global(.sl-ico) {
+	flex: none;
+	color: var(--fg-subtle);
 }
 
 .dot {

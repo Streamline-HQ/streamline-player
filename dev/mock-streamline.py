@@ -19,7 +19,8 @@ Server settings (/api/v1/admin) answers 403 to a member (--role member, or POST 
 --demo-admin serves the design's sample; --read-only[=streamline|engine] locks settings; --restart-hangs
 keeps an admin restart from ever returning; --engine-settings forwards the engine's three keys and the
 restart to the engine. POST /dev/admin/fail/save|action makes every admin write of that kind answer 500
-until /dev/admin/fail/off, and POST /dev/admin/scan/finish ends running scans at once.
+until /dev/admin/fail/off, POST /dev/admin/scan/finish ends running scans at once, and POST
+/dev/admin/read-only/both|engine|streamline|off switches the lock while it runs.
 
 The public URL defaults to 10.0.2.2, the Android emulator's alias for the host.
 """
@@ -1145,6 +1146,10 @@ class Handler(BaseHTTPRequestHandler):
         m = re.fullmatch(r"/dev/admin/fail/(save|action|off)", self.path)
         if m:
             FAIL["mode"] = m[1]
+            return self.reply(204)
+        m = re.fullmatch(r"/dev/admin/read-only/(both|engine|streamline|off)", self.path)
+        if m:
+            args.read_only = None if m[1] == "off" else m[1]
             return self.reply(204)
         if self.path == "/dev/admin/scan/finish":
             for scan in SCANS.values():

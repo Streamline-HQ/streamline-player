@@ -6,12 +6,14 @@ let {
 	value,
 	label,
 	disabled = false,
+	compact = false,
 	onchange,
 }: {
 	options: [string, string][];
 	value: string;
 	label: string;
 	disabled?: boolean;
+	compact?: boolean;
 	onchange: (value: string) => void;
 } = $props();
 
@@ -23,7 +25,7 @@ const index = $derived(
 );
 </script>
 
-<fieldset class="filters" aria-label={label} {disabled}>
+<fieldset class="filters" class:compact aria-label={label} {disabled}>
 	<span
 		class="pill"
 		style:width="calc((100% - {2 * GAP + GAP * (options.length - 1)}px) / {options.length})"
@@ -84,6 +86,19 @@ button {
 	font-weight: 500;
 	cursor: pointer;
 	white-space: nowrap;
+}
+
+.compact {
+	max-width: 100%;
+}
+
+.compact .pill {
+	transition-duration: 220ms;
+}
+
+.compact button {
+	height: 28px;
+	padding: 0 11px;
 }
 
 button:hover:not(:disabled),

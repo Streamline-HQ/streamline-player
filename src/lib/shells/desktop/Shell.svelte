@@ -14,10 +14,12 @@ import {
 import { loadActivity, resetActivity, unread } from "#lib/core/activity.svelte.ts";
 import { bellLabel } from "#lib/core/activity-view.ts";
 import { account, clearMe, initialsOf, setMe } from "#lib/core/me.svelte.ts";
+import { loadPendingPairs, pendingPairs, resetAdmin } from "#lib/core/admin.svelte.ts";
 import { activeToast, toast } from "#lib/core/toast.svelte.ts";
 import { nowPlaying, stop, toFull } from "#lib/core/playback/now-playing.svelte.ts";
 import { m as i18n } from "#lib/paraglide/messages.js";
 import { IS_WEB, TARGET } from "#lib/platform/target.ts";
+import { adminPort } from "#lib/screens/admin/port.ts";
 import { keyAction } from "#lib/shells/desktop/shortcuts.ts";
 import WindowButtons from "#lib/shells/desktop/WindowButtons.svelte";
 import AppBar from "#lib/ui/AppBar.svelte";
@@ -98,11 +100,12 @@ const COUNTDOWN_SHIFT = 74;
 const name = $derived(account.me?.name ?? "");
 const initials = $derived(initialsOf(name));
 const picture = $derived(account.me?.picture ? myPicture(account.version) : undefined);
+const isAdmin = $derived(account.me?.role === "Admin");
 const bell = $derived(bellLabel(unread(), activityWords()));
 const modifier = mac ? "⌘" : "Ctrl";
 
 const tabs = $derived([
-	{ id: "home", label: i18n.nav_home(), on: route === "/" },
+	{ id: "home", label: i18n.nav_home(), on: route === "/" || route === "/admin" },
 	{ id: "movies", label: i18n.nav_movies(), on: route === "/library/[kind]" && kind !== "series" },
 	{ id: "shows", label: i18n.nav_shows(), on: route === "/library/[kind]" && kind === "series" },
 ]);
@@ -112,6 +115,7 @@ const PATHS: Record<string, string> = {
 	shows: "/library/series",
 	search: "/search",
 	settings: "/settings",
+	server: "/admin",
 	activity: "/activity",
 };
 
@@ -125,6 +129,7 @@ const groups = $derived([
 			kb(["G", "M"], i18n.shell_key_movies()),
 			kb(["G", "S"], i18n.shell_key_shows()),
 			kb(["G", ","], i18n.nav_settings()),
+			...(isAdmin ? [kb(["G", "A"], i18n.server_open())] : []),
 			kb(["?"], i18n.shell_key_help()),
 			kb(["Esc"], i18n.shell_key_close()),
 		],
@@ -172,6 +177,20 @@ const items = $derived([
 			go("settings");
 		},
 	},
+	...(isAdmin
+		? [
+				{
+					icon: "server" as const,
+					label: i18n.server_open(),
+					badge: pendingPairs.n ? String(pendingPairs.n) : undefined,
+					keys: pendingPairs.n ? undefined : ["G", "A"],
+					onclick: () => {
+						menuOpen = false;
+						go("server");
+					},
+				},
+			]
+		: []),
 	{
 		icon: "keyboard" as const,
 		label: i18n.shell_keyboard_shortcuts(),
@@ -211,6 +230,7 @@ function onKey(e: KeyboardEvent) {
 		return;
 	}
 	if (!act || act === "close") return;
+	if (act === "server" && !isAdmin) return;
 	e.preventDefault();
 	if (act === "help") {
 		menuOpen = false;
@@ -223,7 +243,14 @@ $effect(() => {
 	if (onboarding) {
 		clearMe();
 		resetActivity();
+		resetAdmin();
 	} else untrack(() => loadActivity(ACTIVITY_PORT));
+});
+
+$effect(() => {
+	if (onboarding || !account.me) return;
+	if (isAdmin) untrack(() => loadPendingPairs(adminPort));
+	else pendingPairs.n = 0;
 });
 
 $effect(() => {
@@ -309,7 +336,9 @@ onMount(() => {
 		if (fullscreenHint) hint = setTimeout(() => (fullscreenHint = false), FULLSCREEN_HINT_MS);
 	};
 	const onVisible = () => {
-		if (document.visibilityState === "visible" && !onboarding) loadActivity(ACTIVITY_PORT);
+		if (document.visibilityState !== "visible" || onboarding) return;
+		loadActivity(ACTIVITY_PORT);
+		if (isAdmin) loadPendingPairs(adminPort);
 	};
 	document.addEventListener("visibilitychange", onVisible);
 	window.addEventListener("resize", zoom);
@@ -367,6 +396,7 @@ if (import.meta.env.DEV)
 					account={{ name, email: account.me?.email ?? "", initials, color: AVATAR_COLOR, picture }}
 					accountLabel={i18n.shell_account_menu()}
 					{menuOpen}
+					accountOn={route === "/settings" || route === "/admin"}
 					onhome={() => go("home")}
 					ontab={go}
 					onsearch={search}

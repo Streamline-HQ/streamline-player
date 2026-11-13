@@ -2,7 +2,7 @@
 import { strictEqual as eq, deepStrictEqual as same } from "node:assert";
 import type { AdminSettings, LogLine } from "../src/lib/core/types.ts";
 
-const S = await import("../src/lib/core/server.svelte.ts");
+const S = await import("../src/lib/core/admin.svelte.ts");
 const { admin, pendingPairs } = S;
 
 const flush = async () => {

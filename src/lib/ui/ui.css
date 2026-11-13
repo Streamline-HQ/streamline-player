@@ -103,6 +103,16 @@
 	color: var(--fg-on-status);
 }
 
+.sl-btn--destructive {
+	background: transparent;
+	border-color: color-mix(in srgb, var(--status-failed) 40%, transparent);
+	color: var(--status-failed);
+}
+
+.sl-btn--destructive:hover {
+	background: color-mix(in srgb, var(--status-failed) 10%, transparent);
+}
+
 .sl-btn--icon {
 	width: 40px;
 	padding: 0;

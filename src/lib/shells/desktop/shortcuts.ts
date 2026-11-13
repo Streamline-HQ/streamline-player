@@ -1,4 +1,12 @@
-export type Action = "search" | "home" | "movies" | "shows" | "settings" | "help" | "close";
+export type Action =
+	| "search"
+	| "home"
+	| "movies"
+	| "shows"
+	| "settings"
+	| "server"
+	| "help"
+	| "close";
 
 type Key = {
 	key: string;
@@ -12,6 +20,7 @@ const AFTER_G: Record<string, Action> = {
 	m: "movies",
 	s: "shows",
 	",": "settings",
+	a: "server",
 };
 
 /** The player owns the keyboard: only the shortcut sheet and closing it stay with the shell. */

@@ -73,6 +73,7 @@ export type Row =
 			t: "stream";
 			id: string;
 			poster: Title | null;
+			kind: Kind;
 			title: string;
 			sub: string;
 			user: string;
@@ -459,6 +460,7 @@ export function sections(d: AdminData, find: Find, now: Date, locale: string, w:
 			t: "stream",
 			id: x.id,
 			poster: title,
+			kind: x.title.kind,
 			title: title?.title ?? "—",
 			sub: ep
 				? `S${x.season} E${x.episode} · ${ep.title}`
@@ -930,4 +932,13 @@ export function sections(d: AdminData, find: Find, now: Date, locale: string, w:
 	};
 
 	return [overview, streams, devices, transcoding, library, logs];
+}
+
+export function logTime(iso: string, locale: string) {
+	return new Date(iso).toLocaleTimeString(dateLocale(locale), {
+		hour: "2-digit",
+		minute: "2-digit",
+		second: "2-digit",
+		hourCycle: "h23",
+	});
 }
