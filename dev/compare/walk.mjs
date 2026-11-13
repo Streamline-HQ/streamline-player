@@ -22,7 +22,15 @@ const ffmpegLibs = () => {
     return undefined;
   }
 };
-const browser = await pw[engine].launch({ headless: true, env: engine === "firefox" && scenarioModule.engine ? ffmpegLibs() : undefined });
+// The clips carry a sine tone: nobody at the machine should hear a regression.
+// WebKit has no mute switch: with every real audio sink ranked out, GStreamer's autoaudiosink falls back to fakesink.
+const noSinks = "pulsesink:NONE,pipewiresink:NONE,alsasink:NONE,jackaudiosink:NONE,osssink:NONE,oss4sink:NONE,openalsink:NONE";
+const silent = {
+  chromium: { args: ["--mute-audio"] },
+  firefox: { firefoxUserPrefs: { "media.volume_scale": "0.0" } },
+  webkit: { env: { ...process.env, GST_PLUGIN_FEATURE_RANK: noSinks } },
+}[engine];
+const browser = await pw[engine].launch({ headless: true, env: engine === "firefox" && scenarioModule.engine ? ffmpegLibs() : undefined, ...silent });
 const ctx = await browser.newContext({ viewport: { width: 1920, height: 1080 } });
 const app = await ctx.newPage();
 if (target !== "web") {
