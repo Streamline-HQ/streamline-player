@@ -206,8 +206,8 @@ async fn env() -> Env {
         secret: Arc::new(common::SECRET.as_bytes().to_vec()),
         hw: hw.clone(),
         ffmpeg_version: None,
-        sessions: Sessions::new(cfg.clone(), hw),
-        jobs: Jobs::new(cfg),
+        sessions: Sessions::new(cfg.clone(), hw.clone()),
+        jobs: Jobs::new(cfg, hw.clone()),
     });
     Env { root, router }
 }

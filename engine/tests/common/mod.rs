@@ -88,7 +88,7 @@ pub fn env_with_hw(hw: Hw) -> Env {
     });
     let hw = Arc::new(hw);
     let sessions = Sessions::new(cfg.clone(), hw.clone());
-    let jobs = Jobs::new(cfg.clone());
+    let jobs = Jobs::new(cfg.clone(), hw.clone());
     let router = app(AppState {
         cfg,
         secret: Arc::new(SECRET.as_bytes().to_vec()),

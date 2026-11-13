@@ -110,7 +110,7 @@ async fn serve(cfg: Config, secret: Vec<u8>) -> anyhow::Result<()> {
 
     let hw = Arc::new(hw);
     let sessions = Sessions::new(cfg.clone(), hw.clone());
-    let jobs = Jobs::new(cfg.clone());
+    let jobs = Jobs::new(cfg.clone(), hw.clone());
     sessions.sweep_tmp();
     jobs.sweep_boot();
     sessions.spawn_reaper();

@@ -156,7 +156,7 @@ async fn job_lifecycle() {
 async fn unsupported_type_400() {
     let e = env();
     let (status, v) = e
-        .api("POST", "/v1/jobs", Some(json!({"type": "trickplay"})))
+        .api("POST", "/v1/jobs", Some(json!({"type": "nonsense"})))
         .await;
     assert_eq!(status, StatusCode::BAD_REQUEST);
     assert_eq!(v["code"], "invalid_request");
@@ -359,4 +359,13 @@ async fn missing_ffprobe_is_503_ffmpeg_unavailable() {
     let (status, v) = e.api("POST", "/v1/sessions", Some(body)).await;
     assert_eq!(status, StatusCode::SERVICE_UNAVAILABLE);
     assert_eq!(v["code"], "ffmpeg_unavailable");
+}
+
+#[tokio::test]
+async fn trickplay_type_is_accepted() {
+    let e = env();
+    let (status, _) = e
+        .api("POST", "/v1/jobs", Some(job_body(1, "trickplay")))
+        .await;
+    assert_eq!(status, StatusCode::ACCEPTED);
 }

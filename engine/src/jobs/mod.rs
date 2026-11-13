@@ -1,5 +1,6 @@
 pub mod intro;
 pub mod subtitles;
+pub mod trickplay;
 
 use std::collections::{HashMap, VecDeque};
 use std::path::{Component, Path, PathBuf};
@@ -17,6 +18,7 @@ use tracing::Instrument;
 use crate::analysis::{Analysis, run_analyze_with};
 use crate::config::Config;
 use crate::error::ApiError;
+use crate::hw::Hw;
 
 const DONE_FILE: &str = "done.json";
 const QUEUE_FULL_RETRY_SECS: u64 = 30;
@@ -35,6 +37,7 @@ pub enum JobSpec {
     Analyze { path: String },
     Subtitles { path: String },
     Intro { paths: Vec<String> },
+    Trickplay { path: String },
 }
 
 impl JobSpec {
@@ -43,11 +46,12 @@ impl JobSpec {
             Self::Analyze { .. } => "analyze",
             Self::Subtitles { .. } => "subtitles",
             Self::Intro { .. } => "intro",
+            Self::Trickplay { .. } => "trickplay",
         }
     }
 
     pub fn knows(kind: &str) -> bool {
-        matches!(kind, "analyze" | "subtitles" | "intro")
+        matches!(kind, "analyze" | "subtitles" | "intro" | "trickplay")
     }
 }
 
@@ -84,6 +88,8 @@ pub enum JobError {
     Io(#[from] std::io::Error),
     #[error("ffmpeg failed on stream {index}: {stderr}")]
     Ffmpeg { index: u32, stderr: String },
+    #[error("the file has no video stream")]
+    NoVideo,
     #[error("cannot encode result: {0}")]
     Json(#[from] serde_json::Error),
 }
@@ -139,6 +145,7 @@ impl Queue {
 
 struct Shared {
     cfg: Arc<Config>,
+    hw: Arc<Hw>,
     queue: Mutex<Queue>,
     wake: Notify,
 }
@@ -194,12 +201,13 @@ impl Shared {
 
     async fn run(&self, id: String, spec: JobSpec) {
         let cfg = self.cfg.clone();
+        let hw = self.hw.clone();
         let dir = self.dir(&id);
         let kind = spec.kind();
         let span = tracing::info_span!("engine.job", job = %id, r#type = kind);
         let started = std::time::Instant::now();
         let task: JoinHandle<Result<Value, JobError>> =
-            tokio::spawn(async move { execute(&cfg, &spec, &dir).await }.instrument(span));
+            tokio::spawn(async move { execute(&cfg, &hw, &spec, &dir).await }.instrument(span));
         {
             let mut q = self.lock();
             match q.jobs.get_mut(&id) {
@@ -305,12 +313,23 @@ async fn analyze(cfg: &Config, path: &str) -> Result<Analysis, JobError> {
     Ok(run_analyze_with(&cfg.ffprobe(), &input, &lower_priority).await?)
 }
 
-async fn execute(cfg: &Config, spec: &JobSpec, dir: &Path) -> Result<Value, JobError> {
+async fn execute(cfg: &Config, hw: &Hw, spec: &JobSpec, dir: &Path) -> Result<Value, JobError> {
     match spec {
         JobSpec::Analyze { path } => Ok(serde_json::to_value(analyze(cfg, path).await?)?),
         JobSpec::Subtitles { path } => {
             let analysis = analyze(cfg, path).await?;
             subtitles::run(&cfg.ffmpeg(), &cfg.path_map.rewrite(path), &analysis, dir).await
+        }
+        JobSpec::Trickplay { path } => {
+            let analysis = analyze(cfg, path).await?;
+            trickplay::run(
+                &cfg.ffmpeg(),
+                hw,
+                &cfg.path_map.rewrite(path),
+                &analysis,
+                dir,
+            )
+            .await
         }
         JobSpec::Intro { paths } => {
             let mut analyses = Vec::with_capacity(paths.len());
@@ -348,9 +367,10 @@ fn name_ok(name: &str) -> bool {
 }
 
 impl Jobs {
-    pub fn new(cfg: Arc<Config>) -> Jobs {
+    pub fn new(cfg: Arc<Config>, hw: Arc<Hw>) -> Jobs {
         let shared = Arc::new(Shared {
             cfg,
+            hw,
             queue: Mutex::new(Queue::default()),
             wake: Notify::new(),
         });
@@ -527,7 +547,8 @@ mod kind_tests {
         assert!(JobSpec::knows("analyze"));
         assert!(JobSpec::knows("subtitles"));
         assert!(JobSpec::knows("intro"));
-        assert!(!JobSpec::knows("trickplay"));
+        assert!(JobSpec::knows("trickplay"));
+        assert!(!JobSpec::knows("nonsense"));
         let spec = JobSpec::Analyze {
             path: String::new(),
         };
@@ -575,7 +596,7 @@ mod tests {
         }
 
         fn jobs(&self) -> Jobs {
-            Jobs::new(Arc::new(self.cfg.clone()))
+            Jobs::new(Arc::new(self.cfg.clone()), Arc::new(test_hw()))
         }
 
         fn bin(&self) -> &Path {
@@ -599,6 +620,15 @@ mod tests {
         fn drop(&mut self) {
             let _ = std::fs::remove_dir_all(&self.root);
         }
+    }
+
+    fn test_hw() -> Hw {
+        Hw::new(
+            crate::hw::Backend::Cpu,
+            String::new(),
+            crate::decision::EncoderSet::default(),
+            false,
+        )
     }
 
     fn id(n: u8) -> String {

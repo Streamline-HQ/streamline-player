@@ -7,7 +7,7 @@ use crate::playlist;
 
 pub const TRANSCODE_SEGMENT_SECS: f64 = 6.0;
 
-const CPU_TONEMAP: &str = "format=p010le,zscale=t=linear:npl=100,format=gbrpf32le,zscale=p=bt709,tonemap=tonemap=hable:desat=0,zscale=t=bt709:m=bt709:r=tv,format=nv12";
+pub(crate) const CPU_TONEMAP: &str = "format=p010le,zscale=t=linear:npl=100,format=gbrpf32le,zscale=p=bt709,tonemap=tonemap=hable:desat=0,zscale=t=bt709:m=bt709:r=tv,format=nv12";
 
 pub struct RunSpec<'a> {
     pub input: &'a Path,
@@ -65,7 +65,7 @@ fn libplacebo(w: u32, h: u32, out: HdrOut, derive: &str) -> String {
     )
 }
 
-fn placebo_filter(w: u32, h: u32, out: HdrOut) -> String {
+pub(crate) fn placebo_filter(w: u32, h: u32, out: HdrOut) -> String {
     let (fmt, space, prim, trc) = match out {
         HdrOut::Keep(Hdr::Hdr10) => ("p010", "bt2020nc", "bt2020", "smpte2084"),
         HdrOut::Keep(Hdr::Hlg) => ("p010", "bt2020nc", "bt2020", "arib-std-b67"),
