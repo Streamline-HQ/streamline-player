@@ -72,6 +72,8 @@ pub struct Config {
     pub hw_accel: HwAccel,
     pub hw_device: String,
     pub max_transcodes: usize,
+    /// Off sends HDR to an SDR screen unconverted, which costs less and looks washed out.
+    pub tonemap: bool,
     pub max_jobs: usize,
     pub max_queued: usize,
     #[serde(with = "humantime_serde")]
@@ -97,6 +99,7 @@ impl Default for Config {
             hw_accel: HwAccel::Auto,
             hw_device: String::new(),
             max_transcodes: 4,
+            tonemap: true,
             max_jobs: 1,
             max_queued: 64,
             orphan_timeout: Duration::from_secs(30 * 60),
@@ -189,6 +192,7 @@ mod tests {
     fn defaults_apply() {
         let c = Config::parse("secret: x").unwrap();
         assert_eq!(c.max_transcodes, 4);
+        assert!(c.tonemap);
         assert_eq!(c.max_jobs, 1);
         assert_eq!(c.max_queued, 64);
         assert_eq!(c.orphan_timeout, Duration::from_secs(30 * 60));

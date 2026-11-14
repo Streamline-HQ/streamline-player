@@ -1380,7 +1380,7 @@ components:
           additionalProperties: { $ref: "#/components/schemas/SettingValue" }
         owners:
           type: object
-          description: The engine owns transcoding.hw_accel, transcoding.hw_device and stream.max_live; Streamline owns the rest.
+          description: The engine owns transcoding.hw_accel, transcoding.hw_device, stream.tonemap and stream.max_live; Streamline owns the rest.
           additionalProperties: { type: string, enum: [streamline, engine] }
         read_only:
           type: object

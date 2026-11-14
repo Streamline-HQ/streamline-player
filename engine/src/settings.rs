@@ -8,13 +8,14 @@ use tokio::sync::{Mutex, Notify};
 use crate::config::{Config, HwAccel};
 use crate::error::ApiError;
 
-const KEYS: [&str; 3] = ["hw_accel", "hw_device", "max_transcodes"];
+const KEYS: [&str; 4] = ["hw_accel", "hw_device", "max_transcodes", "tonemap"];
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 pub struct Values {
     pub hw_accel: HwAccel,
     pub hw_device: String,
     pub max_transcodes: usize,
+    pub tonemap: bool,
 }
 
 impl Values {
@@ -23,6 +24,7 @@ impl Values {
             hw_accel: cfg.hw_accel,
             hw_device: cfg.hw_device.clone(),
             max_transcodes: cfg.max_transcodes,
+            tonemap: cfg.tonemap,
         }
     }
 
@@ -31,6 +33,7 @@ impl Values {
             self.hw_accel != other.hw_accel,
             self.hw_device != other.hw_device,
             self.max_transcodes != other.max_transcodes,
+            self.tonemap != other.tonemap,
         ];
         KEYS.into_iter()
             .zip(changed)
@@ -44,7 +47,7 @@ pub struct SettingsView {
     pub read_only: bool,
     pub values: Values,
     pub pending: Vec<&'static str>,
-    pub restart_keys: [&'static str; 3],
+    pub restart_keys: [&'static str; 4],
 }
 
 /// The engine reads its config once at boot, so a written key only takes effect after a restart:

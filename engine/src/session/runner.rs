@@ -530,7 +530,8 @@ impl Session {
                     VideoAction::Transcode { codec, .. } => st.hw.cpu_encoders.prefer_only(codec),
                     _ => st.hw.cpu_encoders,
                 };
-                let cpu = Hw::new(Backend::Cpu, String::new(), encoders, false);
+                let mut cpu = Hw::new(Backend::Cpu, String::new(), encoders, false);
+                cpu.tonemap = st.hw.tonemap;
                 match decide(&st.caps, &st.analysis, &st.params, &cpu.encoders) {
                     Ok(plan) => self.replan(st, plan, cpu).await,
                     Err(e) => {

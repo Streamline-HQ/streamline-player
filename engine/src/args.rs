@@ -93,6 +93,11 @@ fn pipeline(plan: &Plan, a: &Analysis, hw: &Hw) -> Pipeline {
             burn_in: false,
         };
     };
+    let hdr_out = if hdr_out == HdrOut::Tonemap && !hw.tonemap {
+        HdrOut::Keep(Hdr::Sdr)
+    } else {
+        hdr_out
+    };
     let b = hw.backend;
     let burn = plan.burn_in_subtitle;
     let software_stage = deinterlace || burn.is_some();
@@ -789,6 +794,25 @@ mod tests {
         ));
         assert!(contains_seq(&args, &["-profile:v", "main10"]));
         assert!(contains_seq(&args, &["-color_trc", "smpte2084"]));
+    }
+
+    #[test]
+    fn tonemap_off_leaves_hdr_unconverted() {
+        let tone = plan(
+            transcode(VideoCodec::H264, HdrOut::Tonemap, false),
+            AudioAction::Copy,
+        );
+        let sdr = plan(
+            transcode(VideoCodec::H264, HdrOut::Keep(Hdr::Sdr), false),
+            AudioAction::Copy,
+        );
+        for (backend, libplacebo) in [(Backend::Cpu, false), (Backend::Vaapi, true)] {
+            let mut off = hw(backend, libplacebo);
+            off.tonemap = false;
+            let args = run(&tone, &off, 0, 0.0);
+            assert_eq!(args, run(&sdr, &off, 0, 0.0));
+            assert!(!value_of(&args, "-vf").contains("tonemap"));
+        }
     }
 
     #[test]

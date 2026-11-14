@@ -381,10 +381,11 @@ async fn settings_read_the_file() {
     assert_eq!(v["values"]["hw_accel"], "vaapi");
     assert_eq!(v["values"]["hw_device"], "");
     assert_eq!(v["values"]["max_transcodes"], 4);
+    assert_eq!(v["values"]["tonemap"], true);
     assert_eq!(v["pending"], json!([]));
     assert_eq!(
         v["restart_keys"],
-        json!(["hw_accel", "hw_device", "max_transcodes"])
+        json!(["hw_accel", "hw_device", "max_transcodes", "tonemap"])
     );
 }
 

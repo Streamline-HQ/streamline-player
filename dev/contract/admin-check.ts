@@ -112,7 +112,7 @@ try {
 
 	const settings = await get(`${a}/settings`);
 	eq(Object.keys(settings.values).length, 15);
-	eq(Object.values(settings.owners).filter((o) => o === "engine").length, 3);
+	eq(Object.values(settings.owners).filter((o) => o === "engine").length, 4);
 	eq(settings.pending.length, 0);
 
 	const saved = await send(`${a}/settings`, "PATCH", { "log.app.level": "debug" });

@@ -18,7 +18,7 @@ own file. --art points at p/<slug>.jpg and b/<slug>.jpg artwork, and c/<person>.
 Server settings (/api/v1/admin) answers 403 to a member (--role member, or POST /dev/role/member|admin).
 --demo-admin serves the design's sample; --read-only[=streamline|engine] locks settings; --restart-hangs
 keeps an admin restart from ever returning (until then every admin call answers 503 server_restarting, and the
-settings that wait for a restart apply and started_at moves only when it ends); --engine-settings forwards the engine's three keys and the
+settings that wait for a restart apply and started_at moves only when it ends); --engine-settings forwards the engine's four keys and the
 restart to the engine. POST /dev/admin/fail/save|action makes every admin write of that kind answer 500
 until /dev/admin/fail/off, POST /dev/admin/scan/finish ends running scans at once, and POST
 /dev/admin/read-only/both|engine|streamline|off switches the lock while it runs, and POST /dev/admin/log
@@ -499,7 +499,7 @@ def pkce_matches(verifier, challenge):
     return base64.urlsafe_b64encode(digest).rstrip(b"=").decode() == challenge
 
 
-# Server settings. Streamline owns most keys; the engine owns three, held here unless --engine-settings forwards them.
+# Server settings. Streamline owns most keys; the engine owns four, held here unless --engine-settings forwards them.
 SETTING_DEFAULTS = {
     "transcoding.hw_accel": "auto", "transcoding.hw_device": "/dev/dri/renderD128",
     "stream.tonemap": True, "stream.max_live": 2,
@@ -508,7 +508,7 @@ SETTING_DEFAULTS = {
     "log.rotate.max_size": 50, "log.rotate.max_backups": 5, "log.rotate.compress": True,
     "otel.endpoint": "", "events.retention": "2160h",
 }
-ENGINE_KEYS = {"transcoding.hw_accel": "hw_accel", "transcoding.hw_device": "hw_device", "stream.max_live": "max_transcodes"}
+ENGINE_KEYS = {"transcoding.hw_accel": "hw_accel", "transcoding.hw_device": "hw_device", "stream.tonemap": "tonemap", "stream.max_live": "max_transcodes"}
 # Read once at boot, so a change waits for a restart; the engine reads its whole config that way.
 RESTART_KEYS = ["log.app.level", "log.app.format", "log.http.format", "otel.endpoint", *ENGINE_KEYS]
 CHOICES = {

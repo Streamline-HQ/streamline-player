@@ -32,6 +32,8 @@ pub struct Hw {
     pub untested: bool,
     pub hw_decode: bool,
     pub cpu_encoders: EncoderSet,
+    /// The `tonemap` setting: off leaves HDR unconverted on its way to an SDR picture.
+    pub tonemap: bool,
 }
 
 impl Hw {
@@ -49,6 +51,7 @@ impl Hw {
             } else {
                 EncoderSet::SOFTWARE
             },
+            tonemap: true,
         }
     }
 }
@@ -319,6 +322,7 @@ async fn dovi_tool_works(dovi_tool: &Path) -> bool {
 pub async fn probe(cfg: &Config) -> Hw {
     let mut hw = probe_encoders(cfg).await;
     hw.encoders.dovi_tool = dovi_tool_works(&cfg.dovi_tool()).await;
+    hw.tonemap = cfg.tonemap;
     hw
 }
 
