@@ -253,8 +253,12 @@
               # nixpkgs' default ffmpeg builds with neither, and the engine then tonemaps on
               # the CPU and its intro job fails.
               ffmpeg=${engine.tools}/bin/ffmpeg
-              $ffmpeg -hide_banner -filters | grep -qw libplacebo || { echo "ffmpeg has no libplacebo filter"; exit 1; }
-              $ffmpeg -hide_banner -muxers | grep -qw chromaprint || { echo "ffmpeg has no chromaprint muxer"; exit 1; }
+              # Into variables first: `grep -q` leaves at its first match, and under pipefail an
+              # ffmpeg still writing to the closed pipe fails the whole test.
+              filters=$($ffmpeg -hide_banner -filters)
+              muxers=$($ffmpeg -hide_banner -muxers)
+              grep -qw libplacebo <<< "$filters" || { echo "ffmpeg has no libplacebo filter"; exit 1; }
+              grep -qw chromaprint <<< "$muxers" || { echo "ffmpeg has no chromaprint muxer"; exit 1; }
               touch $out
             '';
 
