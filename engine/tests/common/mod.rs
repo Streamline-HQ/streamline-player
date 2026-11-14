@@ -301,6 +301,8 @@ pub fn spawn_engine(config: &std::path::Path) -> (std::process::Child, std::net:
         .arg("--config")
         .arg(config)
         .env("NO_COLOR", "1")
+        // The address comes from an info line, which a caller's RUST_LOG could filter out.
+        .env("RUST_LOG", "info")
         .stdout(std::process::Stdio::piped())
         .stderr(std::process::Stdio::null())
         .spawn()
@@ -315,10 +317,8 @@ pub fn spawn_engine(config: &std::path::Path) -> (std::process::Child, std::net:
             }
         }
     });
-    // Booting probes every encoder with a real ffmpeg, which takes over ten seconds on a CI
-    // runner that is compiling at the same time.
     let addr = rx
-        .recv_timeout(std::time::Duration::from_secs(60))
+        .recv_timeout(std::time::Duration::from_secs(10))
         .expect("engine never logged its listen address")
         .parse()
         .unwrap();

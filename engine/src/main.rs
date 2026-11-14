@@ -58,7 +58,13 @@ fn init_otel() -> anyhow::Result<Otel> {
 }
 
 fn init_tracing() -> Option<Otel> {
-    let filter = || EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new("info"));
+    // An empty RUST_LOG parses as a filter with no directives, which lets only errors through.
+    // nixpkgs' buildRustPackage exports one into every build, and a unit's `Environment=RUST_LOG=`
+    // is another, so empty means unset.
+    let filter = || match std::env::var("RUST_LOG") {
+        Ok(v) if !v.trim().is_empty() => EnvFilter::new(v),
+        _ => EnvFilter::new("info"),
+    };
     let fmt = tracing_subscriber::fmt::layer().with_filter(filter());
     let registry = tracing_subscriber::registry().with(fmt);
 
