@@ -15,10 +15,13 @@ import { account, initialsOf, setMe } from "#lib/core/me.svelte.ts";
 import { type ChoiceKey, prefs, setPref, type ToggleKey } from "#lib/core/prefs.svelte.ts";
 import { QUALITIES, shown } from "#lib/core/prefs-labels.ts";
 import { pendingPairs } from "#lib/core/admin.svelte.ts";
+import { dl, refreshStorage } from "#lib/core/downloads.svelte.ts";
+import { storageView } from "#lib/core/downloads-view.ts";
 import { toast } from "#lib/core/toast.svelte.ts";
 import type { Device, DeviceInfo } from "#lib/core/types.ts";
 import { m as i18n } from "#lib/paraglide/messages.js";
 import { IS_WEB } from "#lib/platform/target.ts";
+import { downloadsPort } from "#lib/screens/downloads-port.ts";
 import Art from "#lib/ui/Art.svelte";
 import Avatar from "#lib/ui/Avatar.svelte";
 import Button from "#lib/ui/Button.svelte";
@@ -30,11 +33,14 @@ import { presence } from "#lib/ui/presence.svelte.ts";
 import { useScroll } from "#lib/ui/scroll.ts";
 import SettingsList from "#lib/ui/SettingsList.svelte";
 import SettingsRow from "#lib/ui/SettingsRow.svelte";
+import StorageMeter from "#lib/ui/StorageMeter.svelte";
 import Switch from "#lib/ui/Switch.svelte";
+import { downloadWords } from "#lib/ui/download-words.ts";
 import TextField from "#lib/ui/TextField.svelte";
 import {
 	artwork,
 	authState,
+	canDownload,
 	deviceInfo,
 	devices as listDevices,
 	home,
@@ -187,6 +193,15 @@ const SECTIONS: { key: string; icon: IconName; group?: () => string }[] = [
 	{ key: "profile", icon: "user" },
 	{ key: "playback", icon: "circle-play", group: i18n.settings_group_watching },
 	{ key: "subs", icon: "captions", group: i18n.settings_group_watching },
+	...(canDownload
+		? [
+				{
+					key: "downloads",
+					icon: "arrow-down-to-line" as IconName,
+					group: i18n.settings_group_watching,
+				},
+			]
+		: []),
 	{ key: "display", icon: "eye", group: i18n.settings_group_app },
 	{ key: "language", icon: "languages", group: i18n.settings_group_app },
 	{ key: "devices", icon: "monitor-smartphone", group: i18n.settings_account },
@@ -197,6 +212,7 @@ const TITLES: Record<string, () => string> = {
 	profile: i18n.settings_profile,
 	playback: i18n.settings_playback,
 	subs: i18n.settings_audio_subs,
+	downloads: i18n.shell_downloads,
 	display: i18n.settings_display,
 	language: i18n.settings_language,
 	devices: i18n.settings_signed_in_devices,
@@ -285,9 +301,25 @@ const cueShadow = $derived(
 			: "none",
 );
 
+const storage = $derived.by(() => {
+	if (!dl.storage) return null;
+	const v = storageView(dl.storage, downloadWords());
+	const gb = (n: number) => `${(n / 1e9).toFixed(1)} GB`;
+	return {
+		...v,
+		labels: [
+			i18n.dl_meter_used({ size: gb(dl.storage.used) }),
+			i18n.dl_settings_meter_other({ size: gb(dl.storage.other) }),
+			i18n.dl_meter_free({ size: gb(dl.storage.free) }),
+		] as [string, string, string],
+	};
+});
+const offlineItems = $derived(dl.items.filter((e) => e.state === "done").length);
+
 const toggle = (key: ToggleKey) => (on: boolean) => setPref(key, on);
 
 onMount(() => {
+	if (canDownload) refreshStorage(downloadsPort);
 	if (!account.me)
 		whoAmI().then(
 			(v) => setMe(v),
@@ -585,6 +617,47 @@ onMount(() => {
 				{/snippet}
 			</SettingsRow>
 		</SettingsList>
+
+		{#if canDownload}
+			<SettingsList id="downloads" title={TITLES.downloads!()}>
+				<SettingsRow label={i18n.dl_quality_label()} desc={i18n.dl_settings_quality_desc()}>
+					{#snippet control()}
+						<ChoiceMenu
+							label={i18n.dl_quality_label()}
+							options={choice("dlQuality", ["Original", "1080p", "720p"])}
+							value={prefs.dlQuality}
+							onchange={(v) => setPref("dlQuality", v)}
+						/>
+					{/snippet}
+				</SettingsRow>
+				<SettingsRow label={i18n.dl_settings_pick()} desc={i18n.dl_settings_pick_desc()}>
+					{#snippet control()}
+						<Switch
+							label={i18n.dl_settings_pick()}
+							checked={prefs.dlPick}
+							onchange={toggle("dlPick")}
+						/>
+					{/snippet}
+				</SettingsRow>
+				<SettingsRow
+					label={i18n.dl_settings_storage()}
+					desc={offlineItems === 1
+						? i18n.dl_settings_items_one()
+						: i18n.dl_settings_items({ n: offlineItems })}
+				>
+					{#snippet below()}
+						{#if storage}
+							<StorageMeter
+								plain
+								usedPct={storage.usedPct}
+								otherPct={storage.otherPct}
+								labels={storage.labels}
+							/>
+						{/if}
+					{/snippet}
+				</SettingsRow>
+			</SettingsList>
+		{/if}
 
 		<SettingsList id="display" title={TITLES.display!()}>
 			<SettingsRow label={i18n.settings_tech_details()} desc={i18n.settings_tech_details_desc()}>

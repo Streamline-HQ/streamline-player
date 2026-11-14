@@ -15,7 +15,19 @@ import { loadActivity, resetActivity, unread } from "#lib/core/activity.svelte.t
 import { bellLabel } from "#lib/core/activity-view.ts";
 import { account, clearMe, initialsOf, setMe } from "#lib/core/me.svelte.ts";
 import { loadPendingPairs, pendingPairs, resetAdmin } from "#lib/core/admin.svelte.ts";
-import { anyActive, dl, initDownloads, refreshStorage } from "#lib/core/downloads.svelte.ts";
+import {
+	asking as dlAsking,
+	canShowSub,
+	closePick,
+	closePopover,
+	confirmPick,
+	dropFromPopover,
+	type PickState,
+	type PopoverState,
+	retryFromPopover,
+} from "#lib/core/download-ask.svelte.ts";
+import { pickView, popoverView } from "#lib/core/downloads-view.ts";
+import { anyActive, dl, entry, initDownloads, refreshStorage } from "#lib/core/downloads.svelte.ts";
 import { watchOnline } from "#lib/core/online.svelte.ts";
 import { activeToast, toast } from "#lib/core/toast.svelte.ts";
 import { nowPlaying, stop, toFull } from "#lib/core/playback/now-playing.svelte.ts";
@@ -23,6 +35,9 @@ import { m as i18n } from "#lib/paraglide/messages.js";
 import { IS_WEB, TARGET } from "#lib/platform/target.ts";
 import { adminPort } from "#lib/screens/admin/port.ts";
 import { downloadsPort } from "#lib/screens/downloads-port.ts";
+import DownloadPicker from "#lib/ui/DownloadPicker.svelte";
+import DownloadPopover from "#lib/ui/DownloadPopover.svelte";
+import { downloadWords } from "#lib/ui/download-words.ts";
 import { keyAction } from "#lib/shells/desktop/shortcuts.ts";
 import WindowButtons from "#lib/shells/desktop/WindowButtons.svelte";
 import AppBar from "#lib/ui/AppBar.svelte";
@@ -86,6 +101,95 @@ $effect(() => {
 	if (c) lastCount = { title: c.title, note: c.note, seconds: c.seconds };
 });
 const help = presence(() => helpOpen, 240);
+
+const picker = presence(() => !!dlAsking.pick, 230);
+const popover = presence(() => !!dlAsking.popover, 190);
+let lastPick = $state.raw<PickState>();
+let lastPopover = $state.raw<PopoverState>();
+let popoverBox = $state<HTMLElement>();
+let popoverAt = $state<{ x: number; y: number; up: boolean } | null>(null);
+$effect(() => {
+	if (dlAsking.pick) lastPick = dlAsking.pick;
+});
+$effect(() => {
+	if (dlAsking.popover) lastPopover = dlAsking.popover;
+});
+
+const POPOVER_W = 320;
+const POPOVER_GAP = 8;
+const POPOVER_EDGE = 12;
+let placedFor: PopoverState | null = null;
+$effect(() => {
+	const pop = dlAsking.popover;
+	const box = popoverBox;
+	if (!pop || !box || placedFor === pop) return;
+	placedFor = pop;
+	const a = pop.anchor;
+	const w = window.innerWidth;
+	const minY = (showBar ? 64 : 0) + POPOVER_GAP;
+	const maxY = window.innerHeight - POPOVER_GAP;
+	const h = box.offsetHeight;
+	if (!a) {
+		popoverAt = { x: (w - POPOVER_W) / 2, y: Math.max(minY, (minY + maxY - h) / 2), up: false };
+		return;
+	}
+	const x = Math.max(
+		POPOVER_EDGE,
+		Math.min(w - POPOVER_W - POPOVER_EDGE, a.left + a.width / 2 - POPOVER_W / 2),
+	);
+	if (a.bottom + POPOVER_GAP + h <= maxY) popoverAt = { x, y: a.bottom + POPOVER_GAP, up: false };
+	else if (a.top - POPOVER_GAP - h >= minY) popoverAt = { x, y: a.top - POPOVER_GAP, up: true };
+	else popoverAt = { x, y: Math.max(minY, Math.min(maxY - h, a.bottom + POPOVER_GAP)), up: false };
+});
+$effect(() => {
+	const pop = dlAsking.popover;
+	if (pop && dl.loaded && pop.keys.every((k) => !entry(k))) closePopover();
+});
+
+const dlWords = $derived(downloadWords());
+const pickQualities: [string, string][] = $derived([
+	["original", i18n.dl_quality_original()],
+	["1080p", "1080p"],
+	["720p", "720p"],
+]);
+const pv = $derived.by(() => {
+	const p = lastPick;
+	if (!p) return null;
+	return pickView(
+		{
+			label: p.label,
+			count: p.items.length,
+			quality: p.quality,
+			audio: p.audio,
+			subs: p.subs,
+			remember: p.remember,
+		},
+		p.tracks,
+		p.fileBitRate,
+		p.items.reduce((n, it) => n + it.minutes, 0),
+		canShowSub,
+		dlWords,
+	);
+});
+const flip = (list: number[], index: number) =>
+	list.includes(index) ? list.filter((x) => x !== index) : [...list, index];
+const popView = $derived.by(() => {
+	const p = lastPopover;
+	if (!p) return null;
+	return popoverView(p.keys, entry, dl.rate, p.label, dlWords);
+});
+const popEyebrow = $derived.by(() => {
+	const v = popView;
+	if (!v) return "";
+	const base = {
+		downloading: i18n.dl_downloading(),
+		waiting: i18n.dl_popover_waiting(),
+		failed: i18n.dl_popover_failed(),
+		done: i18n.dl_on_device(),
+	}[v.state];
+	if (!v.count) return base;
+	return `${base} · ${v.state === "done" ? dlWords.episodes(v.count.total) : i18n.dl_count_of(v.count)}`;
+});
 
 const route = $derived(page.route.id ?? "");
 const kind = $derived(page.params.kind);
@@ -227,6 +331,13 @@ function onKey(e: KeyboardEvent) {
 	);
 	if (act === "g") {
 		gAt = Date.now();
+		return;
+	}
+	if ((dlAsking.pick || dlAsking.popover) && act === "close") {
+		e.preventDefault();
+		e.stopPropagation();
+		if (dlAsking.pick) closePick();
+		else closePopover();
 		return;
 	}
 	if (asking.spec && act === "close") {
@@ -519,6 +630,97 @@ if (import.meta.env.DEV)
 			{/key}
 		{/if}
 
+		{#if picker.mounted && lastPick && pv}
+			<DownloadPicker
+				title={pv.title}
+				note={pv.qNote}
+				audio={pv.audio}
+				subs={pv.subs}
+				total={pv.total}
+				canDownload={pv.canDownload}
+				quality={lastPick.quality}
+				qualities={pickQualities}
+				remember={lastPick.remember}
+				shown={picker.shown}
+				words={{
+					quality: i18n.dl_quality(),
+					qualityGroup: i18n.dl_quality_label(),
+					audio: i18n.player_audio(),
+					subtitles: i18n.player_subtitles(),
+					remember: i18n.dl_pick_remember(),
+					cancel: i18n.settings_cancel(),
+					download: i18n.dl_download_short(),
+					close: i18n.shell_close(),
+				}}
+				onquality={(q) => {
+					if (dlAsking.pick) dlAsking.pick.quality = q as typeof dlAsking.pick.quality;
+				}}
+				onaudio={(i) => {
+					if (dlAsking.pick) dlAsking.pick.audio = flip(dlAsking.pick.audio, i);
+				}}
+				onsub={(i) => {
+					if (dlAsking.pick) dlAsking.pick.subs = flip(dlAsking.pick.subs, i);
+				}}
+				onremember={() => {
+					if (dlAsking.pick) dlAsking.pick.remember = !dlAsking.pick.remember;
+				}}
+				oncancel={closePick}
+				onconfirm={confirmPick}
+			/>
+		{/if}
+
+		{#if popover.mounted && lastPopover && popView}
+			<button
+				type="button"
+				class="dl-scrim"
+				tabindex="-1"
+				aria-label={i18n.shell_close()}
+				style:pointer-events={dlAsking.popover ? "auto" : "none"}
+				onclick={closePopover}
+			></button>
+			<div
+				class="dl-pop"
+				class:shown={popover.shown && !!popoverAt}
+				class:up={popoverAt?.up}
+				bind:this={popoverBox}
+				style:left="{popoverAt?.x ?? 0}px"
+				style:top="{popoverAt?.y ?? 0}px"
+				style:pointer-events={dlAsking.popover ? "auto" : "none"}
+			>
+				<DownloadPopover
+					state={popView.state}
+					title={popView.title}
+					eyebrow={popEyebrow}
+					progress={popView.progress}
+					got={popView.got}
+					rate={popView.rate}
+					size={popView.size}
+					quality={popView.quality}
+					cause={popView.cause}
+					kept={popView.kept}
+					group={lastPopover.group}
+					words={{
+						open: i18n.dl_open_downloads(),
+						size: i18n.dl_size(),
+						quality: i18n.dl_quality(),
+						removeDownload: i18n.dl_remove(),
+						removeAll: i18n.dl_remove_all(),
+						retry: i18n.dl_retry(),
+						remove: i18n.dl_remove_one(),
+						cancel: i18n.settings_cancel(),
+						cancelRemaining: i18n.dl_cancel_remaining(),
+					}}
+					onopen={() => {
+						closePopover();
+						go("downloads");
+					}}
+					oncancel={() => dropFromPopover(downloadsPort)}
+					onremove={() => dropFromPopover(downloadsPort)}
+					onretry={() => retryFromPopover(downloadsPort)}
+				/>
+			</div>
+		{/if}
+
 		{#if counter.mounted && lastCount}
 			<div class="countdown" class:shown={counter.shown} style:top="{toastTop}px">
 				<CountdownToast
@@ -644,6 +846,44 @@ if (import.meta.env.DEV)
 	border: 0;
 	padding: 0;
 	background: transparent;
+}
+
+.dl-scrim {
+	position: absolute;
+	inset: 0;
+	z-index: 80;
+	border: 0;
+	padding: 0;
+	background: transparent;
+}
+
+.dl-pop {
+	position: absolute;
+	z-index: 81;
+	width: 320px;
+	opacity: 0;
+	transform: translateY(-6px) scale(0.96);
+	transform-origin: top center;
+	transition:
+		opacity 130ms var(--ease-in),
+		transform 130ms var(--ease-in);
+}
+
+.dl-pop.up {
+	transform: translateY(-100%) translateY(6px) scale(0.96);
+	transform-origin: bottom center;
+}
+
+.dl-pop.shown {
+	opacity: 1;
+	transform: translateY(0) scale(1);
+	transition:
+		opacity 180ms var(--ease),
+		transform 180ms var(--ease);
+}
+
+.dl-pop.up.shown {
+	transform: translateY(-100%) scale(1);
 }
 
 .menu {

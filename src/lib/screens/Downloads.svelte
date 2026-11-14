@@ -1,6 +1,7 @@
 <script lang="ts">
 import { ask } from "#lib/core/ask.svelte.ts";
-import { dl, remove, retry } from "#lib/core/downloads.svelte.ts";
+import { removeKeys } from "#lib/core/download-ask.svelte.ts";
+import { dl, retry } from "#lib/core/downloads.svelte.ts";
 import { type Card, type Group, pageView, storageView } from "#lib/core/downloads-view.ts";
 import { episodesOf, stillPos } from "#lib/core/format.ts";
 import { net } from "#lib/core/online.svelte.ts";
@@ -34,12 +35,12 @@ const posOf = (key: string) => {
 };
 
 function cancel(key: string) {
-	remove(downloadsPort, [key]);
+	removeKeys(downloadsPort, [key]);
 	toast(i18n.dl_toast_cancelled());
 }
 
 function removeOne(key: string) {
-	remove(downloadsPort, [key]);
+	removeKeys(downloadsPort, [key]);
 	toast(i18n.dl_toast_removed());
 }
 
@@ -52,7 +53,7 @@ function removeAll(g: Group) {
 		}),
 		confirm: i18n.dl_remove_all(),
 		onconfirm: () => {
-			remove(downloadsPort, g.keys);
+			removeKeys(downloadsPort, g.keys);
 			toast(i18n.dl_toast_removed_title({ title: g.title }));
 		},
 	});

@@ -3,10 +3,17 @@ let {
 	usedPct,
 	otherPct,
 	labels,
-}: { usedPct: number; otherPct: number; labels: [string, string, string] } = $props();
+	plain = false,
+}: {
+	usedPct: number;
+	otherPct: number;
+	labels: [string, string, string];
+	/** Without the card around it, for a settings row. */
+	plain?: boolean;
+} = $props();
 </script>
 
-<div class="card">
+<div class="card" class:plain>
 	<div class="meter" role="img" aria-label={labels.join(", ")}>
 		<b class="used" style:width="{usedPct}%"></b>
 		<b class="other" style:width="{otherPct}%"></b>
@@ -26,6 +33,22 @@ let {
 	border: 1px solid var(--border);
 	border-radius: var(--radius-lg);
 	background: var(--bg-elevated);
+}
+
+.card.plain {
+	max-width: none;
+	padding: 0;
+	border: 0;
+	border-radius: 0;
+	background: transparent;
+}
+
+.plain .legend {
+	margin-top: 0;
+}
+
+.plain .meter {
+	margin-bottom: 8px;
 }
 
 .meter {

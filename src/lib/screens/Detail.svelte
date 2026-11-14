@@ -20,6 +20,16 @@ import {
 	sizeText,
 	stillPos,
 } from "#lib/core/format.ts";
+import { clickGroup, clickOne } from "#lib/core/download-ask.svelte.ts";
+import {
+	episodeItem,
+	episodeKey,
+	episodeLabel,
+	movieItem,
+	movieKey,
+} from "#lib/core/download-items.ts";
+import { bulkState, buttonState } from "#lib/core/downloads-view.ts";
+import { entry } from "#lib/core/downloads.svelte.ts";
 import { applyWatch, lib, loadLibrary } from "#lib/core/library.svelte.ts";
 import { autoCap, PRESETS, presetOf, rememberedThroughput } from "#lib/core/playback/auto.ts";
 import {
@@ -49,10 +59,13 @@ import { myLanguage, prefs } from "#lib/core/prefs.svelte.ts";
 import { toast } from "#lib/core/toast.svelte.ts";
 import type { Decision, Kind, Title } from "#lib/core/types.ts";
 import { m as i18n } from "#lib/paraglide/messages.js";
+import { askPort } from "#lib/screens/downloads-port.ts";
 import Art from "#lib/ui/Art.svelte";
 import Button from "#lib/ui/Button.svelte";
 import CastRow, { type Member } from "#lib/ui/CastRow.svelte";
 import Chip from "#lib/ui/Chip.svelte";
+import DownloadButton from "#lib/ui/DownloadButton.svelte";
+import { downloadWords } from "#lib/ui/download-words.ts";
 import EmptyState from "#lib/ui/EmptyState.svelte";
 import EpisodeList, { type Ep } from "#lib/ui/EpisodeList.svelte";
 import Icon from "#lib/ui/Icon.svelte";
@@ -64,6 +77,7 @@ import { useScroll } from "#lib/ui/scroll.ts";
 import TechDetails, { type Row } from "#lib/ui/TechDetails.svelte";
 import {
 	artwork,
+	canDownload,
 	decisions,
 	deviceInfo,
 	headshot,
@@ -339,6 +353,21 @@ const seasonLang = $derived(
 	}),
 );
 
+function dlFor(e: (typeof seasonEps)[number]): Ep["dl"] {
+	const title = t;
+	if (!canDownload || !title || !e.has_file) return undefined;
+	const ep = { ...e, season };
+	const key = episodeKey(title, ep);
+	const label = episodeLabel(title, season, e.number);
+	const look = buttonState(entry(key), label, dlWords);
+	return {
+		look,
+		label: look.label,
+		onclick: (ev) =>
+			clickOne(askPort, ev, key, label, () => episodeItem(title, ep, lib.watch), title.genres),
+	};
+}
+
 const episodes = $derived<Ep[]>(
 	seasonEps.map((e) => {
 		const state = episodeState(e, lib.watch);
@@ -380,6 +409,7 @@ const episodes = $derived<Ep[]>(
 				subs: subsShort(c),
 			}),
 			langOwn: exact || !!own,
+			dl: dlFor(e),
 		};
 	}),
 );
@@ -401,6 +431,44 @@ function markEpisode(key: string) {
 		was
 			? i18n.detail_episode_marked_unwatched({ n: e.number })
 			: i18n.detail_episode_marked_watched({ n: e.number }),
+	);
+}
+
+const dlWords = $derived(downloadWords());
+const movieDl = $derived(
+	canDownload && t && !series && t.media_files?.[0]
+		? { key: movieKey(t), look: buttonState(entry(movieKey(t)), t.title, dlWords) }
+		: null,
+);
+
+function bulkOf(list: typeof available, name: string, word: "season" | "series") {
+	const keys = list.map((e) => episodeKey(t!, e));
+	return { list, keys, name, state: bulkState(keys, entry, name, word, dlWords) };
+}
+const seriesDl = $derived(
+	canDownload && series && t && available.length ? bulkOf(available, t.title, "series") : null,
+);
+const seasonDl = $derived.by(() => {
+	const list = seasonEps.filter((e) => e.has_file).map((e) => ({ ...e, season }));
+	return canDownload && series && t && list.length
+		? bulkOf(list, i18n.common_season_n({ n: season }), "season")
+		: null;
+});
+
+function clickBulk(b: NonNullable<typeof seriesDl>, ev: MouseEvent) {
+	const title = t;
+	if (!title) return;
+	clickGroup(
+		askPort,
+		ev,
+		b.state.act,
+		b.keys,
+		b.name,
+		() =>
+			b.list
+				.filter((e) => b.state.missing.includes(episodeKey(title, e)))
+				.map((e) => episodeItem(title, e, lib.watch)),
+		title.genres,
 	);
 }
 
@@ -712,6 +780,31 @@ const heroHeight = $derived(
 					>
 						<Icon name="languages" size={19} stroke={1.9} />
 					</button>
+					{#if seriesDl}
+						<DownloadButton
+							variant="hero"
+							look={seriesDl.state}
+							label={seriesDl.state.label}
+							onclick={(ev) => clickBulk(seriesDl, ev)}
+						/>
+					{/if}
+					{#if movieDl && t}
+						{@const title = t}
+						<DownloadButton
+							variant="hero"
+							look={movieDl.look}
+							label={movieDl.look.label}
+							onclick={(ev) =>
+								clickOne(
+									askPort,
+									ev,
+									movieDl.key,
+									title.title,
+									() => movieItem(title, lib.watch),
+									title.genres,
+								)}
+						/>
+					{/if}
 				</div>
 				{#if decided}
 					<div class="status">
@@ -752,6 +845,11 @@ const heroHeight = $derived(
 					seasonLang={{
 						label: seasonLang,
 						onclick: (e) => openLang("season", e.currentTarget as HTMLElement, null),
+					}}
+					seasonDl={seasonDl && {
+						look: seasonDl.state,
+						label: seasonDl.state.label,
+						onclick: (ev) => clickBulk(seasonDl, ev),
 					}}
 					eps={episodes}
 					newLabel={i18n.home_new()}

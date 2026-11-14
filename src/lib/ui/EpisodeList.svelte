@@ -1,6 +1,17 @@
 <script lang="ts">
 import Art from "#lib/ui/Art.svelte";
+import DownloadButton from "#lib/ui/DownloadButton.svelte";
 import Icon from "#lib/ui/Icon.svelte";
+
+type Dl = {
+	look: {
+		icon: "arrow-down-to-line" | "circle-arrow-down" | null;
+		tone: "muted" | "accent" | "progress";
+		pct: number;
+	};
+	label: string;
+	onclick: (e: MouseEvent) => void;
+};
 
 export type Ep = {
 	key: string;
@@ -18,6 +29,7 @@ export type Ep = {
 	markLabel: string;
 	langLabel: string;
 	langOwn: boolean;
+	dl?: Dl;
 };
 
 let {
@@ -26,6 +38,7 @@ let {
 	note,
 	seasonMark,
 	seasonLang,
+	seasonDl,
 	eps,
 	newLabel,
 	minWidth = 252,
@@ -39,6 +52,7 @@ let {
 	note: string;
 	seasonMark: { label: string; watched: boolean; onclick: () => void };
 	seasonLang: { label: string; onclick: (e: MouseEvent) => void };
+	seasonDl?: Dl | null;
 	eps: Ep[];
 	newLabel: string;
 	minWidth?: number;
@@ -85,6 +99,14 @@ let {
 		>
 			<Icon name="languages" size={17} stroke={1.8} />
 		</button>
+		{#if seasonDl}
+			<DownloadButton
+				variant="bar"
+				look={seasonDl.look}
+				label={seasonDl.label}
+				onclick={seasonDl.onclick}
+			/>
+		{/if}
 	</div>
 	<div class="grid" style:--min="{minWidth}px">
 		{#each eps as e (e.key)}
@@ -144,6 +166,14 @@ let {
 							>
 								<Icon name="languages" size={17} stroke={1.8} />
 							</button>
+							{#if e.dl}
+								<DownloadButton
+									variant="round"
+									look={e.dl.look}
+									label={e.dl.label}
+									onclick={e.dl.onclick}
+								/>
+							{/if}
 						{/if}
 					</span>
 					{#if e.synopsis}

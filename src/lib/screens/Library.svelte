@@ -1,6 +1,10 @@
 <script lang="ts">
 import { isNew, nextEpisode, playUrl, watchedTitle } from "#lib/core/browse.ts";
 import { addedText, badges, sizeText } from "#lib/core/format.ts";
+import { clickGroup, clickOne } from "#lib/core/download-ask.svelte.ts";
+import { episodeItem, episodeKey, movieItem, movieKey } from "#lib/core/download-items.ts";
+import { bulkState, buttonState } from "#lib/core/downloads-view.ts";
+import { entry } from "#lib/core/downloads.svelte.ts";
 import { lib, loadLibrary, loadSeasons, applyWatch } from "#lib/core/library.svelte.ts";
 import {
 	FLAGS,
@@ -31,7 +35,9 @@ import { myLanguage, prefs } from "#lib/core/prefs.svelte.ts";
 import { toast } from "#lib/core/toast.svelte.ts";
 import type { Kind, Title } from "#lib/core/types.ts";
 import { m as i18n } from "#lib/paraglide/messages.js";
+import { askPort } from "#lib/screens/downloads-port.ts";
 import Button from "#lib/ui/Button.svelte";
+import { downloadWords } from "#lib/ui/download-words.ts";
 import Chip from "#lib/ui/Chip.svelte";
 import { dismiss } from "#lib/ui/dismiss.ts";
 import EmptyState from "#lib/ui/EmptyState.svelte";
@@ -44,7 +50,16 @@ import { presence } from "#lib/ui/presence.svelte.ts";
 import SegmentedControl from "#lib/ui/SegmentedControl.svelte";
 import SortMenu from "#lib/ui/SortMenu.svelte";
 import TitleRow from "#lib/ui/TitleRow.svelte";
-import { artwork, home, library, playbackPort, setWatched, title, watchState } from "#platform";
+import {
+	artwork,
+	canDownload,
+	home,
+	library,
+	playbackPort,
+	setWatched,
+	title,
+	watchState,
+} from "#platform";
 import { page } from "$app/state";
 import { onMount, untrack } from "svelte";
 
@@ -128,6 +143,58 @@ function playLabel(t: Title) {
 	return ep && "number" in ep
 		? i18n.library_play_episode({ title: t.title, season: ep.season, episode: ep.number })
 		: i18n.library_play_title({ title: t.title });
+}
+
+const dlWords = $derived(downloadWords());
+
+function dlFor(t: Title) {
+	if (!canDownload) return undefined;
+	if (kind === "movies") {
+		const key = movieKey(t);
+		const e = entry(key);
+		const look = buttonState(e, t.title, dlWords);
+		const label = !e
+			? look.label
+			: e.state === "done"
+				? i18n.dl_label_downloaded({ title: t.title })
+				: i18n.dl_label_downloading({ title: t.title });
+		return {
+			look,
+			label,
+			onclick: (ev: MouseEvent) =>
+				clickOne(
+					askPort,
+					ev,
+					key,
+					t.title,
+					async () => movieItem(await title("movies", t.id), lib.watch),
+					t.genres,
+				),
+		};
+	}
+	const files = (t.seasons ?? []).flatMap((s) =>
+		s.episodes.filter((e) => e.has_file).map((e) => ({ ...e, season: s.number })),
+	);
+	if (!files.length) return undefined;
+	const keys = files.map((e) => episodeKey(t, e));
+	const st = bulkState(keys, entry, t.title, "series", dlWords);
+	return {
+		look: st,
+		label: st.label,
+		onclick: (ev: MouseEvent) =>
+			clickGroup(
+				askPort,
+				ev,
+				st.act,
+				keys,
+				t.title,
+				() =>
+					files
+						.filter((e) => st.missing.includes(episodeKey(t, e)))
+						.map((e) => episodeItem(t, e, lib.watch)),
+				t.genres,
+			),
+	};
 }
 
 const POPOVER_W = 280;
@@ -405,6 +472,7 @@ const heads: { label: () => string; sort?: Sort; end?: boolean }[] = [
 										onclick: (el) => openLang(t, el),
 									}
 								: undefined}
+							download={dlFor(t)}
 							onplay={() => play(t)}
 							onclick={() => open(t)}
 						/>

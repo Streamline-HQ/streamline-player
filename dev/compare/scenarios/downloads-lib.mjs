@@ -350,3 +350,40 @@ export async function web(ctx) {
   expect("no request", calls, []);
   return out;
 }
+
+// Tracks the harness gives every title in place of the clip's own, so the picker's rows do not depend on which clip a title plays.
+const sub = (index, codec, language, forced = false) => ({ index, codec, language, forced, sdh: false, files: { vtt: `fake:${language}` } });
+export const TRACKS = {
+  video: { codec: "hevc", width: 3840, height: 2076, profile: "Main 10", hdr: "hdr10" },
+  audio: [
+    { index: 1, codec: "truehd", channels: 8, language: "eng", default: true },
+    { index: 2, codec: "eac3", channels: 6, language: "jpn", default: false },
+    { index: 3, codec: "aac", channels: 2, language: "fre", default: false },
+  ],
+  subtitles: [sub(4, "subrip", "eng"), sub(5, "ass", "jpn"), sub(6, "hdmv_pgs_subtitle", "fre"), sub(7, "dvd_subtitle", "fre")],
+};
+
+// The picker, the popover and the shim's queue as the start scenarios drive them.
+export function starting(ctx) {
+  const { app, wait } = ctx;
+  const dlg = () => app.locator('[role="dialog"][aria-modal="true"]');
+  const pop = () => app.locator('.dl-pop [role="dialog"]');
+  const toast = async () => ({
+    title: norm(await app.locator('[role="status"] .sl-toast__title').textContent()),
+    text: norm((await app.locator('[role="status"] .sl-toast__text').textContent().catch(() => "")) ?? ""),
+  });
+  const starts = async () => (await shimLog(app)).filter((l) => l.call === "start");
+  const removes = async () => (await shimLog(app)).filter((l) => l.call === "remove");
+  const advance = (bytes) => app.evaluate((b) => window.__shim.downloads.advance(b), bytes);
+  const finish = async () => { for (let i = 0; i < 12; i++) await advance(1e12); await wait(400); };
+  const confirm = () => dlg().getByRole("button", { name: "Download", exact: true });
+  const items = () => app.evaluate(() => window.__shim.downloads.items);
+  const clear = () => app.evaluate(([e, s]) => { window.__shim.downloads.storage(...s); window.__shim.downloads.seed(e, 0); }, [[], STORAGE]);
+  return { dlg, pop, toast, starts, removes, advance, finish, confirm, items, clear };
+}
+
+export async function withTracks(ctx, prepare) {
+  await prepare(ctx);
+  await ctx.app.addInitScript((t) => { window.__tracks = { ...window.__tracks, ...t }; }, TRACKS);
+  await ctx.app.setViewportSize({ width: 1440, height: 900 });
+}

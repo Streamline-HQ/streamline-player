@@ -1,7 +1,17 @@
 <script lang="ts">
 import Art from "#lib/ui/Art.svelte";
+import DownloadButton from "#lib/ui/DownloadButton.svelte";
 import Icon from "#lib/ui/Icon.svelte";
 
+type Download = {
+	look: {
+		icon: "arrow-down-to-line" | "circle-arrow-down" | null;
+		tone: "muted" | "accent" | "progress";
+		pct: number;
+	};
+	label: string;
+	onclick: (e: MouseEvent) => void;
+};
 type Mark = { on: boolean; label: string; onclick: () => void };
 type Lang = { own: boolean; label: string; onclick: (trigger: HTMLElement) => void };
 
@@ -18,6 +28,7 @@ let {
 	playLabel,
 	mark,
 	lang,
+	download,
 	onplay,
 	onclick,
 }: {
@@ -37,6 +48,7 @@ let {
 	playLabel?: string;
 	mark?: Mark;
 	lang?: Lang;
+	download?: Download;
 	onplay?: () => void;
 	onclick: () => void;
 } = $props();
@@ -101,6 +113,14 @@ let {
 			>
 				<Icon name="languages" size={16} stroke={1.8} />
 			</button>
+		{/if}
+		{#if download}
+			<DownloadButton
+				variant="poster"
+				look={download.look}
+				label={download.label}
+				onclick={download.onclick}
+			/>
 		{/if}
 	</span>
 </div>
