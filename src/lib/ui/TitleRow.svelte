@@ -1,5 +1,8 @@
 <script lang="ts">
+import Tip from "#lib/ui/Tip.svelte";
+import DownloadButton from "#lib/ui/DownloadButton.svelte";
 import Icon from "#lib/ui/Icon.svelte";
+import type { ComponentProps } from "svelte";
 
 let {
 	title,
@@ -13,6 +16,11 @@ let {
 	audio,
 	size,
 	added,
+	playLabel,
+	mark,
+	lang,
+	download,
+	onplay,
 	onclick,
 }: {
 	title: string;
@@ -26,13 +34,19 @@ let {
 	audio: string;
 	size: string;
 	added: string;
+	playLabel?: string;
+	mark?: { on: boolean; label: string; onclick: () => void };
+	lang?: { own: boolean; label: string; onclick: (trigger: HTMLElement) => void };
+	download?: Pick<ComponentProps<typeof DownloadButton>, "look" | "label" | "onclick">;
+	onplay?: () => void;
 	onclick: () => void;
 } = $props();
 
 let broken = $state(false);
 </script>
 
-<button type="button" class="row" {onclick}>
+<div class="row">
+	<button type="button" class="hit" aria-label={title} {onclick}></button>
 	<span class="thumb">
 		{#if poster && !broken}
 			<img src={poster} alt="" loading="lazy" onerror={() => (broken = true)}>
@@ -55,10 +69,51 @@ let broken = $state(false);
 	<span class="cell muted clip">{audio}</span>
 	<span class="cell muted end">{size}</span>
 	<span class="cell subtle end">{added}</span>
-</button>
+	<span class="tools">
+		{#if onplay}
+			<button type="button" class="tool" aria-label={playLabel} title={playLabel} onclick={onplay}>
+				<Icon name="play" filled size={15} />
+			</button>
+		{/if}
+		{#if mark}
+			<button
+				type="button"
+				class="tool"
+				class:on={mark.on}
+				aria-label={mark.label}
+				onclick={mark.onclick}
+			>
+				<Tip text={mark.label} />
+				<Icon name={mark.on ? "check-check" : "eye"} size={16} stroke={1.75} />
+			</button>
+		{/if}
+		{#if lang}
+			<button
+				type="button"
+				class="tool"
+				class:own={lang.own}
+				data-lang-trigger="lib"
+				aria-label={lang.label}
+				onclick={(e) => lang.onclick(e.currentTarget)}
+			>
+				<Tip text={lang.label} />
+				<Icon name="languages" size={16} stroke={1.8} />
+			</button>
+		{/if}
+		{#if download}
+			<DownloadButton
+				variant="poster"
+				look={download.look}
+				label={download.label}
+				onclick={download.onclick}
+			/>
+		{/if}
+	</span>
+</div>
 
 <style>
 .row {
+	position: relative;
 	display: grid;
 	grid-template-columns: var(--cols);
 	gap: 16px;
@@ -71,11 +126,75 @@ let broken = $state(false);
 	background: transparent;
 	color: var(--fg);
 	text-align: left;
-	cursor: pointer;
 }
 
 .row:hover {
 	background: var(--surface);
+}
+
+/* The whole row opens the title; the tools sit above it and keep their own clicks. */
+.hit {
+	position: absolute;
+	inset: 0;
+	padding: 0;
+	border: 0;
+	background: transparent;
+	cursor: pointer;
+}
+
+.hit:focus-visible {
+	outline: 2px solid var(--accent-ring);
+	outline-offset: -2px;
+}
+
+.row > span {
+	pointer-events: none;
+}
+
+.tools {
+	position: relative;
+	display: flex;
+	justify-content: flex-end;
+	align-items: center;
+	gap: 2px;
+	opacity: 0;
+	transition: opacity 120ms var(--ease);
+}
+
+.row:hover .tools,
+.row:focus-within .tools {
+	opacity: 1;
+}
+
+.tools > :global(*) {
+	pointer-events: auto;
+}
+
+.tool {
+	flex: none;
+	width: 34px;
+	height: 34px;
+	display: grid;
+	place-items: center;
+	padding: 0;
+	border: 0;
+	border-radius: 50%;
+	background: transparent;
+	color: var(--fg-subtle);
+	cursor: pointer;
+}
+
+.tool:hover {
+	background: var(--surface-2);
+	color: var(--fg);
+}
+
+.tool.on {
+	color: var(--status-available);
+}
+
+.tool.own {
+	color: var(--accent);
 }
 
 .thumb {

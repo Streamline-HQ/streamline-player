@@ -15,7 +15,7 @@ import {
 	RotateCw,
 } from "@lucide/svelte";
 import { rememberedThroughput } from "#lib/core/playback/auto.ts";
-import { digits, languageLabel, modeName, subInfo } from "#lib/core/playback/names.ts";
+import { digits, languageLabel, modeName, resBadge, subInfo } from "#lib/core/playback/names.ts";
 import { fmtOffset, panelWords } from "#lib/core/playback/panel-words.ts";
 import {
 	type Launch,
@@ -88,6 +88,7 @@ import SkipButton from "#lib/ui/SkipButton.svelte";
 import StatsPanel from "#lib/ui/StatsPanel.svelte";
 import Stepper from "#lib/ui/Stepper.svelte";
 import SubtitleStyle from "#lib/ui/SubtitleStyle.svelte";
+import Tip from "#lib/ui/Tip.svelte";
 import UpNextCard from "#lib/ui/UpNextCard.svelte";
 import { afterNavigate, beforeNavigate } from "$app/navigation";
 import { onMount, untrack } from "svelte";
@@ -156,11 +157,12 @@ let pfTimer: ReturnType<typeof setTimeout> | undefined;
 let seekTimer: ReturnType<typeof setTimeout> | undefined;
 let menuTimer: ReturnType<typeof setTimeout> | undefined;
 let run: SeekFlash | null = null;
-let fromDetail = false;
+let fromApp = false;
 let leaving = false;
 
 afterNavigate(({ from }) => {
-	if (from?.route.id?.startsWith("/detail")) fromDetail = true;
+	// Another episode replaces this entry, so the page that opened the player stays the one behind it.
+	if (from?.route.id && !from.route.id.startsWith("/player")) fromApp = true;
 });
 
 // Any way out of the player that is neither another player route nor a hand-over to the mini player ends the session.
@@ -170,7 +172,9 @@ beforeNavigate(({ to }) => {
 
 const pb = $derived(launch && nowPlaying.launch?.key === launch.key ? nowPlaying.pb : null);
 const view = $derived(launch?.view ?? null);
-const controlsOn = $derived(!!pb && (controls || (!pb.playing && !pb.buffering) || !!menu));
+const controlsOn = $derived(
+	!!pb && (controls || (!pb.playing && !pb.buffering) || !!menu || pb.stats),
+);
 const showBar = $derived(controlsOn && !pb?.ended && !pb?.halt);
 
 // Where a launch gets its server calls: the server's, or the saved file's when that is all there is.
@@ -358,19 +362,6 @@ function mute() {
 	flashOsd(nowPlaying.muted ? i18n.player_osd_muted() : percent(nowPlaying.volume));
 }
 
-function toggleSubtitles() {
-	if (!pb) return;
-	if (pb.subPick !== null) {
-		pb.pickSub(null);
-		flashOsd(i18n.player_osd_subtitles_off());
-		return;
-	}
-	const track = pb.tracks?.subtitles.find((t) => !t.forced) ?? pb.tracks?.subtitles[0];
-	if (!track) return flashOsd(i18n.player_subtitles_unavailable());
-	pb.pickSub(track);
-	flashOsd(i18n.player_osd_subtitles_language({ language: languageLabel(track.language) }));
-}
-
 async function toggleFullscreen(on = !fullscreen) {
 	await setFullscreen(on).catch(() => {});
 	fullscreen = await isFullscreen().catch(() => on);
@@ -381,7 +372,7 @@ const detail = $derived(`/detail/${kind}/${id}`);
 function leaveRoute() {
 	stop();
 	if (local) goto("/downloads", { replace: true });
-	else if (fromDetail) history.back();
+	else if (fromApp) history.back();
 	else goto(view?.season ? `${detail}?s=${view.season}` : detail, { replace: true });
 }
 
@@ -391,7 +382,7 @@ function toPip() {
 	closeMenu();
 	toMini();
 	if (local) goto("/downloads", { replace: true });
-	else if (fromDetail) history.back();
+	else if (fromApp) history.back();
 	else goto(view?.season ? `${detail}?s=${view.season}` : detail, { replace: true });
 }
 
@@ -464,11 +455,15 @@ function onKey(e: KeyboardEvent) {
 			show();
 		},
 		mute,
-		subtitles: toggleSubtitles,
+		subtitles: () => openMenu("subs"),
 		stats: () => pb?.setStats(!pb.stats),
 		next: goNext,
 		previous: goPrevious,
 		fullscreen: () => toggleFullscreen(),
+		audio: () => openMenu("audio"),
+		quality: () => openMenu("quality"),
+		speed: () => openMenu("speed"),
+		pip: toPip,
 		closeMenu,
 		exitFullscreen: () => toggleFullscreen(false),
 		exit,
@@ -563,8 +558,7 @@ const modeLabel = $derived.by(() => {
 	const s = pb?.session;
 	if (!s) return "";
 	const { width, height, hdr, dv_profile } = s.video;
-	const size =
-		width >= 7000 || height >= 4000 ? "8K" : width >= 3400 || height >= 2000 ? "4K" : `${height}p`;
+	const size = resBadge(width, height);
 	if (prefs.techDetails)
 		return `${modeName(s.mode)} · ${s.video.action === "copy" ? size : i18n.player_mbit({ value: digits(s.bandwidth / 1_000_000, 1) })}`;
 	const range = dv_profile !== undefined ? " · Dolby Vision" : hdr === "sdr" ? "" : " · HDR";
@@ -807,29 +801,26 @@ $effect(() => {
 });
 
 const menuButtons = $derived.by(() => {
-	const label = (name: string, key?: string) => ({
-		label: name,
-		title: key ? `${name} (${key})` : name,
-	});
+	const label = (name: string, key?: string) => ({ label: name, key });
 	return [
 		{
 			id: "subtitles",
 			icon: pb?.subPick === null ? CaptionsOff : Captions,
-			...label(i18n.player_subtitles(), "c"),
-			active: menu === "subs" || pb?.subPick !== null,
+			...label(i18n.player_subtitles(), "C"),
+			active: menu === "subs",
 			onclick: () => openMenu("subs"),
 		},
 		{
 			id: "audio",
 			icon: AudioLines,
-			...label(i18n.player_audio()),
+			...label(i18n.player_audio(), "A"),
 			active: menu === "audio",
 			onclick: () => openMenu("audio"),
 		},
 		{
 			id: "quality",
 			icon: Settings,
-			...label(i18n.player_quality()),
+			...label(i18n.player_quality(), "Q"),
 			active: menu === "quality",
 			text: qualText,
 			onclick: () => openMenu("quality"),
@@ -837,7 +828,7 @@ const menuButtons = $derived.by(() => {
 		{
 			id: "speed",
 			icon: Gauge,
-			...label(i18n.player_speed()),
+			...label(i18n.player_speed(), "S"),
 			active: menu === "speed",
 			text: pb && pb.speed !== 1 ? times(pb.speed) : undefined,
 			onclick: () => openMenu("speed"),
@@ -845,7 +836,7 @@ const menuButtons = $derived.by(() => {
 		{
 			id: "pip",
 			icon: PictureInPicture2,
-			...label(i18n.player_pip()),
+			...label(i18n.player_pip(), "W"),
 			active: false,
 			disabled: !pb || pb.ended || !!pb.halt,
 			onclick: toPip,
@@ -854,7 +845,7 @@ const menuButtons = $derived.by(() => {
 			id: "fullscreen",
 			icon: fullscreen ? Minimize : Maximize,
 			label: fullscreen ? i18n.player_fullscreen_exit() : i18n.player_fullscreen(),
-			title: `${fullscreen ? i18n.player_fullscreen_exit() : i18n.player_fullscreen()} (f)`,
+			key: "F",
 			active: false,
 			onclick: () => toggleFullscreen(),
 		},
@@ -891,7 +882,7 @@ const labels = {
 			aria-label={pb.playing ? labels.pause : labels.play}
 			onclick={togglePlay}
 		></button>
-		<div class="scrim" style:opacity={showBar ? 1 : 0}></div>
+		<div class="scrim" class:off={!showBar} style:opacity={showBar ? 1 : 0}></div>
 
 		{#if pb.buffering && !pb.ended}
 			<BufferingSpinner label={i18n.player_buffering()} />
@@ -946,7 +937,7 @@ const labels = {
 			</div>
 		{/each}
 
-		<div class="chrome" style:opacity={showBar ? 1 : 0}>
+		<div class="chrome" class:off={!showBar} style:opacity={showBar ? 1 : 0}>
 			<div class="top" style:pointer-events={showBar ? "auto" : "none"}>
 				<button type="button" class="back" aria-label={i18n.common_back()} onclick={exit}>
 					<ArrowLeft size={20} strokeWidth={2} />
@@ -962,9 +953,9 @@ const labels = {
 						class="pill"
 						class:on={pb.stats}
 						aria-label={i18n.player_stats_title()}
-						title={`${i18n.player_stats_title()} (i)`}
 						onclick={() => pb.setStats(!pb.stats)}
 					>
+						<Tip text={i18n.player_stats_title()} key="I" />
 						{#if prefs.techDetails}
 							<span
 								class="dot"
@@ -1284,6 +1275,12 @@ const labels = {
 	inset: 0;
 	pointer-events: none;
 	transition: opacity var(--dur-slow);
+}
+
+/* Leaving is quicker than arriving, so the controls do not linger half-faded over the picture. */
+.scrim.off,
+.chrome.off {
+	transition: opacity 160ms var(--ease-in);
 }
 
 .top {

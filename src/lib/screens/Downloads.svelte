@@ -229,23 +229,38 @@ const openGroup = (g: Group) =>
 	{/if}
 
 	{#if view.empty && dl.loaded}
-		<EmptyState icon="download" title={i18n.dl_empty_title()} text={i18n.dl_empty_text()}>
-			{#snippet action()}
-				<Button variant="primary" onclick={() => goto("/library/movies")}>
-					{i18n.dl_browse()}
-				</Button>
-			{/snippet}
-		</EmptyState>
+		<div class="none">
+			<EmptyState icon="download" title={i18n.dl_empty_title()} text={i18n.dl_empty_text()}>
+				{#snippet action()}
+					<Button variant="primary" onclick={() => goto("/library/movies")}>
+						{i18n.dl_browse()}
+					</Button>
+				{/snippet}
+			</EmptyState>
+		</div>
 	{/if}
 </div>
 
 <style>
 .page {
+	position: relative;
 	box-sizing: border-box;
 	min-height: 100%;
 	display: flex;
 	flex-direction: column;
 	gap: 22px;
+}
+
+.none {
+	position: absolute;
+	inset: 0;
+	display: grid;
+	place-items: center;
+	pointer-events: none;
+}
+
+.none > :global(*) {
+	pointer-events: auto;
 }
 
 .top {

@@ -12,6 +12,7 @@ import {
 	modeName,
 	originalName,
 	rangeName,
+	resBadge,
 	subInfo,
 	subName,
 	videoName,
@@ -240,9 +241,7 @@ const modeLabel = $derived.by(() => {
 	if (!pb.session) return "";
 	const { width, height, hdr, dv_profile } = pb.session.video;
 	const range = dv_profile !== undefined ? " · Dolby Vision" : hdr === "sdr" ? "" : " · HDR";
-	// Wide films are cropped (3840×1608, 3816×1592), so height alone would call them 1608p.
-	const size =
-		width >= 7000 || height >= 4000 ? "8K" : width >= 3400 || height >= 2000 ? "4K" : `${height}p`;
+	const size = resBadge(width, height);
 	return `${size}${range}`;
 });
 const fileRate = $derived(pb.preview ? fileMbit(pb.preview.bitRate) : "");

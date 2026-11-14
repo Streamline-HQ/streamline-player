@@ -120,7 +120,7 @@ export async function actions(ctx, side) {
   const n = Number.parseInt(countBefore, 10);
   expect("block count drops", (await text(apps.locator("p"))).startsWith(`${n - 1} devices`), true);
   const browsers = block(app, "Browser sessions");
-  expect("end writes", await act("end", () => browsers.locator(".item", { hasText: "Chrome on Linux" }).getByRole("button", { name: "End" }).click()), ["DELETE /admin/devices/w1"]);
+  expect("end writes", await act("end", () => browsers.locator(".item", { hasText: "Chrome on Linux" }).getByRole("button", { name: "Revoke" }).click()), ["DELETE /admin/devices/w1"]);
   expect("end toast", await toast(app), "Session ended");
 
   // Pairing.

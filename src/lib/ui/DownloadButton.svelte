@@ -1,4 +1,5 @@
 <script lang="ts">
+import Tip from "#lib/ui/Tip.svelte";
 import Icon from "#lib/ui/Icon.svelte";
 
 type Look = {
@@ -33,9 +34,9 @@ const size = $derived(SIZES[variant]);
 	class="dl {variant} {look.tone}"
 	data-state={look.tone}
 	aria-label={label}
-	title={label}
 	{onclick}
 >
+	<Tip text={label} />
 	{#if look.icon}
 		<Icon name={look.icon} size={size.icon} stroke={size.stroke} />
 	{:else}

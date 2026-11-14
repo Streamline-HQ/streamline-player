@@ -89,6 +89,9 @@ export const audioOutName = (s: { audio: Session["audio"] }) =>
 // Wide films are cropped (3840×2076, 1920×800): the width names the class, as on the box.
 export const resName = (w: number, h: number) =>
 	`${w >= 7000 || h >= 4000 ? 4320 : w >= 3400 || h >= 2000 ? 2160 : w >= 1800 || h >= 1000 ? 1080 : w >= 1200 || h >= 700 ? 720 : h}p`;
+/** The badge's short form: 4K and 8K by name, the rest as resName. */
+export const resBadge = (w: number, h: number) =>
+	({ "4320p": "8K", "2160p": "4K" })[resName(w, h)] ?? resName(w, h);
 export const codecName = (codec: string, profile?: string) =>
 	`${CODEC_NAMES[codec] ?? codec.toUpperCase()}${profile ? ` ${profile.replace(/\s/g, "")}` : ""}`;
 export const videoName = (codec: string, w: number, h: number, profile?: string) =>

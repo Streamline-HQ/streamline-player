@@ -474,3 +474,44 @@
 		transform: none;
 	}
 }
+
+/* A label above a control, in place of the native title the webview draws at the pointer. */
+.sl-tip {
+	position: fixed;
+	z-index: 1000;
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	padding: 7px 11px;
+	border-radius: 8px;
+	background: var(--bg-elevated);
+	border: 1px solid var(--border-strong);
+	box-shadow: var(--shadow-4);
+	color: var(--fg);
+	font: 500 13.5px var(--font-sans);
+	white-space: nowrap;
+	opacity: 0;
+	visibility: hidden;
+	pointer-events: none;
+	transition:
+		opacity 100ms var(--ease-in),
+		visibility 0s 100ms;
+}
+
+.sl-tip--on {
+	opacity: 1;
+	visibility: visible;
+	transition: opacity 120ms var(--ease);
+}
+
+.sl-tip__key {
+	min-width: 12px;
+	padding: 2px 6px;
+	border: 1px solid var(--border-strong);
+	border-bottom-width: 2px;
+	border-radius: 5px;
+	background: var(--surface);
+	font: 500 11.5px var(--font-mono);
+	color: var(--fg-muted);
+	text-align: center;
+}

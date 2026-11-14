@@ -1,4 +1,5 @@
 import { episodesOf, runtime, stillPos } from "#lib/core/format.ts";
+import { episodeFor } from "#lib/core/library-view.ts";
 import { choiceFor } from "#lib/core/playback/choice.ts";
 import type { Launch } from "#lib/core/playback/now-playing.svelte.ts";
 import { isAnime } from "#lib/core/playback/rules.ts";
@@ -19,6 +20,10 @@ export type PlayerKey =
 	| "next"
 	| "previous"
 	| "fullscreen"
+	| "audio"
+	| "quality"
+	| "speed"
+	| "pip"
 	| "closeMenu"
 	| "exitFullscreen"
 	| "exit";
@@ -39,6 +44,10 @@ const KEYS: Record<string, PlayerKey> = {
 	n: "next",
 	p: "previous",
 	f: "fullscreen",
+	a: "audio",
+	q: "quality",
+	s: "speed",
+	w: "pip",
 };
 
 /** One segment per chapter, each running up to the next chapter's start so no gap is left in the bar. */
@@ -158,7 +167,8 @@ export async function loadLaunch(
 		};
 	}
 	const eps = episodesOf(t);
-	const at = eps.findIndex((e) => e.id === ep);
+	// A poster's Play comes without an episode when the list entry had no seasons to pick one from.
+	const at = eps.findIndex((e) => e.id === (ep ?? episodeFor(t, watch)?.id));
 	const e = eps[at];
 	if (!e) throw new Error(`no episode ${ep}`);
 	const following = eps[at + 1]?.has_file ? eps[at + 1] : undefined;

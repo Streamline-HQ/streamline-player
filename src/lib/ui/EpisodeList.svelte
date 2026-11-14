@@ -1,4 +1,5 @@
 <script lang="ts">
+import Tip from "#lib/ui/Tip.svelte";
 import Art from "#lib/ui/Art.svelte";
 import DownloadButton from "#lib/ui/DownloadButton.svelte";
 import Icon from "#lib/ui/Icon.svelte";
@@ -83,9 +84,9 @@ let {
 			class="round season-mark"
 			class:done={seasonMark.watched}
 			aria-label={seasonMark.label}
-			title={seasonMark.label}
 			onclick={seasonMark.onclick}
 		>
+			<Tip text={seasonMark.label} />
 			<Icon name={seasonMark.watched ? "check-check" : "eye"} size={17} stroke={1.8} />
 		</button>
 		<button
@@ -94,9 +95,9 @@ let {
 			data-lang-trigger="season"
 			aria-haspopup="dialog"
 			aria-label={seasonLang.label}
-			title={seasonLang.label}
 			onclick={seasonLang.onclick}
 		>
+			<Tip text={seasonLang.label} />
 			<Icon name="languages" size={17} stroke={1.8} />
 		</button>
 		{#if seasonDl}
@@ -150,9 +151,9 @@ let {
 								class="tiny mark"
 								class:done={e.state === "watched"}
 								aria-label={e.markLabel}
-								title={e.markLabel}
 								onclick={() => onmark(e.key)}
 							>
+								<Tip text={e.markLabel} />
 								<Icon name={e.state === "watched" ? "check-check" : "eye"} size={17} stroke={1.8} />
 							</button>
 							<button
@@ -161,9 +162,9 @@ let {
 								class:own={e.langOwn}
 								data-lang-trigger="ep"
 								aria-label={e.langLabel}
-								title={e.langLabel}
 								onclick={(ev) => onlang(e.key, ev)}
 							>
+								<Tip text={e.langLabel} />
 								<Icon name="languages" size={17} stroke={1.8} />
 							</button>
 							{#if e.dl}

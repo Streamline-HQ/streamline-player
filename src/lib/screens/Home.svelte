@@ -14,6 +14,7 @@ import {
 import { badges, left, runtime, stillPos } from "#lib/core/format.ts";
 import { dl } from "#lib/core/downloads.svelte.ts";
 import { lib, loadLibrary } from "#lib/core/library.svelte.ts";
+import { episodeFor, playHref, progressOf } from "#lib/core/library-view.ts";
 import type { Kind, Title } from "#lib/core/types.ts";
 import { getLocale } from "#lib/paraglide/runtime.js";
 import { m as i18n } from "#lib/paraglide/messages.js";
@@ -31,11 +32,39 @@ const PAD_X = 56;
 const HERO_SHARE = 0.8;
 const ROW_LIMIT = 12;
 const OVERLAP = 112;
+const HERO_MIN = 360;
+const ROW_MARGIN = 16;
 const BAR_CLEARANCE = 96;
 const port = { library, watchState, home, title };
 
 let innerHeight = $state(window.innerHeight);
+let rows = $state<HTMLElement>();
+let firstRow = $state(0);
+$effect(() => {
+	const row = rows?.firstElementChild;
+	if (!row) return;
+	const watch = new ResizeObserver(() => (firstRow = (row as HTMLElement).offsetHeight));
+	watch.observe(row);
+	return () => watch.disconnect();
+});
+// The hero gives way so the first row shows whole under it, down to a floor on short windows.
+const heroHeight = $derived(
+	firstRow
+		? Math.max(HERO_MIN, innerHeight - firstRow + OVERLAP - ROW_MARGIN)
+		: Math.round(innerHeight * HERO_SHARE),
+);
 const now = new Date();
+
+function playLabel(t: Title, kind: Kind) {
+	if (kind === "movies")
+		return progressOf(t, kind, lib.watch) > 0
+			? i18n.library_resume_title({ title: t.title })
+			: i18n.library_play_title({ title: t.title });
+	const ep = episodeFor(t, lib.watch);
+	return ep && "number" in ep
+		? i18n.library_play_episode({ title: t.title, season: ep.season, episode: ep.number })
+		: i18n.library_play_title({ title: t.title });
+}
 
 const resume = $derived(continueWatching(lib.movies, lib.shows, lib.watch));
 const byKey = (kind: Kind, id: number) =>
@@ -177,13 +206,17 @@ onMount(() => {
 		{#if slides.length}
 			<Billboard
 				{slides}
-				height={Math.round(innerHeight * HERO_SHARE)}
+				height={heroHeight}
 				padX={PAD_X}
 				infoLabel={i18n.common_more_info()}
 				dotLabel={(name) => i18n.home_show_title({ title: name })}
 			/>
 		{/if}
-		<div class="rows" style:margin-top="{slides.length ? -OVERLAP : BAR_CLEARANCE}px">
+		<div
+			class="rows"
+			bind:this={rows}
+			style:margin-top="{slides.length ? -OVERLAP : BAR_CLEARANCE}px"
+		>
 			{#if resume.length}
 				<Row
 					title={i18n.home_continue_watching()}
@@ -229,6 +262,8 @@ onMount(() => {
 							src={artwork("movies", t.id, "poster")}
 							badge={badge(t, "movies")}
 							watched={watchedTitle(t, "movies", lib.watch)}
+							playLabel={playLabel(t, "movies")}
+							onplay={() => goto(playHref(t, "movies", lib.watch))}
 							onclick={() => open("movies", t.id)}
 						/>
 					{/each}
@@ -250,6 +285,8 @@ onMount(() => {
 							src={artwork("series", t.id, "poster")}
 							badge={badge(t, "series")}
 							watched={watchedTitle(t, "series", lib.watch)}
+							playLabel={playLabel(t, "series")}
+							onplay={() => goto(playHref(t, "series", lib.watch))}
 							onclick={() => open("series", t.id)}
 						/>
 					{/each}
@@ -269,6 +306,8 @@ onMount(() => {
 							sub={kind === "movies" ? movieSub(t) : showSub(t)}
 							src={artwork(kind, t.id, "poster")}
 							watched={watchedTitle(t, kind, lib.watch)}
+							playLabel={playLabel(t, kind)}
+							onplay={() => goto(playHref(t, kind, lib.watch))}
 							onclick={() => open(kind, t.id)}
 						/>
 					{/each}

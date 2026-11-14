@@ -68,7 +68,7 @@ onMount(() => {
 	reduceMotion = matchMedia("(prefers-reduced-motion: reduce)").matches;
 	settle();
 	const timer = setInterval(() => {
-		if (hero?.matches(":hover") || phase !== "in" || slides.length < 2) return;
+		if (phase !== "in" || slides.length < 2) return;
 		if ((scroller?.()?.scrollTop ?? 0) > SCROLLED_PAST) return;
 		if (document.hidden) return;
 		const next = progress + TICK_MS / HERO_MS;
@@ -101,7 +101,7 @@ const frameStyle = (i: number) => {
 </script>
 
 {#if slide}
-	<section class="hero" bind:this={hero} style:height="{height}px">
+	<section class="hero" style:height="{height}px">
 		{#each slides as s, i (s.key)}
 			<div class="frame" style={frameStyle(i)}>
 				<Art src={s.img} position="50% 30%" />

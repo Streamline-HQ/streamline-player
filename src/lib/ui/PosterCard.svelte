@@ -1,4 +1,5 @@
 <script lang="ts">
+import Tip from "#lib/ui/Tip.svelte";
 import Art from "#lib/ui/Art.svelte";
 import DownloadButton from "#lib/ui/DownloadButton.svelte";
 import Icon from "#lib/ui/Icon.svelte";
@@ -69,13 +70,8 @@ let {
 		{/if}
 		{#if onplay}
 			<span class="shade">
-				<button
-					type="button"
-					class="play"
-					aria-label={playLabel}
-					title={playLabel}
-					onclick={onplay}
-				>
+				<button type="button" class="play" aria-label={playLabel} onclick={onplay}>
+					<Tip text={playLabel} />
 					<Icon name="play" filled size={20} />
 				</button>
 			</span>
@@ -95,9 +91,9 @@ let {
 				class="mark"
 				class:on={mark.on}
 				aria-label={mark.label}
-				title={mark.label}
 				onclick={mark.onclick}
 			>
+				<Tip text={mark.label} />
 				<Icon name={mark.on ? "check-check" : "eye"} size={16} stroke={1.75} />
 			</button>
 		{/if}
@@ -108,9 +104,9 @@ let {
 				class:own={lang.own}
 				data-lang-trigger="lib"
 				aria-label={lang.label}
-				title={lang.label}
 				onclick={(e) => lang.onclick(e.currentTarget)}
 			>
+				<Tip text={lang.label} />
 				<Icon name="languages" size={16} stroke={1.8} />
 			</button>
 		{/if}

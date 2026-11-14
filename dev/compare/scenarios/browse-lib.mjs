@@ -15,7 +15,7 @@ export async function home(ctx, side) {
   await app.setViewportSize({ width: 1440, height: 900 });
   await side.open(ctx);
   await wait(1500);
-  // The billboard rotates on the page's clock, which also runs in real time: start from its first slide, held by the pointer.
+  // The billboard rotates on the page's clock, which also runs in real time: start from its first slide.
   await app.locator('.hero button[aria-label^="Show "]').first().click();
   await wait(1200);
   await shot(`${side.target}-home`);
@@ -144,7 +144,9 @@ export async function library(ctx, side) {
   await app.reload();
   await wait(2500);
   out.reloaded = { rows: await app.locator(".library .table .row").count(), first: (await firstTitles(app, 1))[0], query: await searchOf(app) };
-  await app.locator('.library .flags button:text-is("In progress")').click();
+  // The watch chip walks unwatched, in progress, watched: two clicks reach In progress.
+  await app.locator(".library .flags button").first().click();
+  await app.locator(".library .flags button").first().click();
   await wait(600);
   out.nothing = { rows: await app.locator(".library .table .row").count(), title: (await app.locator(".library .empty .title").textContent()) };
   await app.keyboard.press("g");
@@ -495,7 +497,8 @@ export async function settings(ctx, side) {
   }
   await app.locator("nav button").first().click();
   await wait(1200);
-  await app.locator('select[aria-label="Quality at home"]').selectOption("Original");
+  await app.locator('button[aria-label="Quality at home"]').click();
+  await app.locator('[role="listbox"][aria-label="Quality at home"] [role="option"]:text-is("Original")').click();
   await wait(300);
   await app.locator('fieldset[aria-label="Subtitles"] button:text-is("Always")').click();
   await wait(500);
@@ -509,7 +512,7 @@ export async function settings(ctx, side) {
   await wait(2500);
   out.autoplay.reloaded = await app.locator('input[aria-label="Play the next episode automatically"]').isChecked();
   out.held = {
-    quality: await app.locator('select[aria-label="Quality at home"]').inputValue(),
+    quality: await app.locator('button[aria-label="Quality at home"]').getAttribute("data-value"),
     subtitles: await app.locator('fieldset[aria-label="Subtitles"] button[aria-pressed="true"]').textContent(),
   };
   await app.locator('[data-sec="language"] fieldset button:text-is("Français")').click();

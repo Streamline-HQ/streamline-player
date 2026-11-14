@@ -22,6 +22,22 @@ let {
 
 let scroller = $state<HTMLElement>();
 const page = (dir: -1 | 1) => scroller?.scrollBy({ left: dir * PAGE_PX, behavior: "smooth" });
+
+let atStart = $state(true);
+let atEnd = $state(true);
+function measure() {
+	if (!scroller) return;
+	atStart = scroller.scrollLeft <= 1;
+	atEnd = scroller.scrollLeft + scroller.clientWidth >= scroller.scrollWidth - 1;
+}
+// The row's width and its cards both change what is left to scroll.
+$effect(() => {
+	if (!scroller) return;
+	const watch = new ResizeObserver(measure);
+	watch.observe(scroller);
+	for (const card of scroller.children) watch.observe(card);
+	return () => watch.disconnect();
+});
 </script>
 
 <section>
@@ -31,10 +47,22 @@ const page = (dir: -1 | 1) => scroller?.scrollBy({ left: dir * PAGE_PX, behavior
 			{#if note}
 				<span class="note">{note}</span>
 			{/if}
-			<button type="button" class="arrow" aria-label={prevLabel} onclick={() => page(-1)}>
+			<button
+				type="button"
+				class="arrow"
+				aria-label={prevLabel}
+				disabled={atStart}
+				onclick={() => page(-1)}
+			>
 				<Icon name="chevron-left" size={15} stroke={2} />
 			</button>
-			<button type="button" class="arrow" aria-label={nextLabel} onclick={() => page(1)}>
+			<button
+				type="button"
+				class="arrow"
+				aria-label={nextLabel}
+				disabled={atEnd}
+				onclick={() => page(1)}
+			>
 				<Icon name="chevron-right" size={15} stroke={2} />
 			</button>
 		</div>
@@ -42,6 +70,7 @@ const page = (dir: -1 | 1) => scroller?.scrollBy({ left: dir * PAGE_PX, behavior
 	<div
 		class="scroller"
 		bind:this={scroller}
+		onscroll={measure}
 		style:padding="6px {padX}px 10px"
 		style:scroll-padding="0 {padX}px"
 	>
@@ -87,6 +116,7 @@ h2 {
 	height: 30px;
 	display: grid;
 	place-items: center;
+	padding: 0;
 	border-radius: 50%;
 	border: 1px solid var(--border-strong);
 	background: transparent;
@@ -94,7 +124,12 @@ h2 {
 	cursor: pointer;
 }
 
-.arrow:hover {
+.arrow:disabled {
+	opacity: 0.35;
+	cursor: default;
+}
+
+.arrow:hover:not(:disabled) {
 	background: color-mix(in srgb, var(--fg) 8%, transparent);
 	color: var(--fg);
 }
@@ -104,5 +139,6 @@ h2 {
 	gap: 16px;
 	overflow-x: auto;
 	scroll-snap-type: x proximity;
+	scrollbar-width: none;
 }
 </style>

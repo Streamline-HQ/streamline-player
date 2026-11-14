@@ -43,7 +43,7 @@ export async function server(ctx, side) {
   // Ways in.
   await app.goto(`${side.url}/settings`);
   await wait(1500);
-  const entry = app.locator('.settings button[title="Server settings"]');
+  const entry = app.locator('.settings button.server');
   out.entry = { text: await text(entry), badge: await text(entry.locator(".badge")), ping: await entry.locator(".ms").count() };
   expect("settings entry", [out.entry.text.startsWith("Server"), out.entry.badge, out.entry.ping], [true, "1", 1]);
   expect("ping pill gone", await app.locator(".settings .ping").count(), 0);

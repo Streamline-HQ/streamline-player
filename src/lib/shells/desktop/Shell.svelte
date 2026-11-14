@@ -1,5 +1,6 @@
 <script lang="ts">
 import { goto } from "#lib/ui/nav.ts";
+import { afterNavigate, beforeNavigate } from "$app/navigation";
 import { page } from "$app/state";
 import {
 	type AskSpec,
@@ -92,6 +93,18 @@ let pip = $state<HTMLElement>();
 let pipArt = $state<HTMLElement>();
 let hole = $state<{ x: number; y: number; width: number; height: number } | null>(null);
 provideScroll(() => content);
+
+// SvelteKit restores the window's scroll, and the pages scroll in `content`: without this a page
+// opens wherever the one before it was left.
+// ponytail: positions keyed by URL, so two history entries of one page share theirs; key by history entry if that shows.
+const scrolls = new Map<string, number>();
+beforeNavigate(({ from }) => {
+	if (from?.url && content) scrolls.set(from.url.href, content.scrollTop);
+});
+afterNavigate(({ from, to, type }) => {
+	if (!content || !to?.url || from?.url?.pathname === to.url.pathname) return;
+	content.scrollTop = type === "popstate" ? (scrolls.get(to.url.href) ?? 0) : 0;
+});
 
 const menu = presence(() => menuOpen, 140);
 const question = presence(() => !!asking.spec, 230);
@@ -337,6 +350,15 @@ function onKey(e: KeyboardEvent) {
 	);
 	if (act === "g") {
 		gAt = Date.now();
+		return;
+	}
+	// On a focused control Space is that control's own key.
+	const onControl = (e.target as Element | null)?.closest?.(
+		"button, a, input, textarea, select, [role='button']",
+	);
+	if (e.key === " " && showMini && !onControl && !e.ctrlKey && !e.metaKey && !e.altKey) {
+		e.preventDefault();
+		nowPlaying.pb?.togglePlay();
 		return;
 	}
 	if ((dlAsking.pick || dlAsking.popover) && act === "close") {
@@ -844,6 +866,7 @@ if (import.meta.env.DEV)
 	position: absolute;
 	inset: 0;
 	overflow-y: auto;
+	scrollbar-width: none;
 }
 
 .pip {

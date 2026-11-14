@@ -37,10 +37,12 @@ export default async (ctx) => {
   out.muteSent = (await fake(app)).volume;
   out.muteOff = await flash("m");
   await wait(1200);
-  out.subsOn = await flash("c");
-  await wait(1200);
-  out.subsOff = await flash("c");
-  await wait(1200);
+  await key("c");
+  await wait(400);
+  out.subsOn = await app.locator('[data-menu-panel] .head').first().textContent().then((t) => t.trim(), () => null);
+  await key("c");
+  await wait(400);
+  out.subsOff = await app.locator("[data-menu-panel]").count();
   await key("i");
   await wait(400);
   out.stats = await app.locator(".top .pill.on").count();

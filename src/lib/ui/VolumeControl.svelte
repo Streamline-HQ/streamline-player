@@ -1,4 +1,5 @@
 <script lang="ts">
+import Tip from "#lib/ui/Tip.svelte";
 import { Volume1, Volume2, VolumeX } from "@lucide/svelte";
 
 let {
@@ -26,13 +27,8 @@ function at(e: PointerEvent) {
 </script>
 
 <div class="vol">
-	<button
-		type="button"
-		class="mute"
-		aria-label={muteLabel}
-		title={`${muteLabel} (m)`}
-		onclick={onmute}
-	>
+	<button type="button" class="mute" aria-label={muteLabel} onclick={onmute}>
+		<Tip text={muteLabel} key="M" />
 		{#if muted || volume === 0}
 			<VolumeX size={21} strokeWidth={1.75} />
 		{:else if volume < 0.5}

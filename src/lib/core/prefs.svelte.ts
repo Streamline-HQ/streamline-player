@@ -7,6 +7,7 @@ const DEFAULTS = {
 	autoSkip: false,
 	audioLang: "Original language",
 	subsMode: "Auto",
+	subsLang: "App language",
 	animeRule: false,
 	subSize: "M",
 	subBg: "Shadow",
@@ -64,8 +65,13 @@ export function setPref<K extends keyof Prefs>(key: K, value: Prefs[K]) {
 	}
 }
 
-/** The language "your language" means: the app's. */
-export const myLanguage = () => (prefs.language === "Français" ? "French" : "English");
+/** The language subtitles are read in, and the one an audio track is foreign to: the app's unless set. */
+export const myLanguage = () =>
+	prefs.subsLang !== "App language"
+		? prefs.subsLang
+		: prefs.language === "Français"
+			? "French"
+			: "English";
 
 /** Codecs the viewer wants decoded on this device instead of passed through to the TV or receiver. */
 export const decodeHere = () =>

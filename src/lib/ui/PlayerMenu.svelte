@@ -22,10 +22,28 @@ let {
 	children?: Snippet;
 } = $props();
 
-const pop = (_: Element, { y = 8, scale = 0.98, duration = 240 } = {}) => ({
+let panel: HTMLElement;
+const stops = () => [...panel.querySelectorAll<HTMLElement>("button:not(:disabled)")];
+
+$effect(() => {
+	(panel.querySelector<HTMLElement>(".opt.sel:not(:disabled)") ?? stops()[0])?.focus();
+});
+
+function onkeydown(e: KeyboardEvent) {
+	// Kept from the player's own shortcuts, which would seek, change the volume or pause.
+	if (!["ArrowUp", "ArrowDown", "Enter", " ", "Tab"].includes(e.key)) return;
+	e.stopPropagation();
+	if (!e.key.startsWith("Arrow")) return;
+	e.preventDefault();
+	const all = stops();
+	const at = all.indexOf(document.activeElement as HTMLElement);
+	all[(at + (e.key === "ArrowDown" ? 1 : -1) + all.length) % all.length]?.focus();
+}
+
+// Grows out of the bar's buttons, which sit under its bottom right corner.
+const pop = (_: Element, { duration = 110 } = {}) => ({
 	duration,
-	css: (t: number) =>
-		`opacity:${t};transform:translateY(${(1 - t) * y}px) scale(${scale + (1 - scale) * t})`,
+	css: (t: number) => `opacity:${t};transform:scale(${0.92 + 0.08 * t})`,
 });
 </script>
 
@@ -34,8 +52,11 @@ const pop = (_: Element, { y = 8, scale = 0.98, duration = 240 } = {}) => ({
 	role="dialog"
 	aria-label={title}
 	data-menu-panel="1"
+	tabindex="-1"
+	bind:this={panel}
+	{onkeydown}
 	in:pop|global
-	out:pop|global={{ duration: 180 }}
+	out:pop|global={{ duration: 80 }}
 >
 	<div class="head">
 		<span class="title">{title}</span>
@@ -107,9 +128,7 @@ const pop = (_: Element, { y = 8, scale = 0.98, duration = 240 } = {}) => ({
 	display: flex;
 	flex-direction: column;
 	border-radius: 16px;
-	background: rgba(17, 17, 25, 0.94);
-	backdrop-filter: blur(28px) saturate(150%);
-	-webkit-backdrop-filter: blur(28px) saturate(150%);
+	background: rgb(17, 17, 25);
 	border: 1px solid var(--border-strong);
 	box-shadow: 0 24px 64px rgba(0, 0, 0, 0.6);
 	overflow: hidden;
@@ -207,7 +226,8 @@ const pop = (_: Element, { y = 8, scale = 0.98, duration = 240 } = {}) => ({
 	background: color-mix(in srgb, var(--player-accent) 10%, transparent);
 }
 
-.opt:hover:not(:disabled) {
+.opt:hover:not(:disabled),
+.opt:focus-visible {
 	background: var(--surface-2);
 }
 

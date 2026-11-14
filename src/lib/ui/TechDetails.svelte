@@ -63,7 +63,7 @@ let {
 					<div class="card pad">
 						<div class="cap">{audioTitle}</div>
 						<div class="tracks">
-							{#each audio as a (a)}
+							{#each audio as a, i (i)}
 								<div>{a}</div>
 							{/each}
 						</div>

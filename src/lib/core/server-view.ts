@@ -176,7 +176,6 @@ export type TextId =
 	| "btn_scanning"
 	| "btn_download"
 	| "btn_revoke"
-	| "btn_end"
 	| "tile_streams"
 	| "tile_pairing"
 	| "tile_storage"
@@ -510,8 +509,14 @@ export function sections(
 		};
 	});
 
-	const apps = d.devices.filter((x) => x.kind === "app");
-	const browsers = d.devices.filter((x) => x.kind === "browser");
+	// This device, then those streaming, then those seen just now, then the most recent first.
+	const rank = (x: AdminDevice) =>
+		x.current ? 0 : x.streaming ? 1 : now.getTime() - Date.parse(x.last_seen) < 60_000 ? 2 : 3;
+	const ordered = [...d.devices].sort(
+		(a, b) => rank(a) - rank(b) || Date.parse(b.last_seen) - Date.parse(a.last_seen),
+	);
+	const apps = ordered.filter((x) => x.kind === "app");
+	const browsers = ordered.filter((x) => x.kind === "browser");
 	const first = d.pairings[0];
 	const hw = o.health.hw;
 	const ffmpeg = o.health.ffmpeg;
@@ -732,7 +737,7 @@ export function sections(
 				? []
 				: [
 						{
-							label: w.t(browser ? "btn_end" : "btn_revoke"),
+							label: w.t("btn_revoke"),
 							act: { do: browser ? "end" : "revoke", id: x.id },
 							tone: "danger",
 							disabled: false,

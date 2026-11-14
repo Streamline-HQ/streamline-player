@@ -1,4 +1,5 @@
 <script lang="ts">
+import Tip from "#lib/ui/Tip.svelte";
 import { Pause, Play, RotateCcw, RotateCw, SkipForward } from "@lucide/svelte";
 import VolumeControl from "#lib/ui/VolumeControl.svelte";
 import type { Component } from "svelte";
@@ -7,7 +8,7 @@ type Button = {
 	id: string;
 	icon: Component<{ size?: number; strokeWidth?: number }>;
 	label: string;
-	title: string;
+	key?: string;
 	active: boolean;
 	text?: string;
 	disabled?: boolean;
@@ -60,41 +61,26 @@ let {
 		type="button"
 		class="big"
 		aria-label={playing ? labels.pause : labels.play}
-		title={`${playing ? labels.pause : labels.play} (space)`}
 		onclick={ontoggle}
 	>
+		<Tip text={playing ? labels.pause : labels.play} key="Space" />
 		{#if playing}
 			<Pause size={26} fill="currentColor" strokeWidth={0} />
 		{:else}
 			<Play size={26} fill="currentColor" strokeWidth={0} />
 		{/if}
 	</button>
-	<button
-		type="button"
-		class="skip"
-		aria-label={labels.back}
-		title={labels.back}
-		onclick={() => onseek(-10)}
-	>
+	<button type="button" class="skip" aria-label={labels.back} onclick={() => onseek(-10)}>
+		<Tip text={labels.back} key="←" />
 		<RotateCcw size={22} strokeWidth={1.75} /><span>10</span>
 	</button>
-	<button
-		type="button"
-		class="skip"
-		aria-label={labels.forward}
-		title={labels.forward}
-		onclick={() => onseek(10)}
-	>
+	<button type="button" class="skip" aria-label={labels.forward} onclick={() => onseek(10)}>
+		<Tip text={labels.forward} key="→" />
 		<RotateCw size={22} strokeWidth={1.75} /><span>10</span>
 	</button>
 	{#if hasNext}
-		<button
-			type="button"
-			class="plain"
-			aria-label={labels.next}
-			title={`${labels.next} (n)`}
-			onclick={onnext}
-		>
+		<button type="button" class="plain" aria-label={labels.next} onclick={onnext}>
+			<Tip text={labels.next} key="N" />
 			<SkipForward size={22} fill="currentColor" />
 		</button>
 	{/if}
@@ -116,10 +102,10 @@ let {
 			data-menu-btn="1"
 			class:on={b.active}
 			aria-label={b.label}
-			title={b.title}
 			disabled={b.disabled}
 			onclick={b.onclick}
 		>
+			<Tip text={b.label} key={b.key} />
 			<b.icon size={21} strokeWidth={1.75} />
 			{#if b.text}
 				<span>{b.text}</span>

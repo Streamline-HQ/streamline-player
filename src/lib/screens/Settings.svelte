@@ -1,4 +1,5 @@
 <script lang="ts">
+import Tip from "#lib/ui/Tip.svelte";
 import {
 	changed,
 	type Draft,
@@ -13,7 +14,7 @@ import { seen } from "#lib/core/devices.ts";
 import { lib, loadLibrary } from "#lib/core/library.svelte.ts";
 import { account, initialsOf, setMe } from "#lib/core/me.svelte.ts";
 import { type ChoiceKey, prefs, setPref, type ToggleKey } from "#lib/core/prefs.svelte.ts";
-import { QUALITIES, shown } from "#lib/core/prefs-labels.ts";
+import { QUALITIES, shown, subtitleLanguageName } from "#lib/core/prefs-labels.ts";
 import { pendingPairs } from "#lib/core/admin.svelte.ts";
 import { dl, refreshStorage } from "#lib/core/downloads.svelte.ts";
 import { storageView } from "#lib/core/downloads-view.ts";
@@ -62,7 +63,7 @@ import { onMount } from "svelte";
 const APP_VERSION = import.meta.env.VITE_APP_VERSION;
 const PAD_X = 56;
 const TOP = 92;
-const PING_MS = 5000;
+const PING_MS = 2000;
 const SPY_OFFSET = 120;
 const CUE_SIZE = { S: 15, M: 19, L: 23, XL: 28 };
 
@@ -385,12 +386,8 @@ onMount(() => {
 				<span class="mono">{me?.name} · {me?.email} · {me?.role}</span>
 			</span>
 			{#if me?.role === "Admin"}
-				<button
-					type="button"
-					class="server"
-					title={i18n.server_open()}
-					onclick={() => goto("/admin")}
-				>
+				<button type="button" class="server" onclick={() => goto("/admin")}>
+					<Tip text={i18n.server_open()} below />
 					{#key beat}
 						<span class="dot"></span>
 					{/key}
@@ -546,6 +543,16 @@ onMount(() => {
 					/>
 				{/snippet}
 			</SettingsRow>
+			<SettingsRow label={i18n.settings_subtitle_language()}>
+				{#snippet control()}
+					<ChoiceMenu
+						label={i18n.settings_subtitle_language()}
+						options={choice("subsLang", ["App language", "English", "French"])}
+						value={prefs.subsLang}
+						onchange={(v) => setPref("subsLang", v)}
+					/>
+				{/snippet}
+			</SettingsRow>
 			<SettingsRow label={i18n.settings_subtitles()} desc={i18n.settings_subtitles_desc()}>
 				{#snippet control()}
 					<ChoiceMenu
@@ -556,7 +563,10 @@ onMount(() => {
 					/>
 				{/snippet}
 			</SettingsRow>
-			<SettingsRow label={i18n.settings_anime()} desc={i18n.settings_anime_desc()}>
+			<SettingsRow
+				label={i18n.settings_anime()}
+				desc={i18n.settings_anime_desc({ language: subtitleLanguageName() })}
+			>
 				{#snippet control()}
 					<Switch
 						label={i18n.settings_anime()}
@@ -843,7 +853,7 @@ onMount(() => {
 	min-height: 100%;
 	display: grid;
 	grid-template-columns: 220px minmax(0, 800px);
-	justify-content: start;
+	justify-content: center;
 	gap: 48px;
 	background: var(--bg-deep);
 	color: var(--fg);

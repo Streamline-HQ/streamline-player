@@ -7,24 +7,20 @@ let {
 	remaining,
 }: { on: boolean; eyebrow: string; title: string; text: string; remaining: string } = $props();
 
-const enter = (_: Element) => ({
-	duration: 300,
-	css: (t: number) => `opacity:${t};transform:translateY(${(1 - t) * 10}px)`,
-});
-const leave = (_: Element) => ({
-	duration: 210,
-	css: (t: number) => `opacity:${t};transform:translateY(${(1 - t) * 10}px)`,
+// What the card last said while it showed: the remaining time ticks on as playback resumes, and
+// rewriting the text every frame makes the way out stutter.
+let held = $state({ eyebrow: "", title: "", text: "", remaining: "" });
+$effect(() => {
+	if (on) held = { eyebrow, title, text, remaining };
 });
 </script>
 
-{#if on}
-	<div class="card paused" in:enter out:leave>
-		<span class="eyebrow">{eyebrow}</span>
-		<span class="title">{title}</span>
-		<span class="text">{text}</span>
-		<span class="left">{remaining}</span>
-	</div>
-{/if}
+<div class="card paused" class:on aria-hidden={!on}>
+	<span class="eyebrow">{held.eyebrow}</span>
+	<span class="title">{held.title}</span>
+	<span class="text">{held.text}</span>
+	<span class="left">{held.remaining}</span>
+</div>
 
 <style>
 .card {
@@ -35,6 +31,24 @@ const leave = (_: Element) => ({
 	display: flex;
 	flex-direction: column;
 	gap: 8px;
+	opacity: 0;
+	transform: translateY(10px);
+	visibility: hidden;
+	pointer-events: none;
+	will-change: opacity, transform;
+	transition:
+		opacity 180ms var(--ease-in),
+		transform 180ms var(--ease-in),
+		visibility 0s 180ms;
+}
+
+.card.on {
+	opacity: 1;
+	transform: none;
+	visibility: visible;
+	transition:
+		opacity 300ms var(--ease),
+		transform 300ms var(--ease);
 }
 
 .eyebrow {

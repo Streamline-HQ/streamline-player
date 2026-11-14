@@ -1,4 +1,5 @@
 <script lang="ts">
+import Tip from "#lib/ui/Tip.svelte";
 import Icon, { type IconName } from "#lib/ui/Icon.svelte";
 import "#lib/ui/ui.css";
 import type { Snippet } from "svelte";
@@ -42,10 +43,10 @@ let {
 	class:sl-btn--sm={size === "sm"}
 	class:on={active}
 	aria-label={variant === "icon" ? label : undefined}
-	{title}
 	{disabled}
 	{onclick}
 >
+	<Tip text={title} />
 	{#if icon}
 		<Icon name={icon} />
 	{/if}

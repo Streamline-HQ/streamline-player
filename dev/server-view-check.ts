@@ -67,7 +67,6 @@ const EN: Record<TextId, string> = {
 	btn_scanning: "Scanning…",
 	btn_download: "Download",
 	btn_revoke: "Revoke",
-	btn_end: "End",
 	tile_streams: "Streams",
 	tile_pairing: "Pairing",
 	tile_storage: "Media storage",
@@ -605,7 +604,7 @@ eq(safari.meta, "Hugo Bernard · expires in 2 days");
 eq(safari.aside, "5 days ago");
 eq(item(sessions, "Chrome on Linux").meta, "Camille Roux · expires in 6 days");
 same(safari.buttons, [
-	{ label: "End", act: { do: "end", id: "w2" }, tone: "danger", disabled: false },
+	{ label: "Revoke", act: { do: "end", id: "w2" }, tone: "danger", disabled: false },
 ]);
 
 const empty = demo();

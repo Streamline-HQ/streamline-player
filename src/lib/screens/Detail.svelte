@@ -1,4 +1,11 @@
+<script lang="ts" module>
+// History entries between this title and the page the viewer left to look at titles (Home, a
+// library, Search): Back returns there in one go, past the titles opened from "More like this".
+let hops = 0;
+</script>
+
 <script lang="ts">
+import Tip from "#lib/ui/Tip.svelte";
 import { playUrl, watchedTitle } from "#lib/core/browse.ts";
 import {
 	defaultSeason,
@@ -121,10 +128,17 @@ let device = $state("");
 let tracks = $state.raw<Tracks | null>(null);
 let choices = $state<Choices>(loadChoices());
 
-afterNavigate(({ from, to }) => {
+afterNavigate((nav) => {
+	const { from, to } = nav;
 	// A replace on the same page (the season in the query) is not an arrival: after a deep link Back must still go Home.
 	if (from && from.url.pathname === to?.url.pathname) return;
 	fromApp = from !== null;
+	const fromTitle = !!from?.url.pathname.includes("/detail/");
+	if (!from) hops = 0;
+	else if (nav.type === "popstate") {
+		// Coming back from the player lands on the entry that was left, so the count still holds.
+		if (fromTitle) hops += nav.delta;
+	} else hops = fromTitle ? hops + 1 : 1;
 });
 
 const ready = $derived(lib.loaded || lib.error !== null);
@@ -258,7 +272,7 @@ const eyebrow = $derived(
 );
 
 function back() {
-	if (fromApp) history.back();
+	if (fromApp && hops > 0) history.go(-hops);
 	else goto("/");
 }
 
@@ -764,9 +778,9 @@ const heroHeight = $derived(
 						class="glass sq mark-title"
 						style:color={watched ? "var(--status-available)" : "var(--fg)"}
 						aria-label={watched ? i18n.detail_mark_as_unwatched() : i18n.detail_mark_as_watched()}
-						title={watched ? i18n.detail_mark_as_unwatched() : i18n.detail_mark_as_watched()}
 						onclick={toggleWatched}
 					>
+						<Tip text={watched ? i18n.detail_mark_as_unwatched() : i18n.detail_mark_as_watched()} />
 						<Icon name={watched ? "check-check" : "eye"} size={19} stroke={2} />
 					</button>
 					<button
@@ -774,10 +788,10 @@ const heroHeight = $derived(
 						class="glass sq"
 						data-lang-trigger="hero"
 						aria-label={heroLang}
-						title={heroLang}
 						aria-expanded={lang?.scope === "title"}
 						onclick={(e) => openLang("title", e.currentTarget, null)}
 					>
+						<Tip text={heroLang} />
 						<Icon name="languages" size={19} stroke={1.9} />
 					</button>
 					{#if seriesDl}
@@ -897,8 +911,11 @@ const heroHeight = $derived(
 						{#each similar as it (`${it.kind}:${it.id}`)}
 							<button type="button" onclick={() => goto(`/detail/${it.kind}/${it.id}`)}>
 								<span class="poster"
-									><Art src={artwork(it.kind, it.id, "poster")} kind="poster" ratio="2 / 3" /></span
-								>
+									><Art src={artwork(it.kind, it.id, "poster")} kind="poster" ratio="2 / 3" />
+									{#if watchedTitle(it, it.kind, lib.watch)}
+										<span class="seen"><Icon name="tick" size={13} stroke={2.5} /></span>
+									{/if}
+								</span>
 								<span class="name">{it.title}</span>
 							</button>
 						{/each}
@@ -1208,6 +1225,19 @@ h2 {
 	transition:
 		box-shadow var(--dur-fast),
 		transform var(--dur-fast);
+}
+
+.seen {
+	position: absolute;
+	right: 8px;
+	top: 8px;
+	width: 22px;
+	height: 22px;
+	display: grid;
+	place-items: center;
+	border-radius: 50%;
+	background: color-mix(in srgb, var(--bg-deep) 78%, transparent);
+	color: var(--status-available);
 }
 
 .similar > button:hover .poster {

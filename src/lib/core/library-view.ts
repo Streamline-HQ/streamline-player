@@ -1,20 +1,32 @@
-import { watchedTitle } from "#lib/core/browse.ts";
+import { nextEpisode, playUrl, watchedTitle } from "#lib/core/browse.ts";
 import type { Kind, Title, Watch } from "#lib/core/types.ts";
 
-export type Flag = "unwatched" | "progress" | "uhd" | "hdr";
+export type Flag = "unwatched" | "progress" | "watched" | "uhd" | "hdr";
 export type Sort = "added" | "title" | "year" | "rating" | "size";
 export type Layout = "grid" | "list";
 export type View = { flags: Flag[]; genre: string | null; sort: Sort; layout: Layout };
 
-export const FLAGS: Flag[] = ["unwatched", "progress", "uhd", "hdr"];
+export const FLAGS: Flag[] = ["unwatched", "progress", "watched", "uhd", "hdr"];
+/** One title is in exactly one of these, so only one can be asked for at a time. */
+export const WATCH_FLAGS: Flag[] = ["unwatched", "progress", "watched"];
 export const SORTS: Sort[] = ["added", "title", "year", "rating", "size"];
 export const DEFAULT_VIEW: View = { flags: [], genre: null, sort: "added", layout: "grid" };
 
-const EXCLUDES: Partial<Record<Flag, Flag>> = { unwatched: "progress", progress: "unwatched" };
-
 export function toggleFlag(flags: Flag[], f: Flag): Flag[] {
 	if (flags.includes(f)) return flags.filter((x) => x !== f);
-	return [...flags.filter((x) => x !== EXCLUDES[f]), f];
+	const rivals = WATCH_FLAGS.includes(f) ? WATCH_FLAGS : [];
+	return [...flags.filter((x) => !rivals.includes(x)), f];
+}
+
+/** The watch state asked for, if any. */
+export const watchFlag = (flags: Flag[]) => flags.find((f) => WATCH_FLAGS.includes(f)) ?? null;
+
+/** One button walks the watch states: none, unwatched, in progress, watched, none. */
+export function cycleWatch(flags: Flag[]): Flag[] {
+	const now = watchFlag(flags);
+	const next = now === null ? WATCH_FLAGS[0] : WATCH_FLAGS[WATCH_FLAGS.indexOf(now) + 1];
+	const rest = flags.filter((f) => !WATCH_FLAGS.includes(f));
+	return next ? [...rest, next] : rest;
 }
 
 /** Percent watched of the unfinished play, 0 when there is none. */
@@ -36,6 +48,7 @@ const matches: Record<Flag, (t: Title, kind: Kind, watch: Watch[]) => boolean> =
 		!watch.some((w) => isPlayOf(w, t, kind) && !w.watched && w.position_seconds > 0),
 	progress: (t, kind, watch) =>
 		watch.some((w) => isPlayOf(w, t, kind) && !w.watched && w.position_seconds > 0),
+	watched: (t, kind, watch) => watchedTitle(t, kind, watch),
 	uhd: (t) => t.file_summary?.resolution === "2160p",
 	hdr: (t) => !!t.file_summary?.hdr,
 };
@@ -93,4 +106,25 @@ export function viewFromQuery(q: URLSearchParams): View {
 		sort: (SORTS as string[]).includes(sort ?? "") ? (sort as Sort) : DEFAULT_VIEW.sort,
 		layout: q.get("layout") === "list" ? "list" : "grid",
 	};
+}
+
+/** The episode a poster's play button starts: the one under way, else the next one up. */
+export function episodeFor(t: Title, watch: Watch[]) {
+	const going = watch.find((w) => w.series_id === t.id && !w.watched && w.position_seconds > 0);
+	const files = (t.seasons ?? []).flatMap((s) =>
+		s.episodes.filter((e) => e.has_file).map((e) => ({ ...e, season: s.number })),
+	);
+	return (
+		(going && files.find((e) => e.id === going.episode_id)) ||
+		nextEpisode(t, watch) ||
+		(going?.episode_id ? { id: going.episode_id } : undefined)
+	);
+}
+
+/** Where a poster's play button goes, resuming an unfinished play. */
+export function playHref(t: Title, kind: Kind, watch: Watch[]): string {
+	const resuming = progressOf(t, kind, watch) > 0;
+	return kind === "movies"
+		? playUrl("movies", t.id, undefined, resuming)
+		: playUrl("series", t.id, episodeFor(t, watch)?.id, resuming);
 }

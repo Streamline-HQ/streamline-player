@@ -20,7 +20,7 @@ export default async (ctx) => {
 
   await app.goto(`${side.url}/settings`);
   await wait(1500);
-  expect("member settings header", [await app.locator('.settings button[title="Server settings"]').count(), await app.locator(".settings .ping").count()], [0, 1]);
+  expect("member settings header", [await app.locator('.settings button.server').count(), await app.locator(".settings .ping").count()], [0, 1]);
   await shot("web-server-member-settings");
   await app.locator("button.account").click();
   await wait(600);
@@ -52,7 +52,7 @@ export default async (ctx) => {
   await dev("role/member");
   await wait(11000);
   expect("demoted leaves", await pathOf(app), "/settings");
-  expect("button gone", await app.locator('.settings button[title="Server settings"]').count(), 0);
+  expect("button gone", await app.locator('.settings button.server').count(), 0);
   expect("403 seen", calls.includes(403), true);
   await app.goto(`${side.url}/admin`);
   await wait(2500);

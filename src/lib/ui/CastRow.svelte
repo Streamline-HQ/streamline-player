@@ -78,6 +78,7 @@ h2 {
 	display: flex;
 	gap: 4px;
 	overflow-x: auto;
+	scrollbar-width: none;
 }
 
 .castc {

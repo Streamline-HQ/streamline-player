@@ -50,7 +50,6 @@ const TEXT: Record<TextId, () => string> = {
 	btn_scanning: i18n.server_btn_scanning,
 	btn_download: i18n.server_btn_download,
 	btn_revoke: i18n.server_btn_revoke,
-	btn_end: i18n.server_btn_end,
 	tile_streams: i18n.server_tile_streams,
 	tile_pairing: i18n.server_tile_pairing,
 	tile_storage: i18n.server_tile_storage,

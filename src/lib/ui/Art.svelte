@@ -17,12 +17,18 @@ $effect(() => {
 	failed = false;
 	loaded = false;
 });
-// A cached image can finish before the handlers are attached.
+// A cached image can finish before the handlers are attached. `complete` alone is no verdict:
+// WebKit also says it of an image it has not decoded or has put off loading, with no size yet,
+// so a refusal here is left to the handlers.
 $effect(() => {
-	if (img?.complete) {
-		if (img.naturalWidth > 0) loaded = true;
-		else failed = true;
-	}
+	const shown = src;
+	if (img?.complete)
+		img.decode().then(
+			() => {
+				if (src === shown) loaded = true;
+			},
+			() => {},
+		);
 });
 </script>
 

@@ -1,4 +1,5 @@
 <script lang="ts" generics="V extends string">
+import Tip from "#lib/ui/Tip.svelte";
 import Icon, { type IconName } from "#lib/ui/Icon.svelte";
 
 let {
@@ -20,9 +21,9 @@ let {
 			type="button"
 			aria-pressed={value === o.value}
 			aria-label={o.label}
-			title={o.label}
 			onclick={() => onchange(o.value)}
 		>
+			<Tip text={o.label} />
 			<Icon name={o.icon} />
 		</button>
 	{/each}

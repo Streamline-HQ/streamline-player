@@ -61,7 +61,7 @@ for (const [k, want] of [
 	["M", "mute"],
 ] as const)
 	eq(keyFor(press(k), idle), want, k);
-eq(keyFor(press("q"), idle), null);
+eq(keyFor(press("z"), idle), null);
 eq(keyFor(press("Escape"), { ...idle, menuOpen: true, fullscreen: true }), "closeMenu");
 eq(keyFor(press("Escape"), { ...idle, fullscreen: true }), "exitFullscreen");
 eq(keyFor(press("Escape"), idle), "exit");
@@ -83,7 +83,16 @@ eq(endsAt(new Date(2026, 10, 2, 21, 14), 5400, 1, "en-GB"), "22:44");
 eq(endsAt(new Date(2026, 10, 2, 21, 14), 5400, 2, "en-GB"), "21:59");
 eq(endsAt(new Date(2026, 10, 2, 23, 50), 1200, 1, "en-US"), "00:10");
 
-const watched = [{ media_id: "m2", position_seconds: 120, duration_seconds: 3000, watched: false }];
+const watched = [
+	{
+		media_id: "m2",
+		series_id: 1,
+		episode_id: 11,
+		position_seconds: 120,
+		duration_seconds: 3000,
+		watched: false,
+	},
+];
 const title = {
 	id: 1,
 	title: "Show",
@@ -170,6 +179,8 @@ eq(
 	film.view.more.every((m: { href: string }) => !m.href.endsWith("/movies/5")),
 	true,
 );
+// Without an episode, the one being watched plays, as Play on the title's page would start.
+eq((await loadLaunch(source, "series", 1, null, true)).key, "m2");
 let failed = "";
 await loadLaunch(source, "series", 1, 99, false).catch((e: Error) => (failed = e.message));
 eq(failed, "no episode 99");

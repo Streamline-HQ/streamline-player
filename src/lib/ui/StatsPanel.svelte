@@ -9,14 +9,14 @@ let {
 	onclose,
 }: { title: string; closeLabel: string; rows: StatRow[]; onclose: () => void } = $props();
 
-const pop = (_: Element) => ({
-	duration: 220,
+const pop = (_: Element, { duration = 110 } = {}) => ({
+	duration,
 	css: (t: number) =>
 		`opacity:${t};transform:translateY(${(1 - t) * -6}px) scale(${0.98 + 0.02 * t})`,
 });
 </script>
 
-<div class="sl-stats" in:pop|global out:pop|global>
+<div class="sl-stats" in:pop|global out:pop|global={{ duration: 80 }}>
 	<div class="head">
 		<span>{title}</span>
 		<button type="button" class="close" aria-label={closeLabel} onclick={onclose}>
@@ -44,9 +44,7 @@ const pop = (_: Element) => ({
 	padding: 14px 16px;
 	border: 1px solid rgba(255, 255, 255, 0.1);
 	border-radius: var(--radius-player-controls);
-	background: rgba(5, 5, 8, 0.78);
-	backdrop-filter: blur(14px);
-	-webkit-backdrop-filter: blur(14px);
+	background: rgb(5, 5, 8);
 	font: 400 11.5px / 1.65 var(--font-mono);
 	color: var(--player-ink-muted);
 	transform-origin: 100% 0;

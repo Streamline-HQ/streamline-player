@@ -1,9 +1,11 @@
-import type { ChoiceKey } from "#lib/core/prefs.svelte.ts";
+import { type ChoiceKey, myLanguage } from "#lib/core/prefs.svelte.ts";
 import { m as i18n } from "#lib/paraglide/messages.js";
+import { getLocale } from "#lib/paraglide/runtime.js";
 
 // Stored values stay English (the player's rules read them); only what is shown is translated.
 const VALUES: Record<string, () => string> = {
 	Auto: i18n.value_auto,
+	"App language": i18n.value_app_language,
 	Original: i18n.value_original,
 	"Original language": i18n.value_original_language,
 	English: i18n.value_english,
@@ -18,6 +20,12 @@ const VALUES: Record<string, () => string> = {
 	"Pass through": i18n.value_pass_through,
 	"Decode here": i18n.value_decode_here,
 };
+
+/** The subtitle language as a sentence names it: "French" in English, "français" in French. */
+export const subtitleLanguageName = () =>
+	new Intl.DisplayNames([getLocale()], { type: "language" }).of(
+		myLanguage() === "French" ? "fr" : "en",
+	) ?? myLanguage();
 
 export const shown = (key: ChoiceKey, v: string) => {
 	// Each app language is named in itself, so it can be found from any other.

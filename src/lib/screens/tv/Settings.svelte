@@ -5,7 +5,7 @@ import LoadFailed from "#lib/tv/LoadFailed.svelte";
 import TvScreen from "#lib/tv/TvScreen.svelte";
 import { focus, focusDefault } from "#lib/tv/focus.ts";
 import { prefs, setPref, type ChoiceKey, type ToggleKey } from "#lib/core/prefs.svelte.ts";
-import { QUALITIES, shown } from "#lib/core/prefs-labels.ts";
+import { QUALITIES, shown, subtitleLanguageName } from "#lib/core/prefs-labels.ts";
 import { seen } from "#lib/core/devices.ts";
 import {
 	authState,
@@ -154,13 +154,22 @@ const sections = $derived.by((): Section[] => {
 					"English",
 					"French",
 				]),
+				choice(i18n.settings_subtitle_language(), "subsLang", [
+					"App language",
+					"English",
+					"French",
+				]),
 				choice(
 					i18n.settings_subtitles(),
 					"subsMode",
 					["Auto", "Always", "Off"],
 					i18n.settings_subtitles_desc(),
 				),
-				toggle(i18n.settings_anime(), "animeRule", i18n.settings_anime_desc()),
+				toggle(
+					i18n.settings_anime(),
+					"animeRule",
+					i18n.settings_anime_desc({ language: subtitleLanguageName() }),
+				),
 				choice(i18n.settings_size(), "subSize", ["S", "M", "L", "XL"]),
 				choice(i18n.settings_background(), "subBg", ["None", "Shadow", "Box"]),
 				choice(i18n.settings_color(), "subColor", ["White", "Yellow"]),

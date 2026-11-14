@@ -7,12 +7,17 @@ import { bulkState, buttonState } from "#lib/core/downloads-view.ts";
 import { dl, entry } from "#lib/core/downloads.svelte.ts";
 import { lib, loadLibrary, loadSeasons, applyWatch } from "#lib/core/library.svelte.ts";
 import {
+	cycleWatch,
 	FLAGS,
 	genres,
+	episodeFor,
+	playHref,
 	progressOf,
 	SORTS,
 	type Sort,
 	toggleFlag,
+	WATCH_FLAGS,
+	watchFlag,
 	type Flag,
 	type Layout,
 	type View,
@@ -67,7 +72,7 @@ const PAD_X = 56;
 const TOP = 92;
 const MIN_COL = 196;
 const ALL = "__all";
-const LIST_COLS = "32px minmax(0,2.2fr) 74px 58px 104px minmax(0,1.4fr) 76px 84px";
+const LIST_COLS = "32px minmax(0,2.2fr) 74px 58px 104px minmax(0,1.4fr) 76px 84px 150px";
 const port = { library, watchState, home, title };
 
 let { kind }: { kind: Kind } = $props();
@@ -82,9 +87,11 @@ const flaggedTotal = $derived(visible(base, kind, lib.watch, { ...view, genre: n
 let genreMenu = $state(false);
 const genrePanel = presence(() => genreMenu, 170);
 
+const watchPick = $derived(watchFlag(view.flags));
 const flagLabel: Record<Flag, string> = {
 	unwatched: i18n.library_unwatched(),
 	progress: i18n.library_in_progress(),
+	watched: i18n.library_watched(),
 	uhd: "4K",
 	hdr: "HDR",
 };
@@ -116,30 +123,31 @@ const sub = (t: Title) => {
 	return [t.year, tech].filter(Boolean).join(" · ");
 };
 
-function episodeFor(t: Title) {
-	const going = lib.watch.find((w) => w.series_id === t.id && !w.watched && w.position_seconds > 0);
-	const files = (t.seasons ?? []).flatMap((s) =>
-		s.episodes.filter((e) => e.has_file).map((e) => ({ ...e, season: s.number })),
-	);
-	return (
-		(going && files.find((e) => e.id === going.episode_id)) ||
-		nextEpisode(t, lib.watch) ||
-		(going?.episode_id ? { id: going.episode_id } : undefined)
-	);
-}
+const play = (t: Title) => goto(playHref(t, kind, lib.watch));
 
-function play(t: Title) {
-	const resuming = progressOf(t, kind, lib.watch) > 0;
-	if (kind === "movies") return goto(playUrl("movies", t.id, undefined, resuming));
-	return goto(playUrl("series", t.id, episodeFor(t)?.id, resuming));
-}
+const markFor = (t: Title, watched: boolean) => ({
+	on: watched,
+	label: watched
+		? i18n.library_mark_unwatched({ title: t.title })
+		: i18n.library_mark_watched({ title: t.title }),
+	onclick: () => toggleMark(t),
+});
+
+const langFor = (t: Title) =>
+	kind === "movies"
+		? {
+				own: !!choices[`movies:${t.id}`],
+				label: langLabel(t),
+				onclick: (el: HTMLElement) => openLang(t, el),
+			}
+		: undefined;
 
 function playLabel(t: Title) {
 	if (kind === "movies")
 		return progressOf(t, kind, lib.watch) > 0
 			? i18n.library_resume_title({ title: t.title })
 			: i18n.library_play_title({ title: t.title });
-	const ep = episodeFor(t);
+	const ep = episodeFor(t, lib.watch);
 	return ep && "number" in ep
 		? i18n.library_play_episode({ title: t.title, season: ep.season, episode: ep.number })
 		: i18n.library_play_title({ title: t.title });
@@ -425,7 +433,13 @@ const heads: { label: () => string; sort?: Sort; end?: boolean }[] = [
 						{/if}
 					</div>
 					<fieldset class="flags" aria-label={i18n.library_show_only()}>
-						{#each FLAGS as f (f)}
+						<Chip
+							pressed={watchPick !== null}
+							onclick={() => set({ flags: cycleWatch(view.flags) })}
+						>
+							{watchPick ? flagLabel[watchPick] : i18n.library_watch_state()}
+						</Chip>
+						{#each FLAGS.filter((f) => !WATCH_FLAGS.includes(f)) as f (f)}
 							<Chip
 								pressed={view.flags.includes(f)}
 								onclick={() => set({ flags: toggleFlag(view.flags, f) })}
@@ -465,20 +479,8 @@ const heads: { label: () => string; sort?: Sort; end?: boolean }[] = [
 							{watched}
 							progress={progressOf(t, kind, lib.watch)}
 							playLabel={playLabel(t)}
-							mark={{
-								on: watched,
-								label: watched
-									? i18n.library_mark_unwatched({ title: t.title })
-									: i18n.library_mark_watched({ title: t.title }),
-								onclick: () => toggleMark(t),
-							}}
-							lang={kind === "movies"
-								? {
-										own: !!choices[`movies:${t.id}`],
-										label: langLabel(t),
-										onclick: (el) => openLang(t, el),
-									}
-								: undefined}
+							mark={markFor(t, watched)}
+							lang={langFor(t)}
 							download={dlFor(t)}
 							onplay={() => play(t)}
 							onclick={() => open(t)}
@@ -516,6 +518,11 @@ const heads: { label: () => string; sort?: Sort; end?: boolean }[] = [
 							audio={[q?.audio, q?.channels].filter(Boolean).join(" ")}
 							size={sizeText(q?.size)}
 							added={addedText(t.added_at, now)}
+							playLabel={playLabel(t)}
+							mark={markFor(t, watchedTitle(t, kind, lib.watch))}
+							lang={langFor(t)}
+							download={dlFor(t)}
+							onplay={() => play(t)}
 							onclick={() => open(t)}
 						/>
 					{/each}
