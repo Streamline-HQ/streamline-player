@@ -10,7 +10,7 @@ let
   format = pkgs.formats.yaml { };
   # The package's own tools, rebuilt around the chosen ffmpeg. ffmpeg is only
   # in passthru, so this does not rebuild the engine.
-  tools = (cfg.package.override { ffmpeg = cfg.ffmpeg.package; }).tools;
+  tools = (cfg.package.override { engineFfmpeg = cfg.ffmpeg.package; }).tools;
 in
 {
   configFile = format.generate "streamline-engine.yaml" (

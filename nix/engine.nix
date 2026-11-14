@@ -3,9 +3,16 @@
   callPackage,
   rustPlatform,
   symlinkJoin,
-  ffmpeg-full,
+  ffmpeg-headless,
   dovi-tool,
-  ffmpeg ? ffmpeg-full,
+  # Not named `ffmpeg`: callPackage would fill that from nixpkgs and this default would never
+  # apply. nixpkgs' ffmpeg and ffmpeg-headless both lack libplacebo, which tonemaps, and
+  # chromaprint, the muxer the intro job fingerprints with; ffmpeg-full has them and is three
+  # times the size, most of it desktop libraries.
+  engineFfmpeg ? ffmpeg-headless.override {
+    withPlacebo = true;
+    withChromaprint = true;
+  },
 }:
 let
   source = callPackage ./source.nix { };
@@ -28,7 +35,7 @@ rustPlatform.buildRustPackage {
   passthru.tools = symlinkJoin {
     name = "streamline-engine-tools";
     paths = [
-      (lib.getBin ffmpeg)
+      (lib.getBin engineFfmpeg)
       dovi-tool
     ];
   };

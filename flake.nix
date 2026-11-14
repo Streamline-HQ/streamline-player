@@ -250,6 +250,11 @@
               for tool in ffmpeg ffprobe dovi_tool; do
                 test -x ${engine.tools}/bin/$tool || { echo "engine tools lack $tool"; exit 1; }
               done
+              # nixpkgs' default ffmpeg builds with neither, and the engine then tonemaps on
+              # the CPU and its intro job fails.
+              ffmpeg=${engine.tools}/bin/ffmpeg
+              $ffmpeg -hide_banner -filters | grep -qw libplacebo || { echo "ffmpeg has no libplacebo filter"; exit 1; }
+              $ffmpeg -hide_banner -muxers | grep -qw chromaprint || { echo "ffmpeg has no chromaprint muxer"; exit 1; }
               touch $out
             '';
 
