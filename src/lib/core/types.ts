@@ -283,3 +283,18 @@ export type LogLine = {
 	source: string;
 	message: string;
 };
+
+export type DownloadQuality = "original" | "1080p" | "720p";
+export type DownloadJob = {
+	id: string;
+	media_id: string;
+	state: "preparing" | "ready" | "failed";
+	/** 0 to 1; 1 once ready. */
+	progress: number;
+	/** Bytes, once ready. */
+	size: number | null;
+	container: string | null;
+	/** The engine's signed /dl URL, once ready; minted again on every read. */
+	url: string | null;
+	error?: { code: string; message?: string };
+};

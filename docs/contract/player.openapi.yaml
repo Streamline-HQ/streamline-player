@@ -142,22 +142,37 @@ paths:
       - $ref: "#/components/parameters/MediaId"
     put:
       operationId: setWatched
-      description: The Mark watched and Mark unwatched actions on Detail.
+      description: |
+        The Mark watched and Mark unwatched actions on Detail, and the sync of what a desktop app watched from a download while the server was out of reach.
+        The second body carries a position and the time it was recorded; the server applies it only when `at` is later than the state's `updated_at`,
+        works out `watched` as a heartbeat does, and answers with the state it now holds, whether or not it applied.
       requestBody:
         required: true
         content:
           application/json:
             schema:
-              type: object
-              required: [watched]
-              properties:
-                watched: { type: boolean }
+              oneOf:
+                - type: object
+                  required: [watched]
+                  properties:
+                    watched: { type: boolean }
+                - type: object
+                  required: [position_seconds, duration_seconds, at]
+                  properties:
+                    position_seconds: { type: integer, minimum: 0 }
+                    duration_seconds: { type: integer, minimum: 0 }
+                    at: { type: string, description: ISO 8601 }
       responses:
         "200":
           description: The state after the change.
           content:
             application/json:
               schema: { $ref: "#/components/schemas/Watch" }
+        "400":
+          description: A body that is neither shape, or an `at` that is not a time. `error.code` is `invalid_request`.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
         default: { $ref: "#/components/responses/Error" }
   /me:
     get:
@@ -230,7 +245,7 @@ paths:
   /activity:
     get:
       operationId: listActivity
-      description: Activity. What happened on the server, newest first, at most 100 events, with the caller's read state.
+      description: Activity. What happened on the server, newest first, at most 100 events, with the caller's read state. A `download` event is returned only to the device that made it.
       responses:
         "200":
           description: The feed. Empty for a library with nothing in it.
@@ -302,6 +317,124 @@ paths:
         - $ref: "#/components/parameters/DeviceId"
       responses:
         "204": { description: The device is revoked. }
+        default: { $ref: "#/components/responses/Error" }
+  /downloads:
+    post:
+      operationId: createDownload
+      description: |
+        Downloads. Asks the server to prepare a file for this device: `original` is the file as it is (or a copy of the chosen audio tracks), `1080p` and `720p` a capped MP4.
+        Only an app's device key may call it; a browser's bearer token gets 403 `forbidden`. Asking again for the same media, quality and audio tracks answers the same job.
+      security:
+        - deviceKey: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [media_id, quality, audio_indexes, capabilities]
+              properties:
+                media_id: { type: string }
+                quality: { $ref: "#/components/schemas/DownloadQuality" }
+                audio_indexes:
+                  type: array
+                  minItems: 1
+                  items: { type: integer, minimum: 0 }
+                  description: Stream indexes as the media's tracks number them.
+                capabilities: { $ref: "#/components/schemas/Capabilities" }
+      responses:
+        "201":
+          description: The job to poll.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/DownloadJob" }
+        "400":
+          description: A missing field, no audio track, or an index the file lacks. `error.code` is `invalid_request`.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "403":
+          description: Not an app's device key. `error.code` is `forbidden`.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "404":
+          description: No such media. `error.code` is `not_found`.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "429":
+          description: The engine's queue is full. `error.code` is `queue_full`.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        default: { $ref: "#/components/responses/Error" }
+  /downloads/{downloadId}:
+    parameters:
+      - $ref: "#/components/parameters/DownloadId"
+    get:
+      operationId: getDownload
+      description: |
+        Downloads. The job's state. Once `ready`, `url` is the engine's signed `/dl` address, minted again on every call and good for 12 hours.
+        A download belongs to the device that made it: another device, and an unknown ID, get 404 `not_found`; a browser's bearer token gets 403 `forbidden`.
+      security:
+        - deviceKey: []
+      responses:
+        "200":
+          description: The job.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/DownloadJob" }
+        "403":
+          description: Not an app's device key. `error.code` is `forbidden`.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "404":
+          description: Not this device's download. `error.code` is `not_found`.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        default: { $ref: "#/components/responses/Error" }
+    delete:
+      operationId: deleteDownload
+      description: Downloads. Cancels the job and deletes it on the engine. An unknown or already deleted ID answers 204 as well.
+      security:
+        - deviceKey: []
+      responses:
+        "204": { description: The job is gone. }
+        "403":
+          description: Not an app's device key. `error.code` is `forbidden`.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        default: { $ref: "#/components/responses/Error" }
+  /downloads/{downloadId}/complete:
+    post:
+      operationId: completeDownload
+      description: |
+        Downloads. The app has the whole file. Streamline deletes the engine's job and records a `download` event in Activity for this device, unread.
+      security:
+        - deviceKey: []
+      parameters:
+        - $ref: "#/components/parameters/DownloadId"
+      responses:
+        "204": { description: The event is recorded and the job deleted. }
+        "403":
+          description: Not an app's device key. `error.code` is `forbidden`.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "404":
+          description: Not this device's download. `error.code` is `not_found`.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "409":
+          description: The job is not `ready`. `error.code` is `not_ready`.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
         default: { $ref: "#/components/responses/Error" }
   /admin/overview:
     get:
@@ -895,6 +1028,11 @@ components:
       in: path
       required: true
       schema: { type: integer }
+    DownloadId:
+      name: downloadId
+      in: path
+      required: true
+      schema: { type: string, pattern: "^[0-9a-f]{32}$" }
     DeviceId:
       name: deviceId
       in: path
@@ -1176,6 +1314,7 @@ components:
         previous: { $ref: "#/components/schemas/FileSummary", description: "upgrade: the file it replaced." }
         device:
           type: object
+          description: "device, and download: the device that made it."
           required: [name, platform]
           properties:
             name: { type: string }
@@ -1429,6 +1568,22 @@ components:
     LogLevel:
       type: string
       enum: [debug, info, warn, error]
+
+    DownloadQuality:
+      type: string
+      enum: [original, 1080p, 720p]
+    DownloadJob:
+      type: object
+      required: [id, media_id, state, progress, size, container, url]
+      properties:
+        id: { type: string, pattern: "^[0-9a-f]{32}$" }
+        media_id: { type: string }
+        state: { type: string, enum: [preparing, ready, failed] }
+        progress: { type: number, minimum: 0, maximum: 1, description: 1 once ready. }
+        size: { type: integer, nullable: true, description: Bytes, once ready. }
+        container: { type: string, nullable: true, description: "mkv, mp4, avi, ... once ready." }
+        url: { type: string, nullable: true, description: The engine's /dl URL with `exp` and `sig`, once ready. }
+        error: { $ref: "#/components/schemas/ErrorBody", description: When failed. }
 
     Capabilities:
       type: object

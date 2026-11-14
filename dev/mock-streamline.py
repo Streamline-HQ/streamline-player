@@ -27,6 +27,9 @@ until /dev/admin/fail/off, POST /dev/admin/scan/finish ends running scans at onc
 /dev/admin/restart-hangs/on|off and /dev/admin/restart/finish
 reshape the demo while it runs.
 
+Downloads (/api/v1/downloads) are for a device key and prepared by the engine's download job; POST /dev/downloads/fail makes
+the next one end failed. A download event reaches only the device that made it.
+
 The public URL defaults to 10.0.2.2, the Android emulator's alias for the host.
 """
 
@@ -127,6 +130,9 @@ REFRESH = {}
 SSO = [{"id": "authentik", "label": "Authentik"}]
 WATCH = {}
 WATCHED_AT = 0.9
+DOWNLOADS = {}
+DOWNLOAD_QUALITIES = {"original": {}, "1080p": {"max_bitrate": 8_000_000, "max_height": 1080}, "720p": {"max_bitrate": 4_000_000, "max_height": 720}}
+DOWNLOAD_FAIL = {"next": False}
 
 with open(os.path.join(os.path.dirname(os.path.abspath(__file__)), "mock-library.json")) as f:
     LIBRARY = json.load(f)
@@ -311,6 +317,44 @@ def note_progress(sid, position):
         "watched": duration > 0 and position >= WATCHED_AT * duration,
         "updated_at": stamp(),
     }
+
+
+def download_url(job):
+    exp = int(time.time()) + MEDIA_TTL
+    sig = hmac.new(args.secret.encode(), f"dl|{job}|{exp}".encode(), hashlib.sha256).hexdigest()
+    return f"{args.public}/dl/{job}?exp={exp}&sig={sig}"
+
+
+def download_view(entry):
+    """The job as the client reads it: the engine's state, with a fresh URL once the file is ready."""
+    view = {"id": entry["id"], "media_id": entry["media_id"], "state": "preparing", "progress": 0, "size": None, "container": None, "url": None}
+    if entry["failed"]:
+        return {**view, "state": "failed", "error": {"code": "prepare_failed", "message": "The server couldn't prepare it."}}
+    st, status = engine("GET", f"/v1/jobs/{entry['id']}")
+    if st != 200 or status["state"] == "failed":
+        return {**view, "state": "failed", "error": {"code": "prepare_failed", "message": (status or {}).get("error") or "The server couldn't prepare it."}}
+    if status["state"] == "done":
+        result = status["result"]
+        return {**view, "state": "ready", "progress": 1, "size": result["size"], "container": result["container"], "url": download_url(entry["id"])}
+    return {**view, "progress": status.get("progress") or 0}
+
+
+def download_event(entry, device):
+    ref = REFS.get(entry["media_id"], {})
+    event = {"id": f"d{entry['id'][:8]}", "kind": "download", "at": stamp(), "read": False, "device": {"name": device["name"], "platform": device["platform"]}, "_device": entry["device"]}
+    if "movie_id" in ref:
+        return {**event, "title": {"kind": "movies", "id": ref["movie_id"]}}
+    show = next((s for s in SERIES if s["id"] == ref.get("series_id")), None)
+    episode = next((e for s in (show or {}).get("seasons", []) for e in s["episodes"] if e["id"] == ref.get("episode_id")), None)
+    return {**event, "title": {"kind": "series", "id": ref["series_id"]}, "season": ref["season"], "episodes": [episode["number"]] if episode else []}
+
+
+def parse_time(text):
+    try:
+        t = datetime.datetime.fromisoformat(text.replace("Z", "+00:00"))
+    except (AttributeError, ValueError):
+        return None
+    return (t if t.tzinfo else t.replace(tzinfo=datetime.UTC)).timestamp()
 
 
 def engine(method, path, body=None):
@@ -1056,6 +1100,8 @@ class Handler(BaseHTTPRequestHandler):
             return
         if self.path.startswith("/api/v1/admin/"):
             return self.admin("GET")
+        if self.path.startswith("/api/v1/downloads"):
+            return self.downloads("GET")
         m = re.fullmatch(r"/api/v1/auth/device/([A-Za-z0-9-]+)", self.path)
         if m and m[1] not in ("code", "token"):
             found = self.approver_pairing(m[1])
@@ -1109,7 +1155,8 @@ class Handler(BaseHTTPRequestHandler):
         if self.path == "/api/v1/me":
             return self.reply(200, profile())
         if self.path == "/api/v1/activity":
-            return self.reply(200, {"items": ACTIVITY})
+            me = self.headers.get("X-API-Key") or ""
+            return self.reply(200, {"items": [{k: v for k, v in e.items() if k != "_device"} for e in ACTIVITY if e.get("_device", me) == me][:100]})
         if self.path == "/api/v1/devices":
             return self.reply(200, {"items": device_items(self.headers)})
         m = re.fullmatch(r"/api/v1/playback/media/([^/]+)/tracks", self.path)
@@ -1127,6 +1174,8 @@ class Handler(BaseHTTPRequestHandler):
             return
         if self.path.startswith("/api/v1/admin/"):
             return self.admin("POST")
+        if self.path.startswith("/api/v1/downloads"):
+            return self.downloads("POST")
         # Dev only: what an admin does from Streamline's web app. Both answer the next heartbeat.
         m = re.fullmatch(r"/dev/stop(?:/([0-9a-f]{32}))?", self.path)
         if m:
@@ -1193,6 +1242,9 @@ class Handler(BaseHTTPRequestHandler):
             for scan in SCANS.values():
                 scan["t0"] -= scan["dur"]
             tick_scans()
+            return self.reply(204)
+        if self.path == "/dev/downloads/fail":
+            DOWNLOAD_FAIL["next"] = True
             return self.reply(204)
         if self.path == "/dev/activity/unread":
             for event in ACTIVITY:
@@ -1302,11 +1354,87 @@ class Handler(BaseHTTPRequestHandler):
         m = re.fullmatch(r"/api/v1/watchstate/(.+)", self.path)
         if not m or m[1] not in MEDIA:
             return self.reply(404, {"error": {"code": "not_found"}})
+        b = self.body()
+        if "position_seconds" in b or "at" in b:
+            return self.offline_progress(m[1], b)
         WATCH[m[1]] = {
             **REFS.get(m[1], {}), "media_id": m[1], "position_seconds": 0, "duration_seconds": 0,
-            "watched": self.body().get("watched", False), "updated_at": stamp(),
+            "watched": b.get("watched", False), "updated_at": stamp(),
         }
         self.reply(200, WATCH[m[1]])
+
+    def offline_progress(self, media_id, b):
+        """Progress a desktop app recorded from a download: kept only when newer than what the server holds."""
+        position, duration, at = b.get("position_seconds"), b.get("duration_seconds"), parse_time(b.get("at"))
+        ints = all(isinstance(v, int) and not isinstance(v, bool) and v >= 0 for v in (position, duration))
+        if not ints or at is None:
+            return self.reply(400, {"error": {"code": "invalid_request"}})
+        held = WATCH.get(media_id)
+        if held is None or at > (parse_time(held["updated_at"]) or 0):
+            WATCH[media_id] = {
+                **REFS.get(media_id, {}), "media_id": media_id, "position_seconds": position, "duration_seconds": duration,
+                "watched": duration > 0 and position >= WATCHED_AT * duration,
+                "updated_at": datetime.datetime.fromtimestamp(at, datetime.UTC).isoformat(),
+            }
+        self.reply(200, WATCH[media_id])
+
+    def downloads(self, method):
+        """Downloads: /api/v1/downloads/*, for an app's device key; a browser has none."""
+        if bearer_device(self.headers) is not None:
+            return self.reply(403, {"error": {"code": "forbidden"}})
+        key = self.headers.get("X-API-Key")
+        device = key or ""
+        invalid = lambda: self.reply(400, {"error": {"code": "invalid_request"}})
+        not_found = lambda: self.reply(404, {"error": {"code": "not_found"}})
+        if self.path == "/api/v1/downloads" and method == "POST":
+            b = self.body()
+            indexes, quality, caps = b.get("audio_indexes"), b.get("quality"), b.get("capabilities")
+            if (not isinstance(b.get("media_id"), str) or quality not in DOWNLOAD_QUALITIES or not isinstance(caps, dict)
+                    or not isinstance(indexes, list) or not indexes or not all(isinstance(i, int) and not isinstance(i, bool) for i in indexes)):
+                return invalid()
+            path = MEDIA.get(b["media_id"])
+            if path is None:
+                return not_found()
+            if path in ANALYSIS and not all(i in {a["index"] for a in ANALYSIS[path].get("audio", [])} for i in indexes):
+                return invalid()
+            if DOWNLOAD_FAIL["next"]:
+                DOWNLOAD_FAIL["next"] = False
+                entry = {"id": secrets.token_hex(16), "media_id": b["media_id"], "device": device, "failed": True}
+                DOWNLOADS[entry["id"]] = entry
+                return self.reply(201, download_view(entry))
+            seed = f"{job_id('download', path)}|{device}|{quality}|{sorted(set(indexes))}"
+            entry = {"id": hashlib.md5(seed.encode()).hexdigest(), "media_id": b["media_id"], "device": device, "failed": False}
+            st, resp = engine("POST", "/v1/jobs", {"job_id": entry["id"], "type": "download", "priority": "background", "path": path,
+                                                   "capabilities": caps, "audio_indexes": indexes, **DOWNLOAD_QUALITIES[quality]})
+            if st == 429:
+                return self.reply(429, {"error": {"code": "queue_full"}})
+            if st >= 400 and (resp or {}).get("code") != "job_exists":
+                print(f"download {b['media_id']}: {st} {resp}", flush=True)
+                return invalid() if st == 400 else self.reply(502, {"error": {"code": "engine_error"}})
+            DOWNLOADS[entry["id"]] = entry
+            return self.reply(201, download_view(entry))
+        m = re.fullmatch(r"/api/v1/downloads/([0-9a-f]{32})(/complete)?", self.path)
+        if not m:
+            return not_found()
+        entry = DOWNLOADS.get(m[1])
+        if method == "DELETE" and not m[2]:
+            if entry is not None and entry["device"] == device:
+                DOWNLOADS.pop(m[1])
+                if not entry["failed"]:
+                    engine("DELETE", f"/v1/jobs/{m[1]}")
+            return self.reply(204)
+        if entry is None or entry["device"] != device:
+            return not_found()
+        if method == "GET" and not m[2]:
+            return self.reply(200, download_view(entry))
+        if method == "POST" and m[2]:
+            if download_view(entry)["state"] != "ready":
+                return self.reply(409, {"error": {"code": "not_ready"}})
+            DOWNLOADS.pop(m[1])
+            engine("DELETE", f"/v1/jobs/{m[1]}")
+            ACTIVITY.insert(0, download_event(entry, KEYS.get(key, {"name": "Desktop · app", "platform": "Linux"})))
+            return self.reply(204)
+        return not_found()
 
     def do_PATCH(self):
         if self.refused():
@@ -1337,6 +1465,8 @@ class Handler(BaseHTTPRequestHandler):
             return
         if self.path.startswith("/api/v1/admin/"):
             return self.admin("DELETE")
+        if self.path.startswith("/api/v1/downloads"):
+            return self.downloads("DELETE")
         if self.path == "/api/v1/me/picture":
             PICTURE.update(data=None, type="")
             return self.reply(204)
