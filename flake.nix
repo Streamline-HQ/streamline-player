@@ -121,6 +121,8 @@
               pname = "streamline-workspace-${name}";
               src = (pkgs.callPackage ./nix/source.nix { }).app;
               nativeBuildInputs = old.nativeBuildInputs ++ [
+                # The sandbox has no CA bundle, and the app's HTTP client refuses to start without one.
+                pkgs.cacert
                 pkgs.pkg-config
                 pkgs.ffmpeg-full
                 pkgs.dovi-tool
