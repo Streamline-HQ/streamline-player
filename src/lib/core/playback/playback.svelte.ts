@@ -17,6 +17,7 @@ import {
 	languageLabel,
 	modeName,
 	originalName,
+	resName,
 	subInfo,
 } from "#lib/core/playback/names.ts";
 import type {
@@ -486,6 +487,16 @@ export class Playback {
 		}
 	}
 
+	/**
+	 * A direct session hands over the whole file, every audio track in it, so the player has to be
+	 * told which one: its 1-based place among the file's audio tracks. Any other mode carries one.
+	 */
+	#fileAudio() {
+		if (this.session?.mode !== "direct") return undefined;
+		const at = this.tracks?.audio.findIndex((t) => t.index === this.selectedAudio?.index) ?? -1;
+		return at < 0 ? undefined : at + 1;
+	}
+
 	async pickAudio(t: AudioTrack) {
 		if (t.index === this.selectedAudio?.index) return;
 		this.audioPick = t.index;
@@ -574,7 +585,7 @@ export class Playback {
 				text:
 					s.video.action === "copy"
 						? i18n.player_toast_audio_to({ audio: audioOutName(s) })
-						: `${s.video.height}p ${CODEC_NAMES[s.video.codec] ?? s.video.codec}`,
+						: `${resName(s.video.width, s.video.height)} ${CODEC_NAMES[s.video.codec] ?? s.video.codec}`,
 			});
 	}
 
@@ -614,7 +625,12 @@ export class Playback {
 			await this.#cmd("frameRate", { mode: FRAME_RATE_MODE[prefs.frameRate] ?? "off" }).catch(
 				() => {},
 			);
-			await this.#cmd("load", { url: started.url, decode: decodeHere(), at });
+			await this.#cmd("load", {
+				url: started.url,
+				decode: decodeHere(),
+				at,
+				audio: this.#fileAudio(),
+			});
 			if (!this.#paused) await this.#cmd("play");
 			if (this.halt) this.#unhalt();
 			this.#ui.started?.();
@@ -833,7 +849,12 @@ export class Playback {
 				position: at,
 			});
 			if (wasDirect !== (this.session.mode === "direct")) this.measured = null;
-			await this.#cmd("load", { url: this.session.url, decode: decodeHere(), at });
+			await this.#cmd("load", {
+				url: this.session.url,
+				decode: decodeHere(),
+				at,
+				audio: this.#fileAudio(),
+			});
 			if (!this.#paused) await this.#cmd("play");
 		} catch (e) {
 			if (String(e).includes('"not_found"')) {

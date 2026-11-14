@@ -90,10 +90,13 @@ impl Player {
 
     /// Returns once the file is open and at `at`. A failure reaches the page as an `error`
     /// event, like ExoPlayer's.
-    fn load(&self, url: &str, at: f64) -> Done {
+    fn load(&self, url: &str, at: f64, audio: Option<u32>) -> Done {
         self.direct.store(!url.contains(".m3u8"), Ordering::Relaxed);
         *self.loading.lock().unwrap() = true;
         self.mpv.set("pause", "yes")?;
+        // `aid` outlives the file it was set for, so a stream with one track resets it.
+        self.mpv
+            .set("aid", &audio.map_or("auto".into(), |a| a.to_string()))?;
         if let Err(e) = self.mpv.command(&["loadfile", url, "replace"]) {
             self.finish_load();
             return Err(e);
@@ -185,6 +188,7 @@ fn watch(p: Arc<Player>) {
         match p.mpv.wait_event(TICK) {
             Event::Shutdown => return,
             Event::FileLoaded => p.finish_load(),
+            Event::Restarted => p.emit_position(),
             Event::EndFile(Some(error)) => {
                 p.finish_load();
                 p.emit("error", json!({ "code": "mpv", "message": error }));
@@ -357,9 +361,14 @@ pub fn viewport(
 }
 
 #[tauri::command]
-pub async fn load(player: State<'_, Arc<Player>>, url: String, at: Option<f64>) -> Done {
+pub async fn load(
+    player: State<'_, Arc<Player>>,
+    url: String,
+    at: Option<f64>,
+    audio: Option<u32>,
+) -> Done {
     let p = player.inner().clone();
-    tauri::async_runtime::spawn_blocking(move || p.load(&url, at.unwrap_or(0.0)))
+    tauri::async_runtime::spawn_blocking(move || p.load(&url, at.unwrap_or(0.0), audio))
         .await
         .map_err(|e| e.to_string())?
 }
@@ -386,7 +395,6 @@ pub fn seek(player: State<'_, Arc<Player>>, seconds: f64) -> Done {
     let _ = player
         .mpv
         .command(&["seek", &seconds.max(0.0).to_string(), "absolute"]);
-    player.emit_position();
     Ok(())
 }
 

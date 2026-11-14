@@ -26,6 +26,7 @@ struct RawEndFile {
 }
 
 const EVENT_SHUTDOWN: c_int = 1;
+const EVENT_PLAYBACK_RESTART: c_int = 21;
 const EVENT_END_FILE: c_int = 7;
 const EVENT_FILE_LOADED: c_int = 8;
 const END_FILE_REASON_ERROR: c_int = 4;
@@ -65,6 +66,8 @@ pub enum Event {
     FileLoaded,
     /// A file stopped for good; `Some` when it failed.
     EndFile(Option<String>),
+    /// Playback picked up again after a seek, so `time-pos` is the new place.
+    Restarted,
     Shutdown,
 }
 
@@ -161,6 +164,7 @@ impl Mpv {
                     (end.reason == END_FILE_REASON_ERROR).then(|| error_string(end.error)),
                 )
             }
+            EVENT_PLAYBACK_RESTART => Event::Restarted,
             EVENT_SHUTDOWN => Event::Shutdown,
             _ => Event::Nothing,
         }

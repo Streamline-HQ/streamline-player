@@ -21,6 +21,7 @@ const PARAM_GL_INIT: c_int = 2;
 const PARAM_GL_FBO: c_int = 3;
 const PARAM_FLIP_Y: c_int = 4;
 const PARAM_WL_DISPLAY: c_int = 9;
+const PARAM_BLOCK_FOR_TARGET_TIME: c_int = 12;
 const GL_FRAMEBUFFER_BINDING: u32 = 0x8CA6;
 
 #[repr(C)]
@@ -152,6 +153,9 @@ fn render(area: &gtk::GLArea) -> glib::Propagation {
         internal_format: 0,
     };
     let mut flip: c_int = 1;
+    // GTK also redraws the area whenever the page above it repaints. mpv would hold each of
+    // those redraws until the video frame's display time, stalling the page for frames on end.
+    let mut block: c_int = 0;
     let mut params = [
         RenderParam {
             kind: PARAM_GL_FBO,
@@ -160,6 +164,10 @@ fn render(area: &gtk::GLArea) -> glib::Propagation {
         RenderParam {
             kind: PARAM_FLIP_Y,
             data: (&raw mut flip).cast(),
+        },
+        RenderParam {
+            kind: PARAM_BLOCK_FOR_TARGET_TIME,
+            data: (&raw mut block).cast(),
         },
         RenderParam {
             kind: PARAM_END,
@@ -234,15 +242,11 @@ pub fn place(rect: Option<Rect>) {
 /// Raises subtitles `px` CSS pixels above where mpv puts them.
 pub fn lift(px: f64) {
     LIFT.with(|l| l.set(px));
-    apply_layout();
+    apply_lift();
 }
 
-// The margins are ratios and a lift is in the window's own pixels, so both follow a resize.
-fn apply_layout() {
-    let Some(player) = PLAYER.with(|p| p.borrow().clone()) else {
-        return;
-    };
-    let Some((width, height, scale)) = AREA.with(|a| {
+fn area_size() -> Option<(f64, f64, f64)> {
+    AREA.with(|a| {
         a.borrow().as_ref().map(|a| {
             (
                 f64::from(a.allocated_width()),
@@ -250,16 +254,38 @@ fn apply_layout() {
                 f64::from(a.scale_factor()),
             )
         })
-    }) else {
+    })
+}
+
+// The margins are ratios and a lift is in the window's own pixels, so both follow a resize.
+fn apply_layout() {
+    let Some(player) = PLAYER.with(|p| p.borrow().clone()) else {
+        return;
+    };
+    let Some((width, height, _)) = area_size() else {
         return;
     };
     let ratios = probe::margin_ratios(RECT.with(Cell::get), width, height);
     for (side, ratio) in ["left", "right", "top", "bottom"].iter().zip(ratios) {
         let _ = player.set(&format!("video-margin-ratio-{side}"), &ratio.to_string());
     }
+    apply_lift();
+}
+
+fn apply_lift() {
+    let Some(player) = PLAYER.with(|p| p.borrow().clone()) else {
+        return;
+    };
+    let Some((_, height, scale)) = area_size() else {
+        return;
+    };
     let margin = probe::sub_margin_y(LIFT.with(Cell::get), scale, height * scale);
-    // mpv takes whole pixels here and refuses a fraction.
-    let _ = player.set("sub-margin-y", &(margin.round() as i64).to_string());
+    // Off the GTK thread: mpv answers a property write between two frames, and waiting for it
+    // here stalls the page just as the controls start to fade.
+    std::thread::spawn(move || {
+        // mpv takes whole pixels here and refuses a fraction.
+        let _ = player.set("sub-margin-y", &(margin.round() as i64).to_string());
+    });
 }
 
 /// The monitor the window is on, in device pixels.
