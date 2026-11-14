@@ -315,8 +315,10 @@ pub fn spawn_engine(config: &std::path::Path) -> (std::process::Child, std::net:
             }
         }
     });
+    // Booting probes every encoder with a real ffmpeg, which takes over ten seconds on a CI
+    // runner that is compiling at the same time.
     let addr = rx
-        .recv_timeout(std::time::Duration::from_secs(10))
+        .recv_timeout(std::time::Duration::from_secs(60))
         .expect("engine never logged its listen address")
         .parse()
         .unwrap();
