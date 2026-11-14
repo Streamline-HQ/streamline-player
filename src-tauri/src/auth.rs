@@ -15,6 +15,8 @@ const HEALTH_TIMEOUT: Duration = Duration::from_secs(5);
 pub const KEYSTORE: &str = "Android Keystore";
 #[cfg(target_os = "linux")]
 pub const KEYSTORE: &str = "Secret Service";
+#[cfg(target_os = "windows")]
+pub const KEYSTORE: &str = "Windows Credential Manager";
 
 /// Where the server address and this install's id live: plain app data, unlike the key.
 fn data_file(app: &AppHandle, name: &str) -> Option<PathBuf> {
@@ -50,11 +52,15 @@ fn client_id(app: &AppHandle) -> String {
     id
 }
 
-#[cfg(target_os = "linux")]
+#[cfg(any(target_os = "linux", target_os = "windows"))]
 fn entry() -> Result<keyring_core::Entry, String> {
+    #[cfg(target_os = "windows")]
+    use windows_native_keyring_store::Store;
+    #[cfg(target_os = "linux")]
+    use zbus_secret_service_keyring_store::Store;
     static STORE: std::sync::Once = std::sync::Once::new();
     STORE.call_once(|| {
-        if let Ok(store) = zbus_secret_service_keyring_store::Store::new() {
+        if let Ok(store) = Store::new() {
             keyring_core::set_default_store(store);
         }
     });
@@ -72,7 +78,7 @@ fn vault(app: &AppHandle, command: &str, value: Option<&str>) -> Result<Value, S
 // Only Android reaches its key store through the app.
 #[cfg_attr(not(target_os = "android"), allow(unused_variables))]
 pub fn load_key(app: &AppHandle) -> Result<Option<String>, String> {
-    #[cfg(target_os = "linux")]
+    #[cfg(any(target_os = "linux", target_os = "windows"))]
     return match entry()?.get_password() {
         Ok(key) => Ok(Some(key)),
         Err(keyring_core::Error::NoEntry) => Ok(None),
@@ -86,7 +92,7 @@ pub fn load_key(app: &AppHandle) -> Result<Option<String>, String> {
 
 #[cfg_attr(not(target_os = "android"), allow(unused_variables))]
 fn store_key(app: &AppHandle, key: &str) -> Result<(), String> {
-    #[cfg(target_os = "linux")]
+    #[cfg(any(target_os = "linux", target_os = "windows"))]
     return entry()?.set_password(key).map_err(|e| e.to_string());
     #[cfg(target_os = "android")]
     return vault(app, "vaultSet", Some(key)).map(drop);
@@ -94,7 +100,7 @@ fn store_key(app: &AppHandle, key: &str) -> Result<(), String> {
 
 #[cfg_attr(not(target_os = "android"), allow(unused_variables))]
 pub fn delete_key(app: &AppHandle) {
-    #[cfg(target_os = "linux")]
+    #[cfg(any(target_os = "linux", target_os = "windows"))]
     let _ = entry().and_then(|e| e.delete_credential().map_err(|e| e.to_string()));
     #[cfg(target_os = "android")]
     let _ = vault(app, "vaultDelete", None);
@@ -175,6 +181,14 @@ fn device(app: &AppHandle) -> (String, &'static str) {
         let name =
             fs::read_to_string("/etc/hostname").map_or("Linux".to_owned(), |h| h.trim().to_owned());
         (name, "linux")
+    }
+    #[cfg(target_os = "windows")]
+    {
+        let _ = app;
+        (
+            std::env::var("COMPUTERNAME").unwrap_or("Windows".to_owned()),
+            "windows",
+        )
     }
 }
 
