@@ -6,6 +6,7 @@ tasks:
     cmds:
       - task: rust
       - task: js
+      - task: python
       - task: svelte
 
   rust:
@@ -13,8 +14,12 @@ tasks:
     cmd: cargo clippy --workspace --all-targets -- -D warnings
 
   js:
-    desc: Lint TypeScript and Svelte (biome)
-    cmd: biome lint .
+    desc: Lint TypeScript and Svelte (biome, warnings are errors)
+    cmd: biome lint --error-on-warnings .
+
+  python:
+    desc: Lint the dev scripts in Python (ruff)
+    cmd: ruff check dev
 
   svelte:
     desc: Typecheck the UI and check its messages (svelte-check, Paraglide)

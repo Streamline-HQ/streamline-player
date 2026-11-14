@@ -17,10 +17,11 @@ tasks:
     silent: true
 
   fmt:
-    desc: Format Rust, TypeScript/Svelte and Nix
+    desc: Format Rust, TypeScript/Svelte, Python and Nix
     cmds:
       - cargo fmt --all
       - biome format --write .
+      - ruff format dev
       - nixfmt flake.nix nix/*.nix
 
   fmt:check:
@@ -28,6 +29,7 @@ tasks:
     cmds:
       - cargo fmt --all --check
       - biome format .
+      - ruff format --check dev
       - nixfmt --check flake.nix nix/*.nix
 
   check:

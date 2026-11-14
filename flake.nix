@@ -272,6 +272,7 @@
                   nativeBuildInputs = [
                     rust
                     pkgs.biome
+                    pkgs.ruff
                     pkgs.nixfmt
                   ];
                 }
@@ -279,13 +280,20 @@
                   cd ${./.}
                   cargo fmt --all --check
                   biome format --vcs-enabled=false .
+                  ruff format --no-cache --check dev
                   nixfmt --check flake.nix nix/*.nix
                   touch $out
                 '';
 
             biome-lint = pkgs.runCommandLocal "check-biome-lint" { nativeBuildInputs = [ pkgs.biome ]; } ''
               cd ${./.}
-              biome lint --vcs-enabled=false .
+              biome lint --vcs-enabled=false --error-on-warnings .
+              touch $out
+            '';
+
+            ruff-lint = pkgs.runCommandLocal "check-ruff-lint" { nativeBuildInputs = [ pkgs.ruff ]; } ''
+              cd ${./.}
+              ruff check --no-cache dev
               touch $out
             '';
 
@@ -312,6 +320,7 @@
                 pkg-config
                 go-task
                 biome
+                ruff
                 nixfmt
                 typescript-language-server
                 playwright-mcp
