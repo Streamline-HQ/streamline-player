@@ -831,8 +831,12 @@ impl Inner {
         let dir = self.dir.join(name);
         fs::create_dir_all(&dir).map_err(io_stop)?;
         if find_video(&dir).is_none() {
+            // A retry stays Waiting until the server answers: going through Preparing on every
+            // attempt would flicker the state while the network is down.
             self.update(key, |e| {
-                e.state = State::Preparing;
+                if e.state != State::Waiting {
+                    e.state = State::Preparing;
+                }
                 e.error = None;
             });
             let job = self.prepare(&entry, &dir, None).await?;
@@ -1620,9 +1624,19 @@ mod tests {
             vec![request(1, 50_000), request(2, 60_000), request(3, 70_000)],
             json!({}),
         );
-        until("three downloads", || {
-            (1..=3).all(|n| done(&q, &format!("movies:{n}")))
-        });
+        let end = Instant::now() + Duration::from_secs(20);
+        while !(1..=3).all(|n| done(&q, &format!("movies:{n}"))) {
+            let states: Vec<_> = q
+                .items()
+                .iter()
+                .map(|e| (e.key.clone(), e.state, e.error))
+                .collect();
+            assert!(
+                Instant::now() < end,
+                "timed out waiting for three downloads: {states:?}"
+            );
+            thread::sleep(Duration::from_millis(10));
+        }
         let events: Vec<String> = fake
             .events()
             .into_iter()
@@ -1664,8 +1678,9 @@ mod tests {
             w.valid_from = w.sigs + 1;
             w.forbid_next = 1;
         }
+        // Read before a queue exists: its worker would move the entry on straight away.
+        assert_eq!(load_index(&dir)[0].state, State::Queued);
         let second = queue(&dir, &fake, fast());
-        assert_eq!(second.items()[0].state, State::Queued);
         until("the finished file", || done(&second, "movies:1"));
         assert_eq!(video(&dir, "movies-1"), source);
         let ranges: Vec<String> = fake
