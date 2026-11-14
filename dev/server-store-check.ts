@@ -1,5 +1,6 @@
 // node --import ./dev/controller-check/register.mjs dev/server-store-check.ts
 import { strictEqual as eq, deepStrictEqual as same } from "node:assert";
+import { must } from "./must.ts";
 import type { AdminSettings, LogLine } from "../src/lib/core/types.ts";
 
 const S = await import("../src/lib/core/admin.svelte.ts");
@@ -278,16 +279,16 @@ p.gate = new Promise<void>((done) => {
 	gate = done;
 });
 const scanning = S.scan(p, "movies");
-const folders = admin.data!.library.folders;
-eq(folders[0]!.scan?.progress, 0);
-eq(folders[1]!.scan, undefined);
+const folders = must(admin.data).library.folders;
+eq(must(folders[0]).scan?.progress, 0);
+eq(must(folders[1]).scan, undefined);
 gate();
 p.gate = null;
 eq(await scanning, true);
 p.fail.adminScan = new Error("down");
 eq(await S.scan(p), false);
-eq(folders[1]!.scan, undefined);
-eq(folders[0]!.scan?.progress, 0);
+eq(must(folders[1]).scan, undefined);
+eq(must(folders[0]).scan?.progress, 0);
 
 p.gate = new Promise<void>((done) => {
 	gate = done;
@@ -299,8 +300,8 @@ gate();
 p.gate = null;
 eq(await clearing, true);
 p.fail.adminClearCache = new Error("down");
-admin.data!.cacheCleared = false;
-admin.data!.overview.storage.cache.size = 3200000000;
+must(admin.data).cacheCleared = false;
+must(admin.data).overview.storage.cache.size = 3200000000;
 eq(await S.clearCache(p), false);
 eq(admin.data?.cacheCleared, false);
 eq(admin.data?.overview.storage.cache.size, 3200000000);
@@ -368,7 +369,7 @@ same(
 p.logs = Array.from({ length: 100 }, (_, i) => line(200 - i));
 await S.refreshLogs(p);
 eq(admin.logs.length, 80);
-eq(admin.logs[0]!.id, 200);
+eq(must(admin.logs[0]).id, 200);
 admin.live = false;
 const asked = p.count("adminLogs");
 await S.refreshLogs(p);

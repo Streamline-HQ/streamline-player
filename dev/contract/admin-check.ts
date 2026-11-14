@@ -4,6 +4,16 @@ import { strictEqual as eq, ok } from "node:assert";
 import { existsSync, mkdtempSync, readFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import type {
+	AdminDevice,
+	AdminLibrary,
+	AdminOverview,
+	AdminPairing,
+	AdminSettings,
+	AdminStream,
+	LogLine,
+	Me,
+} from "../../src/lib/core/types.ts";
 
 function firstLine(child: ReturnType<typeof spawn>, pattern: RegExp) {
 	return new Promise<string>((resolve, reject) => {
@@ -75,49 +85,50 @@ const send = (url: string, method: string, body?: unknown) =>
 		headers: body === undefined ? {} : JSON_HEADERS,
 		body: body === undefined ? undefined : JSON.stringify(body),
 	});
-const get = async (url: string) => {
+const get = async <T>(url: string) => {
 	const r = await send(url, "GET");
 	eq(r.status, 200, url);
-	return (await r.json()) as any;
+	return (await r.json()) as T;
 };
-const items = async (url: string) => (await get(url)).items as any[];
-const errorOf = async (r: Response) => ((await r.json()) as any).error;
+const items = async <T>(url: string) => (await get<{ items: T[] }>(url)).items;
+const errorOf = async (r: Response) =>
+	((await r.json()) as { error: { code: string; owner?: string } }).error;
 
 try {
 	const demo = await start("demo", "--demo-admin");
 	const a = demo.admin;
 
-	const streams = await items(`${a}/streams`);
+	const streams = await items<AdminStream>(`${a}/streams`);
 	eq(streams.map((s) => s.mode).join(), "copy,transcode,audio");
 	ok(streams.every((s) => s.duration > s.position));
-	eq((await items(`${a}/pairings`)).map((p) => p.user_code).join(), "R4W-X9P");
+	eq((await items<AdminPairing>(`${a}/pairings`)).map((p) => p.user_code).join(), "R4W-X9P");
 
-	const devices = await items(`${a}/devices`);
+	const devices = await items<AdminDevice>(`${a}/devices`);
 	eq(devices.length, 8);
 	eq(devices[0].current, true);
 	eq(devices.filter((d) => d.current).length, 1);
 	eq(devices.filter((d) => d.kind === "app").length, 6);
 	eq(devices.filter((d) => d.kind === "browser").length, 2);
 
-	const library = await get(`${a}/library`);
+	const library = await get<AdminLibrary>(`${a}/library`);
 	eq(library.folders.length, 2);
 	ok(library.last_scan);
 
-	const logs = await items(`${a}/logs`);
+	const logs = await items<LogLine>(`${a}/logs`);
 	eq(logs.length, 9);
 	for (let i = 1; i < logs.length; i++) ok(logs[i - 1].id > logs[i].id, "newest first");
-	eq((await items(`${a}/logs?level=warn`)).length, 2);
-	eq((await items(`${a}/logs?level=error`)).length, 1);
-	eq((await items(`${a}/logs?after=${logs[2].id}`)).length, 2);
+	eq((await items<LogLine>(`${a}/logs?level=warn`)).length, 2);
+	eq((await items<LogLine>(`${a}/logs?level=error`)).length, 1);
+	eq((await items<LogLine>(`${a}/logs?after=${logs[2].id}`)).length, 2);
 
-	const settings = await get(`${a}/settings`);
+	const settings = await get<AdminSettings>(`${a}/settings`);
 	eq(Object.keys(settings.values).length, 15);
 	eq(Object.values(settings.owners).filter((o) => o === "engine").length, 4);
 	eq(settings.pending.length, 0);
 
 	const saved = await send(`${a}/settings`, "PATCH", { "log.app.level": "debug" });
 	eq(saved.status, 200);
-	const after = (await saved.json()) as any;
+	const after = (await saved.json()) as AdminSettings;
 	eq(after.pending.join(), "log.app.level");
 	eq(after.values["log.app.level"], "debug");
 	for (const body of [{ "stream.max_live": 0 }, { nope: 1 }, { "stream.tonemap": "yes" }]) {
@@ -127,45 +138,45 @@ try {
 	}
 	const mixed = await send(`${a}/settings`, "PATCH", { "stream.max_live": 4, nope: 1 });
 	eq(mixed.status, 400);
-	eq((await get(`${a}/settings`)).values["stream.max_live"], 2);
+	eq((await get<AdminSettings>(`${a}/settings`)).values["stream.max_live"], 2);
 
 	const stop = await send(`${a}/streams/s2/stop`, "POST", { message: "Need the bandwidth" });
 	eq(stop.status, 204);
-	eq((await items(`${a}/streams`)).length, 2);
+	eq((await items<AdminStream>(`${a}/streams`)).length, 2);
 	const unknown = await send(`${a}/streams/nope/stop`, "POST", {});
 	eq(unknown.status, 404);
 	eq((await errorOf(unknown)).code, "not_found");
 
 	eq((await send(`${a}/devices/d5`, "DELETE")).status, 204);
-	eq((await items(`${a}/devices`)).length, 7);
+	eq((await items<AdminDevice>(`${a}/devices`)).length, 7);
 	const own = await send(`${a}/devices/${devices[0].id}`, "DELETE");
 	eq(own.status, 409);
 	eq((await errorOf(own)).code, "current_device");
 	eq((await send(`${a}/devices/nope`, "DELETE")).status, 404);
 
-	const movies = library.folders.find((f: any) => f.kind === "movies");
+	const movies = library.folders.find((f) => f.kind === "movies");
 	eq((await send(`${a}/library/scan`, "POST", { folder_id: movies.id })).status, 202);
-	const scanning = (await get(`${a}/library`)).folders;
-	const progress = scanning.find((f: any) => f.id === movies.id).scan.progress;
+	const scanning = (await get<AdminLibrary>(`${a}/library`)).folders;
+	const progress = scanning.find((f) => f.id === movies.id).scan.progress;
 	ok(progress >= 0 && progress < 1, String(progress));
-	eq(scanning.filter((f: any) => f.scan).length, 1);
+	eq(scanning.filter((f) => f.scan).length, 1);
 	eq((await send(`${demo.dev}/admin/scan/finish`, "POST")).status, 204);
-	const finished = await get(`${a}/library`);
-	ok(finished.folders.every((f: any) => !f.scan));
+	const finished = await get<AdminLibrary>(`${a}/library`);
+	ok(finished.folders.every((f) => !f.scan));
 	ok(finished.last_scan.at !== library.last_scan.at, "last_scan moved");
 
-	const started = (await get(`${a}/overview`)).server.started_at;
-	eq((await get(`${a}/overview`)).storage.cache.size > 0, true);
+	const started = (await get<AdminOverview>(`${a}/overview`)).server.started_at;
+	eq((await get<AdminOverview>(`${a}/overview`)).storage.cache.size > 0, true);
 	eq((await send(`${a}/cache/clear`, "POST")).status, 200);
-	eq((await get(`${a}/overview`)).storage.cache.size, 0);
+	eq((await get<AdminOverview>(`${a}/overview`)).storage.cache.size, 0);
 
 	eq((await send(`${a}/restart`, "POST", {})).status, 202);
 	const down = await send(`${a}/overview`, "GET");
 	eq(down.status, 503);
 	eq((await errorOf(down)).code, "server_restarting");
 	eq((await send(`${demo.dev}/admin/restart/finish`, "POST")).status, 204);
-	eq((await get(`${a}/settings`)).pending.length, 0);
-	ok((await get(`${a}/overview`)).server.started_at > started, "started_at moved");
+	eq((await get<AdminSettings>(`${a}/settings`)).pending.length, 0);
+	ok((await get<AdminOverview>(`${a}/overview`)).server.started_at > started, "started_at moved");
 
 	const zip = await send(`${a}/logs/download`, "GET");
 	eq(zip.status, 200);
@@ -178,7 +189,7 @@ try {
 	const refused = await send(`${locked.admin}/settings`, "PATCH", { "log.app.level": "debug" });
 	eq(refused.status, 409);
 	eq((await errorOf(refused)).code, "read_only");
-	eq((await get(`${locked.admin}/settings`)).read_only.streamline, true);
+	eq((await get<AdminSettings>(`${locked.admin}/settings`)).read_only.streamline, true);
 	clean(locked.report);
 
 	const engineLocked = await start("engine-locked", "--read-only=engine");
@@ -217,24 +228,24 @@ try {
 		}
 	};
 	const member = await start("member", "--demo-admin", "--role", "member");
-	eq((await get(`${member.api}/me`)).role, "Member");
+	eq((await get<Me>(`${member.api}/me`)).role, "Member");
 	await forbidden(member.admin);
 	clean(member.report);
 
-	eq((await get(`${demo.api}/me`)).role, "Admin");
+	eq((await get<Me>(`${demo.api}/me`)).role, "Admin");
 	eq((await send(`${demo.dev}/role/member`, "POST")).status, 204);
-	eq((await get(`${demo.api}/me`)).role, "Member");
+	eq((await get<Me>(`${demo.api}/me`)).role, "Member");
 	await forbidden(demo.admin);
 	eq((await send(`${demo.dev}/role/admin`, "POST")).status, 204);
 	eq((await send(`${demo.admin}/overview`, "GET")).status, 200);
 
 	const plain = await start("plain");
-	eq((await items(`${plain.admin}/streams`)).length, 0);
-	eq((await items(`${plain.admin}/pairings`)).length, 0);
-	eq((await items(`${plain.admin}/devices`)).length >= 4, true);
-	eq((await get(`${plain.admin}/library`)).folders.length, 2);
-	eq((await items(`${plain.admin}/logs`)).length, 10);
-	eq((await get(`${plain.admin}/settings`)).pending.length, 0);
+	eq((await items<AdminStream>(`${plain.admin}/streams`)).length, 0);
+	eq((await items<AdminPairing>(`${plain.admin}/pairings`)).length, 0);
+	eq((await items<AdminDevice>(`${plain.admin}/devices`)).length >= 4, true);
+	eq((await get<AdminLibrary>(`${plain.admin}/library`)).folders.length, 2);
+	eq((await items<LogLine>(`${plain.admin}/logs`)).length, 10);
+	eq((await get<AdminSettings>(`${plain.admin}/settings`)).pending.length, 0);
 	clean(plain.report);
 
 	console.log("admin-check: ok");

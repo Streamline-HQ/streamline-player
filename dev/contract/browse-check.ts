@@ -5,6 +5,9 @@ import { strictEqual as eq, ok } from "node:assert";
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import type { HomeFeed, Me, Title } from "../../src/lib/core/types.ts";
+
+type ApiError = { error: { code: string } };
 
 const NOW = "1794225600";
 const REASONS = ["continue", "new_episodes", "added"];
@@ -87,11 +90,12 @@ try {
 			password: "streamline",
 			device_name: "Chrome",
 		}),
-	}).then((r) => r.json())) as any;
+	}).then((r) => r.json())) as { access_token: string };
 	const auth = { Authorization: `Bearer ${login.access_token}` };
 	const call = (path: string, init: RequestInit = {}) =>
 		fetch(`${api}${path}`, { ...init, headers: { ...auth, ...(init.headers as object) } });
-	const json = (path: string, init?: RequestInit) => call(path, init).then((r) => r.json() as any);
+	const json = <T>(path: string, init?: RequestInit) =>
+		call(path, init).then((r) => r.json() as Promise<T>);
 	const patch = (body: object) =>
 		call("/me", {
 			method: "PATCH",
@@ -101,40 +105,40 @@ try {
 	const put = (body: Buffer, type: string) =>
 		call("/me/picture", { method: "PUT", headers: { "Content-Type": type }, body });
 
-	const home = await json("/home");
+	const home = await json<HomeFeed>("/home");
 	eq(home.featured.length, 3);
 	for (const f of home.featured) ok(REASONS.includes(f.reason), f.reason);
 	ok(home.arrivals.length > 0);
-	const days = home.arrivals.map((d: any) => d.date);
+	const days = home.arrivals.map((d) => d.date);
 	eq(days.join(), [...days].sort().reverse().join());
 	for (const day of home.arrivals) ok(day.items.length > 0);
 
 	eq(
-		((await patch({ display_name: "A. Langlois" }).then((r) => r.json())) as any).name,
+		((await patch({ display_name: "A. Langlois" }).then((r) => r.json())) as Me).name,
 		"A. Langlois",
 	);
-	eq((await json("/me")).name, "A. Langlois");
-	const before = (await json("/me")).email;
+	eq((await json<Me>("/me")).name, "A. Langlois");
+	const before = (await json<Me>("/me")).email;
 	const taken = await patch({ email: "taken@example.net" });
 	eq(taken.status, 409);
-	eq(((await taken.json()) as any).error.code, "email_taken");
+	eq(((await taken.json()) as ApiError).error.code, "email_taken");
 	const invalid = await patch({ email: "nope" });
 	eq(invalid.status, 422);
-	eq(((await invalid.json()) as any).error.code, "invalid_email");
-	eq((await json("/me")).email, before);
+	eq(((await invalid.json()) as ApiError).error.code, "invalid_email");
+	eq((await json<Me>("/me")).email, before);
 
-	eq((await json("/me")).picture, false);
+	eq((await json<Me>("/me")).picture, false);
 	eq((await put(PNG, "image/png")).status, 204);
-	const me = await json("/me");
+	const me = await json<Me>("/me");
 	eq(me.picture, true);
 	ok(/^[A-Z]{1,2}$/.test(me.initials), me.initials);
 	eq((await call("/posters/users/me/photo.jpg")).status, 200);
 	const big = await put(Buffer.alloc(3 * 1024 * 1024), "image/png");
 	eq(big.status, 413);
-	eq(((await big.json()) as any).error.code, "too_large");
+	eq(((await big.json()) as ApiError).error.code, "too_large");
 	eq((await put(PNG, "image/gif")).status, 415);
 	eq((await call("/me/picture", { method: "DELETE" })).status, 204);
-	eq((await json("/me")).picture, false);
+	eq((await json<Me>("/me")).picture, false);
 	eq((await call("/posters/users/me/photo.jpg")).status, 404);
 
 	const poster = "/posters/movies/1/poster.jpg";
@@ -145,18 +149,22 @@ try {
 	eq((await mock("/dev/art/on")).status, 204);
 	eq((await call(poster)).status, 200);
 
-	const files = (await json("/movies")).items;
-	ok(files.every((m: any) => m.file_summary.size > 0));
+	const files = (await json<{ items: Title[] }>("/movies")).items;
+	ok(files.every((m) => m.file_summary.size > 0));
 
 	const lines = violations(full.report);
 	eq(lines.length, 0, lines.join("\n"));
 
 	const empty = await start("empty", "--empty");
 	const emptyApi = `${empty.root}/api/v1`;
-	const feed = await fetch(`${emptyApi}/home`).then((r) => r.json() as any);
+	const feed = await fetch(`${emptyApi}/home`).then((r) => r.json() as Promise<HomeFeed>);
 	eq(feed.featured.length, 0);
 	eq(feed.arrivals.length, 0);
-	eq((await fetch(`${emptyApi}/movies`).then((r) => r.json() as any)).items.length, 0);
+	eq(
+		(await fetch(`${emptyApi}/movies`).then((r) => r.json() as Promise<{ items: Title[] }>)).items
+			.length,
+		0,
+	);
 	const emptyLines = violations(empty.report);
 	eq(emptyLines.length, 0, emptyLines.join("\n"));
 

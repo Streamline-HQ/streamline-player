@@ -1,5 +1,6 @@
 // node dev/detail-check.ts
 import { deepStrictEqual as eq } from "node:assert";
+import { must } from "./must.ts";
 import {
 	applyChoice,
 	audioLanguages,
@@ -74,17 +75,17 @@ const movies = [
 ];
 const none = movie(5, "Nothing", ["Drama"]);
 
-eq(primaryAction(movies[0]!, "movies", [])?.label, "play");
-eq(primaryAction(movies[0]!, "movies", [row("d", 50)])?.label, "resume");
-eq(primaryAction(movies[0]!, "movies", [row("d", 50)])?.pct, 50);
-eq(primaryAction(movies[0]!, "movies", [row("d", 100, true)])?.label, "play");
+eq(primaryAction(must(movies[0]), "movies", [])?.label, "play");
+eq(primaryAction(must(movies[0]), "movies", [row("d", 50)])?.label, "resume");
+eq(primaryAction(must(movies[0]), "movies", [row("d", 50)])?.pct, 50);
+eq(primaryAction(must(movies[0]), "movies", [row("d", 100, true)])?.label, "play");
 eq(primaryAction(none, "movies", []), null);
 
 const watch = [row("m14", 40), row("m11", 100, true)];
 const p = primaryAction(show, "series", watch);
 eq([p?.season, p?.episode, p?.label], [2, 4, "resume"]);
-const all = show
-	.seasons!.flatMap((s) => s.episodes)
+const all = must(show.seasons)
+	.flatMap((s) => s.episodes)
 	.filter((e) => e.has_file)
 	.map((e) => row(e.media_file_id, 100, true));
 const done = primaryAction(show, "series", all);
@@ -100,11 +101,11 @@ eq(
 	null,
 );
 
-const s2 = show.seasons![1]!.episodes;
-eq(episodeState(s2[8]!, watch), "wanted");
-eq(episodeState(s2[0]!, watch), "watched");
-eq(episodeState(s2[3]!, watch), "progress");
-eq(episodeState(s2[4]!, watch), "unwatched");
+const s2 = must(must(show.seasons)[1]).episodes;
+eq(episodeState(must(s2[8]), watch), "wanted");
+eq(episodeState(must(s2[0]), watch), "watched");
+eq(episodeState(must(s2[3]), watch), "progress");
+eq(episodeState(must(s2[4]), watch), "unwatched");
 
 eq(defaultSeason(show, watch, null), 2);
 eq(defaultSeason(show, watch, 1), 1);
@@ -113,20 +114,20 @@ eq(defaultSeason(show, all, null), 1);
 
 const tagged = [...movies, none].map((t) => ({ ...t, kind: "movies" as const }));
 eq(
-	moreLikeThis(movies[0]!, "movies", tagged, 2).some((t) => t.id === 1 && t.kind === "movies"),
+	moreLikeThis(must(movies[0]), "movies", tagged, 2).some((t) => t.id === 1 && t.kind === "movies"),
 	false,
 );
 eq(
-	moreLikeThis(movies[0]!, "movies", tagged, 10).map((t) => t.id),
+	moreLikeThis(must(movies[0]), "movies", tagged, 10).map((t) => t.id),
 	[2, 4],
 );
 eq(
-	moreLikeThis(movies[0]!, "movies", tagged, 1).map((t) => t.id),
+	moreLikeThis(must(movies[0]), "movies", tagged, 1).map((t) => t.id),
 	[2],
 );
 eq(
 	moreLikeThis(
-		movies[0]!,
+		must(movies[0]),
 		"movies",
 		[{ ...show, genres: ["Science Fiction"], kind: "series" as const, id: 1 }, ...tagged],
 		10,
@@ -160,20 +161,22 @@ const ctx = {
 	size: "9 GB",
 };
 const q = { resolution: "2160p", codec: "HEVC", hdr: "HDR10", audio: "TrueHD", channels: "7.1" };
-const rows = techRows({ ...movies[0]!, file_summary: q }, "movies", null, ctx).map((r) => r.key);
+const rows = techRows({ ...must(movies[0]), file_summary: q }, "movies", null, ctx).map(
+	(r) => r.key,
+);
 eq(rows, ["video", "audio", "subs", "file", "added"]);
 eq(
 	techRows({ ...show, file_summary: q }, "series", null, ctx).map((r) => r.key),
 	["video", "audio", "added"],
 );
-eq(techRows({ ...movies[0]!, file_summary: q }, "movies", null, ctx)[2], {
+eq(techRows({ ...must(movies[0]), file_summary: q }, "movies", null, ctx)[2], {
 	key: "subs",
 	value: "SRT, VobSub",
 	count: 2,
 	mode: { kind: "burn", formats: ["VobSub"] },
 });
 eq(
-	techRows({ ...movies[0]!, file_summary: q }, "movies", null, {
+	techRows({ ...must(movies[0]), file_summary: q }, "movies", null, {
 		...ctx,
 		video: { copy: false, out: "H.264" },
 	})[0]?.mode,

@@ -1,5 +1,6 @@
 // node dev/downloads-view-check.ts
 import { strictEqual as eq, deepStrictEqual as same, ok } from "node:assert";
+import { must } from "./must.ts";
 import { audioRate, converts, estimate, sizeText } from "../src/lib/core/download-size.ts";
 import {
 	bulkState,
@@ -185,19 +186,19 @@ const sample: DownloadEntry[] = [
 const page = pageView(sample, 5_000_000, w);
 eq(page.summary, "11 ready · 2 in progress");
 eq(page.empty, false);
-eq(page.active[0]!.title, "Severance · S2 E4");
-eq(page.active[0]!.pct, 46);
-eq(page.active[0]!.sub, "1080p · 0.74 of 1.6 GB");
-eq(page.active[0]!.state, "downloading");
-eq(page.active[0]!.noteTone, "rate");
-ok(/^\d+(\.\d)? MB\/s · .+ left$/.test(page.active[0]!.note), page.active[0]!.note);
-eq(page.active[1]!.note, "Queued · #1");
-eq(page.active[1]!.state, "queued");
-eq(page.active[1]!.sub, "720p · 0.00 of 1.1 GB");
-eq(pageView(sample, 0, w).active[0]!.note, "Starting…");
-eq(pageView(sample, 0, w).active[0]!.state, "starting");
+eq(must(page.active[0]).title, "Severance · S2 E4");
+eq(must(page.active[0]).pct, 46);
+eq(must(page.active[0]).sub, "1080p · 0.74 of 1.6 GB");
+eq(must(page.active[0]).state, "downloading");
+eq(must(page.active[0]).noteTone, "rate");
+ok(/^\d+(\.\d)? MB\/s · .+ left$/.test(must(page.active[0]).note), must(page.active[0]).note);
+eq(must(page.active[1]).note, "Queued · #1");
+eq(must(page.active[1]).state, "queued");
+eq(must(page.active[1]).sub, "720p · 0.00 of 1.1 GB");
+eq(must(pageView(sample, 0, w).active[0]).note, "Starting…");
+eq(must(pageView(sample, 0, w).active[0]).state, "starting");
 
-const one = (s: Spec) => pageView([make(s)], 0, w).active[0]!;
+const one = (s: Spec) => must(pageView([make(s)], 0, w).active[0]);
 const prep = one({ id: 9, title: "X", state: "preparing", progress: 0.42 });
 eq(prep.note, "Preparing on the server · 42%");
 eq(prep.state, "preparing");
@@ -210,43 +211,49 @@ eq(bad.state, "failed");
 
 const g = page.groups;
 eq(g.length, 4);
-eq(g[0]!.kind, "movies");
-eq(g[0]!.sub, "1 · 4.2 GB");
+eq(must(g[0]).kind, "movies");
+eq(must(g[0]).sub, "1 · 4.2 GB");
 same(
 	g.slice(1).map((x) => x.title),
 	["Severance", "Shōgun", "The Last of Us"],
 );
-eq(g[1]!.sub, "5 episodes · 8.5 GB");
+eq(must(g[1]).sub, "5 episodes · 8.5 GB");
 same(
-	g[1]!.seasons.map((s) => s.label),
+	must(g[1]).seasons.map((s) => s.label),
 	["Season 1 · 2 episodes · 3.3 GB", "Season 2 · 3 episodes · 5.2 GB"],
 );
-eq(g[1]!.firstSeason, 1);
-eq(g[1]!.titleId, 1);
-eq(g[1]!.titleKind, "series");
-eq(g[1]!.keys.length, 5);
-eq(g[1]!.seasons[0]!.cards[0]!.head, "E1 · Episode 1");
-eq(g[1]!.seasons[0]!.cards[0]!.line, "48 min");
-eq(g[1]!.seasons[0]!.cards[0]!.meta, "1080p · 1.8 GB");
-eq(g[1]!.seasons[0]!.cards[1]!.meta, "1080p · 1.5 GB · watched");
-eq(g[3]!.seasons[0]!.label, "Season 1 · 1 episode · 1.8 GB");
-eq(g[0]!.seasons[0]!.label, null);
-eq(g[0]!.seasons[0]!.cards[0]!.line, "2021 · 2 h 28 min");
+eq(must(g[1]).firstSeason, 1);
+eq(must(g[1]).titleId, 1);
+eq(must(g[1]).titleKind, "series");
+eq(must(g[1]).keys.length, 5);
+eq(must(must(must(g[1]).seasons[0]).cards[0]).head, "E1 · Episode 1");
+eq(must(must(must(g[1]).seasons[0]).cards[0]).line, "48 min");
+eq(must(must(must(g[1]).seasons[0]).cards[0]).meta, "1080p · 1.8 GB");
+eq(must(must(must(g[1]).seasons[0]).cards[1]).meta, "1080p · 1.5 GB · watched");
+eq(must(must(g[3]).seasons[0]).label, "Season 1 · 1 episode · 1.8 GB");
+eq(must(must(g[0]).seasons[0]).label, null);
+eq(must(must(must(g[0]).seasons[0]).cards[0]).line, "2021 · 2 h 28 min");
 
-eq(g[0]!.seasons[0]!.cards[0]!.tracks, "Audio: English · Subtitles: none");
-eq(g[1]!.seasons[0]!.cards[0]!.tracks, "Audio: English · Subtitles: none");
+eq(must(must(must(g[0]).seasons[0]).cards[0]).tracks, "Audio: English · Subtitles: none");
+eq(must(must(must(g[1]).seasons[0]).cards[0]).tracks, "Audio: English · Subtitles: none");
 
-eq(g[2]!.seasons[0]!.cards[2]!.offText, "Watched to 34:00 offline · syncs when you’re back online");
-eq(g[3]!.seasons[1]!.cards[0]!.offText, "Finished offline · syncs when you’re back online");
-eq(g[3]!.seasons[1]!.cards[0]!.watched, true);
-eq(g[1]!.seasons[0]!.cards[0]!.offText, null);
+eq(
+	must(must(must(g[2]).seasons[0]).cards[2]).offText,
+	"Watched to 34:00 offline · syncs when you’re back online",
+);
+eq(
+	must(must(must(g[3]).seasons[1]).cards[0]).offText,
+	"Finished offline · syncs when you’re back online",
+);
+eq(must(must(must(g[3]).seasons[1]).cards[0]).watched, true);
+eq(must(must(must(g[1]).seasons[0]).cards[0]).offText, null);
 
 const empty = pageView([], 0, w);
 eq(empty.empty, true);
 eq(empty.summary, "0 ready · 0 in progress");
 
 const lib = pageView([make({ id: 6, title: "Gone", season: 1, episode: 1 })], 0, w);
-eq(lib.groups[0]!.title, "Gone");
+eq(must(lib.groups[0]).title, "Gone");
 
 const st = storageView({ used: 21.9e9, other: 612.4e9, free: 341.8e9 }, w);
 same(st.labels, ["21.9 GB Streamline", "612.4 GB other", "341.8 GB free"]);
@@ -323,7 +330,7 @@ eq(
 eq(bulkState([], mk(0, 0), "Season 1", "season", w).act, "none");
 
 const pop1 = popoverView(
-	[sample[5]!.key],
+	[must(sample[5]).key],
 	(k) => sample.find((e) => e.key === k),
 	5e6,
 	"Severance S2 E4",
@@ -351,7 +358,7 @@ same(gm.count, { done: 3, total: 10 });
 eq(gm.state, "waiting");
 eq(gm.rate, "Queued");
 const doneOne = popoverView(
-	[sample[0]!.key],
+	[must(sample[0]).key],
 	(k) => sample.find((e) => e.key === k),
 	0,
 	"Severance S1 E1",
@@ -410,7 +417,7 @@ const orig = estimate({ ...base, quality: "original" });
 ok(Math.abs(orig.total - 18e9) / 18e9 < 0.01, String(orig.total));
 const p1080 = estimate({ ...base, quality: "1080p" });
 ok(Math.abs(p1080.video - 7.2e9) < 1e6);
-ok(Math.abs(p1080.audio[0]! - (640_000 * 7200) / 8) < 1);
+ok(Math.abs(must(p1080.audio[0]) - (640_000 * 7200) / 8) < 1);
 const bare = estimate({ ...base, quality: "1080p", picked: [] });
 eq(bare.total, bare.video);
 const withSubs = estimate({ ...base, quality: "1080p", picked: [], subs, pickedSubs: [4, 5] });
@@ -437,18 +444,18 @@ eq(
 const three = pv({ quality: "1080p", count: 3 });
 eq(three.qNote, "The server converts them to 1080p first, so the download takes longer to start.");
 ok(three.total.endsWith(" · 3 episodes"), three.total);
-eq(pv({}).audio[0]!.sub, "TrueHD 7.1");
-eq(pv({}).audio[0]!.label, "English · original");
-eq(pv({ quality: "1080p" }).audio[0]!.sub, "TrueHD 7.1 → EAC3 5.1");
-eq(pv({ quality: "1080p" }).audio[1]!.sub, "EAC3 5.1");
-eq(pv({}).audio[1]!.label, "French");
-eq(pv({}).audio[0]!.on, true);
-eq(pv({}).audio[1]!.on, false);
+eq(must(pv({}).audio[0]).sub, "TrueHD 7.1");
+eq(must(pv({}).audio[0]).label, "English · original");
+eq(must(pv({ quality: "1080p" }).audio[0]).sub, "TrueHD 7.1 → EAC3 5.1");
+eq(must(pv({ quality: "1080p" }).audio[1]).sub, "EAC3 5.1");
+eq(must(pv({}).audio[1]).label, "French");
+eq(must(pv({}).audio[0]).on, true);
+eq(must(pv({}).audio[1]).on, false);
 const cant = pv({ subs: [5] }, () => false);
-eq(cant.subs[1]!.disabled, true);
-ok(cant.subs[1]!.sub.endsWith("can’t be shown here"));
-eq(cant.subs[1]!.on, false);
-eq(pv({ subs: [5] }, (t) => t.index !== 5).subs[0]!.disabled, false);
+eq(must(cant.subs[1]).disabled, true);
+ok(must(cant.subs[1]).sub.endsWith("can’t be shown here"));
+eq(must(cant.subs[1]).on, false);
+eq(must(pv({ subs: [5] }, (t) => t.index !== 5).subs[0]).disabled, false);
 eq(pv({ audio: [] }).canDownload, false);
 eq(pv({}).canDownload, true);
 eq(pv({}).title, "Download Dune");

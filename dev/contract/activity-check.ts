@@ -4,6 +4,7 @@ import { strictEqual as eq, ok } from "node:assert";
 import { existsSync, mkdtempSync, readFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import type { ActivityEvent } from "../../src/lib/core/types.ts";
 
 function firstLine(child: ReturnType<typeof spawn>, pattern: RegExp) {
 	return new Promise<string>((resolve, reject) => {
@@ -16,6 +17,8 @@ function firstLine(child: ReturnType<typeof spawn>, pattern: RegExp) {
 		});
 	});
 }
+
+type ApiError = { error: { code: string } };
 
 const children: ReturnType<typeof spawn>[] = [];
 const dir = mkdtempSync(join(tmpdir(), "activity-check-"));
@@ -66,7 +69,7 @@ const JSON_HEADERS = { "Content-Type": "application/json" };
 const feed = async (api: string) => {
 	const r = await fetch(`${api}/activity`);
 	eq(r.status, 200);
-	return ((await r.json()) as any).items as any[];
+	return ((await r.json()) as { items: ActivityEvent[] }).items;
 };
 const read = (api: string, body: unknown) =>
 	fetch(`${api}/activity/read`, {
@@ -99,7 +102,7 @@ try {
 	for (const body of [{}, { ids: [] }]) {
 		const r = await read(bad.api, body);
 		eq(r.status, 400);
-		eq(((await r.json()) as any).error.code, "invalid_request");
+		eq(((await r.json()) as ApiError).error.code, "invalid_request");
 	}
 
 	const plain = await start("plain");

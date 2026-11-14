@@ -20,19 +20,33 @@ if (!opt.listen || !opt.upstream || !opt.spec || !opt.report) {
 	process.exit(2);
 }
 
-type Json = any;
+type Ref = { $ref?: string };
+type Schema = Ref & { nullable?: boolean; type?: string | string[]; enum?: unknown[] };
+type Parameter = Ref & { in?: string; name: string; required?: boolean; schema?: Schema };
+type Media = { schema?: Schema };
+type Body = Ref & { required?: boolean; content?: Record<string, Media> };
+type Declared = Ref & { content?: Record<string, Media> };
+type Operation = {
+	parameters?: Parameter[];
+	requestBody?: Body;
+	responses: Record<string, Declared>;
+};
+type Method = "get" | "put" | "post" | "delete" | "patch" | "head" | "options";
+type PathItem = { parameters?: Parameter[] } & Partial<Record<Method, Operation>>;
+type Spec = { servers: { url: string }[]; paths: Record<string, PathItem>; components?: object };
 type Where = "request" | "response" | "undocumented";
 
-const spec: Json = parse(readFileSync(opt.spec, "utf8"));
+const spec: Spec = parse(readFileSync(opt.spec, "utf8"));
 const base: string = spec.servers[0].url;
 
 // The one gap between OpenAPI 3.0 and JSON Schema that the contract uses.
-function nullable(node: Json) {
+function nullable(node: unknown) {
 	if (Array.isArray(node)) return node.forEach(nullable);
 	if (node === null || typeof node !== "object") return;
-	if (node.nullable === true && node.type) {
-		node.type = [node.type, "null"].flat();
-		if (node.enum) node.enum = [...node.enum, null];
+	const schema: Schema = node;
+	if (schema.nullable === true && schema.type) {
+		schema.type = [schema.type, "null"].flat();
+		if (schema.enum) schema.enum = [...schema.enum, null];
 	}
 	for (const v of Object.values(node)) nullable(v);
 }
@@ -51,14 +65,16 @@ function validator(schema: object) {
 const problems = (v: ReturnType<typeof ajv.compile>) =>
 	(v.errors ?? []).map((e) => `${e.instancePath || "/"} ${e.message}`);
 
-const deref = (node: Json): Json => {
-	const ref: string | undefined = node?.$ref;
-	if (!ref) return node;
+function deref<T extends Ref>(node: T): T;
+function deref<T extends Ref>(node: T | undefined): T | undefined;
+function deref<T extends Ref>(node: T | undefined): T | undefined {
+	const ref = node?.$ref;
+	if (!node || !ref) return node;
 	return ref
 		.slice(2)
 		.split("/")
-		.reduce((at: Json, part) => at[part], spec);
-};
+		.reduce<unknown>((at, part) => (at as Record<string, unknown>)[part], spec) as T;
+}
 
 const templates = Object.keys(spec.paths).map((path) => {
 	const names: string[] = [];
@@ -85,19 +101,19 @@ function route(pathname: string) {
 	return null;
 }
 
-function scalar(type: string | undefined, raw: string): unknown {
+function scalar(type: string | string[] | undefined, raw: string): unknown {
 	if (type === "integer" || type === "number") return raw.trim() === "" ? raw : Number(raw);
 	if (type === "boolean") return raw === "true" ? true : raw === "false" ? false : raw;
 	return raw;
 }
 
 function checkParams(
-	parameters: Json[],
+	parameters: Parameter[],
 	where: "path" | "query",
 	values: (n: string) => string | undefined,
 ) {
 	const errors: string[] = [];
-	for (const p of parameters.map(deref).filter((p) => p.in === where)) {
+	for (const p of parameters.map((p) => deref(p)).filter((p) => p.in === where)) {
 		const raw = values(p.name);
 		if (raw === undefined) {
 			if (p.required) errors.push(`${where} parameter ${p.name} is missing`);
@@ -131,7 +147,7 @@ type Exchange = {
 
 function check(x: Exchange): { where: Where; errors: string[] }[] {
 	const found = route(x.pathname.slice(base.length) || "/");
-	const op = found?.template && spec.paths[found.template.path][x.method.toLowerCase()];
+	const op = found?.template && spec.paths[found.template.path]?.[x.method.toLowerCase() as Method];
 	if (!found || !op)
 		return [{ where: "undocumented", errors: ["no such operation in the contract"] }];
 	const item = spec.paths[found.template.path];

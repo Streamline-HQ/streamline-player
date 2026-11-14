@@ -4,6 +4,15 @@ import { strictEqual as eq, ok } from "node:assert";
 import { existsSync, mkdtempSync, readFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import type { PairRequest } from "../../src/lib/core/types.ts";
+
+type ApiError = { error: { code: string } };
+type DeviceCode = {
+	device_code: string;
+	user_code: string;
+	verification_uri: string;
+	verification_uri_complete: string;
+};
 
 function firstLine(child: ReturnType<typeof spawn>, pattern: RegExp) {
 	return new Promise<string>((resolve, reject) => {
@@ -76,14 +85,14 @@ try {
 			password: "streamline",
 			device_name: "Chrome",
 		}),
-	}).then((r) => r.json())) as any;
+	}).then((r) => r.json())) as { access_token: string };
 	const bearer = { Authorization: `Bearer ${login.access_token}` };
 	const start1 = async () =>
 		(await fetch(`${api}/auth/device/code`, {
 			method: "POST",
 			headers: JSON_HEADERS,
 			body: JSON.stringify({ client_id: "c1", name: "framework-13", platform: "Linux" }),
-		}).then((r) => r.json())) as any;
+		}).then((r) => r.json())) as DeviceCode;
 	const poll = (device_code: string) =>
 		fetch(`${api}/auth/device/token`, {
 			method: "POST",
@@ -93,7 +102,7 @@ try {
 	const post = (code: string, action: string, headers: object = bearer) =>
 		fetch(`${api}/auth/device/${code}/${action}`, { method: "POST", headers });
 	const code404 = async (r: Response, want: string) => {
-		eq(((await r.json()) as any).error.code, want);
+		eq(((await r.json()) as ApiError).error.code, want);
 	};
 
 	const a = await start1();
@@ -106,7 +115,7 @@ try {
 
 	const seen = await fetch(`${api}/auth/device/${a.user_code}`, { headers: bearer });
 	eq(seen.status, 200);
-	const req = (await seen.json()) as any;
+	const req = (await seen.json()) as PairRequest;
 	eq(req.name, "framework-13");
 	eq(req.platform, "Linux");
 	ok(!Number.isNaN(Date.parse(req.requested_at)), req.requested_at);
@@ -123,7 +132,7 @@ try {
 	eq((await post(a.user_code, "approve")).status, 204);
 	const approved = await poll(a.device_code);
 	eq(approved.status, 200);
-	const key = ((await approved.json()) as any).api_key;
+	const key = ((await approved.json()) as { api_key: string }).api_key;
 	ok(key, "api_key");
 	const again = await post(a.user_code, "approve");
 	eq(again.status, 404);
@@ -154,7 +163,7 @@ try {
 		method: "POST",
 		headers: JSON_HEADERS,
 		body: JSON.stringify({ client_id: "c2", name: "tv", platform: "Android TV" }),
-	}).then((r) => r.json())) as any;
+	}).then((r) => r.json())) as DeviceCode;
 	eq(d.verification_uri_complete.endsWith(`/pair?code=${d.user_code}`), true);
 	await sleep(1200);
 	const late = await fetch(`${short.api}/auth/device/token`, {

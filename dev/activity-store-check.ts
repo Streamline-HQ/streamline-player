@@ -1,5 +1,6 @@
 // node --import ./dev/controller-check/register.mjs dev/activity-store-check.ts
 import { strictEqual as eq, deepStrictEqual as same } from "node:assert";
+import { must } from "./must.ts";
 
 const { feed, loadActivity, markAllRead, markRead, resetActivity, unread } = await import(
 	"../src/lib/core/activity.svelte.ts"
@@ -47,7 +48,7 @@ await Promise.all([loadActivity(concurrent), loadActivity(concurrent, true)]);
 eq(concurrent.loads, 1);
 
 p.failLoad = true;
-feed.items[0]!.read = true;
+must(feed.items[0]).read = true;
 await loadActivity(p, true);
 eq(typeof feed.error, "string");
 eq(feed.items.length, 3);
@@ -57,7 +58,7 @@ p = port();
 resetActivity();
 await loadActivity(p);
 const pending = markRead(p, ["a1"]);
-eq(feed.items[0]!.read, true);
+eq(must(feed.items[0]).read, true);
 eq(unread(), 1);
 eq(await pending, true);
 same(p.sent, [["a1"]]);
@@ -67,9 +68,9 @@ same(p.sent, [["a1"]]);
 
 p.failRead = true;
 eq(await markRead(p, ["a2"]), false);
-eq(feed.items[1]!.read, false);
-eq(feed.items[0]!.read, true);
-eq(feed.items[2]!.read, true);
+eq(must(feed.items[1]).read, false);
+eq(must(feed.items[0]).read, true);
+eq(must(feed.items[2]).read, true);
 eq(unread(), 1);
 
 p = port();

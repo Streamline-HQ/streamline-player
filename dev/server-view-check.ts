@@ -1,6 +1,7 @@
 process.env.TZ = "UTC";
 // node dev/server-view-check.ts
 import { strictEqual as eq, deepStrictEqual as same, ok } from "node:assert";
+import { must } from "./must.ts";
 import {
 	canRestart,
 	commitNumber,
@@ -432,16 +433,16 @@ const demo = (): AdminData => ({
 });
 
 const build = (d: AdminData = demo()) => sections(d, find, now, "en", words);
-const section = (s: Section[], key: string) => s.find((x) => x.key === key)!;
+const section = (s: Section[], key: string) => must(s.find((x) => x.key === key));
 const rows = (s: Section) => s.blocks.flatMap((b) => b.rows);
-const titled = (s: Section, title: string) => s.blocks.find((b) => b.title === title)!;
+const titled = (s: Section, title: string) => must(s.blocks.find((b) => b.title === title));
 const kinds = <T extends Row["t"]>(r: Row[], t: T) =>
 	r.filter((x): x is Extract<Row, { t: T }> => x.t === t);
 const setting = (s: Section[], key: string) =>
 	s.flatMap(rows).find((r) => "key" in r && r.key === key) as Extract<Row, { key: string }>;
 const hasRestart = (s: Section[]) => JSON.stringify(s).includes('"do":"restart"');
 
-let all = build();
+const all = build();
 same(
 	all.map((s) => s.title),
 	["Overview", "Now playing", "Devices", "Transcoding", "Library", "Logs"],
@@ -455,7 +456,7 @@ eq(section(all, "devices").badge, 1);
 eq(section(all, "overview").badge, undefined);
 
 const tiles = kinds(rows(section(all, "overview")), "tiles").flatMap((t) => t.tiles);
-const tile = (label: string) => tiles.find((t) => t.label === label)!;
+const tile = (label: string) => must(tiles.find((t) => t.label === label));
 eq(tile("Streams").value, "3");
 eq(tile("Streams").sub, "1 transcoding · 29.9 Mbps out");
 eq(tile("Pairing").value, "1");
@@ -503,7 +504,7 @@ same(
 );
 
 const stream = (s: Section[], id: string) =>
-	kinds(rows(section(s, "streams")), "stream").find((r) => r.id === id)!;
+	must(kinds(rows(section(s, "streams")), "stream").find((r) => r.id === id));
 const sev = stream(all, "s1");
 eq(sev.title, "Severance");
 ok(sev.sub.startsWith("S2 E4 · "));
@@ -540,9 +541,11 @@ eq(stream(build(ticked), "s3").time, "20:05 / 41:00");
 const quiet = demo();
 quiet.streams = [];
 const quietAll = build(quiet);
-const quietTile = kinds(rows(section(quietAll, "overview")), "tiles")
-	.flatMap((t) => t.tiles)
-	.find((t) => t.label === "Streams")!;
+const quietTile = must(
+	kinds(rows(section(quietAll, "overview")), "tiles")
+		.flatMap((t) => t.tiles)
+		.find((t) => t.label === "Streams"),
+);
 eq(quietTile.value, "0");
 eq(quietTile.sub, "Nobody is watching");
 eq(quietTile.tone, "muted");
@@ -551,26 +554,28 @@ same(rows(section(quietAll, "streams")), [
 ]);
 
 const devices = section(all, "devices");
-eq(devices.blocks[0]!.title, "Waiting for approval");
-eq(devices.blocks[0]!.desc, EN.blk_waiting_desc);
-same(devices.blocks[0]!.rows, [
+eq(must(devices.blocks[0]).title, "Waiting for approval");
+eq(must(devices.blocks[0]).desc, EN.blk_waiting_desc);
+same(must(devices.blocks[0]).rows, [
 	{ t: "pair", code: "R4W-X9P", device: "iPad mini", icon: "tablet", sub: "iPadOS · 2 min ago" },
 ]);
 const noPair = demo();
 noPair.pairings = [];
-eq(section(build(noPair), "devices").blocks[0]!.title, "Paired apps");
+eq(must(section(build(noPair), "devices").blocks[0]).title, "Paired apps");
 eq(section(build(noPair), "devices").badge, undefined);
 eq(
-	kinds(rows(section(build(noPair), "overview")), "tiles")
-		.flatMap((t) => t.tiles)
-		.find((t) => t.label === "Pairing")!.sub,
+	must(
+		kinds(rows(section(build(noPair), "overview")), "tiles")
+			.flatMap((t) => t.tiles)
+			.find((t) => t.label === "Pairing"),
+	).sub,
 	"No requests waiting",
 );
 
 const apps = titled(devices, "Paired apps");
 eq(apps.desc, "3 devices, each with its own key in the device’s secure storage.");
 const item = (b: { rows: Row[] }, title: string) =>
-	kinds(b.rows, "item").find((r) => r.title === title)!;
+	must(kinds(b.rows, "item").find((r) => r.title === title));
 const pixel = item(apps, "Pixel 9");
 eq(pixel.meta, "Android · Camille Roux · Android Keystore");
 eq(pixel.aside, "3 days ago");
@@ -579,7 +584,7 @@ same(pixel.buttons, [
 	{ label: "Revoke", act: { do: "revoke", id: "d5" }, tone: "danger", disabled: false },
 ]);
 const bare = demo();
-delete bare.devices[2]!.key_store;
+delete must(bare.devices[2]).key_store;
 eq(
 	item(titled(section(build(bare), "devices"), "Paired apps"), "Pixel 9").meta,
 	"Android · Camille Roux",
@@ -593,7 +598,7 @@ same(self.pills, [["This device", "accent"]]);
 same(self.buttons, []);
 const web = demo();
 web.web = true;
-web.devices[0]!.kind = "browser";
+must(web.devices[0]).kind = "browser";
 const webSessions = titled(section(build(web), "devices"), "Browser sessions");
 same(item(webSessions, "Desktop · app").pills, [["This browser", "accent"]]);
 
@@ -647,18 +652,22 @@ same(softRows[2], {
 	desc: EN.hw_status_desc,
 });
 eq(
-	kinds(rows(section(softAll, "overview")), "tiles")
-		.flatMap((t) => t.tiles)
-		.find((t) => t.label === "Health")!.sub,
+	must(
+		kinds(rows(section(softAll, "overview")), "tiles")
+			.flatMap((t) => t.tiles)
+			.find((t) => t.label === "Health"),
+	).sub,
 	"ffmpeg 7.1 · software encoding",
 );
 for (const patch of [{ ready: false }, { mode: "software" as const }]) {
 	const d = demo();
 	Object.assign(d.overview.health.hw, patch);
 	eq(
-		kinds(rows(section(build(d), "overview")), "tiles")
-			.flatMap((t) => t.tiles)
-			.find((t) => t.label === "Health")!.sub,
+		must(
+			kinds(rows(section(build(d), "overview")), "tiles")
+				.flatMap((t) => t.tiles)
+				.find((t) => t.label === "Health"),
+		).sub,
 		"ffmpeg 7.1 · software encoding",
 	);
 }
@@ -704,10 +713,10 @@ same(folders.rows.at(-1), {
 	value: "Tue 03:00 · 4 new files · 2 replaced · 0 errors",
 });
 const scanning = demo();
-scanning.library.folders[0]!.scan = { progress: 0.5, eta_seconds: 8 };
+must(scanning.library.folders[0]).scan = { progress: 0.5, eta_seconds: 8 };
 const scanned = item(titled(section(build(scanning), "library"), "Folders"), "Movies");
-eq(scanned.buttons[0]!.label, "Scanning…");
-eq(scanned.buttons[0]!.disabled, true);
+eq(must(scanned.buttons[0]).label, "Scanning…");
+eq(must(scanned.buttons[0]).disabled, true);
 eq(scanned.aside, "50% · 0:08 left");
 eq(scanned.progress, 0.5);
 eq(item(titled(section(build(scanning), "library"), "Folders"), "Series").progress, undefined);
@@ -719,7 +728,10 @@ same(
 	(setting(all, "log.app.level").options ?? []).map((o) => o[0]),
 	["debug", "info", "warn", "error"],
 );
-eq(kinds(titled(lg, "Application log").rows, "kv").at(-1)!.value, "/var/log/streamline/app.log");
+eq(
+	must(kinds(titled(lg, "Application log").rows, "kv").at(-1)).value,
+	"/var/log/streamline/app.log",
+);
 
 for (const r of all.flatMap(rows)) if ("restart" in r) eq(r.restart, false);
 eq(hasRestart(all), true);
@@ -730,7 +742,7 @@ eq(setting(waitAll, "log.app.level").restart, true);
 eq(setting(waitAll, "otel.endpoint").restart, true);
 eq(setting(waitAll, "log.app.format").restart, false);
 const ov = section(waitAll, "overview");
-same(ov.blocks[1]!.rows, [
+same(must(ov.blocks[1]).rows, [
 	{
 		t: "note",
 		tone: "warn",
@@ -738,9 +750,11 @@ same(ov.blocks[1]!.rows, [
 		button: ["Restart now", { do: "restart" }],
 	},
 ]);
-const waitHealth = kinds(rows(ov), "tiles")
-	.flatMap((t) => t.tiles)
-	.find((t) => t.label === "Health")!;
+const waitHealth = must(
+	kinds(rows(ov), "tiles")
+		.flatMap((t) => t.tiles)
+		.find((t) => t.label === "Health"),
+);
 eq(waitHealth.value, "Restart needed");
 eq(waitHealth.sub, "2 changes waiting");
 eq(waitHealth.tone, "warn");
@@ -750,7 +764,7 @@ same(status(demo(), false, words), { label: "All good", tone: "ok" });
 const one = demo();
 one.settings.pending = ["log.app.level"];
 eq(
-	(section(build(one), "overview").blocks[1]!.rows[0] as { text: string }).text,
+	(must(section(build(one), "overview").blocks[1]).rows[0] as { text: string }).text,
 	"1 change only applies after a restart: log.app.level.",
 );
 
@@ -771,23 +785,23 @@ eq(canRestart(locked.settings), false);
 eq(hasRestart(bothAll), false);
 
 const during = sections(one, find, now, "en", words, true);
-const duringNote = section(during, "overview").blocks[1]!.rows[0] as {
+const duringNote = must(section(during, "overview").blocks[1]).rows[0] as {
 	button: [string, unknown];
 	disabled?: boolean;
 };
 same([duringNote.button[0], duringNote.disabled], ["Restarting…", true]);
-const duringAct = kinds(rows(section(during, "overview")), "action")[0]!;
+const duringAct = must(kinds(rows(section(during, "overview")), "action")[0]);
 same([duringAct.button, duringAct.disabled], ["Restarting…", true]);
-const idleAct = kinds(rows(section(build(), "overview")), "action")[0]!;
+const idleAct = must(kinds(rows(section(build(), "overview")), "action")[0]);
 same([idleAct.button, idleAct.disabled], ["Restart", undefined]);
 
 const approved = demo();
-approved.fresh = [approved.devices.find((d) => !d.current && d.kind === "app")!.name];
+approved.fresh = [must(approved.devices.find((d) => !d.current && d.kind === "app")).name];
 const freshRows = kinds(rows(section(build(approved), "devices")), "item").filter((r) =>
 	r.pills.some((p) => p[0] === "New"),
 );
 eq(freshRows.length, 1);
-eq(freshRows[0]!.pills[0]![1], "ok");
+eq(must(must(freshRows[0]).pills[0])[1], "ok");
 
 eq(commitNumber("abc", 1, 8), null);
 eq(commitNumber("999", 1, 8), 8);

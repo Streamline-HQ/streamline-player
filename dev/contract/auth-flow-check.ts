@@ -4,6 +4,15 @@ import { strictEqual as eq, ok } from "node:assert";
 import { existsSync, mkdtempSync, readFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import type { AdminDevice, AuthMethods } from "../../src/lib/core/types.ts";
+
+type Tokens = {
+	token_type: string;
+	access_token: string;
+	refresh_token: string;
+	device_id: string;
+};
+type ApiError = { error: { code: string } };
 
 const VERIFIER = "dBjftJeZ4CVP-mB92K27uhbUJU1p1r_wW1gFWFOEjXk";
 const CHALLENGE = "E9Melhoa2OwvFrEMTJguCHaoeK1t8URWbuGJSstw-cM";
@@ -75,10 +84,10 @@ try {
 	};
 	const token = (body: object) =>
 		call("/auth/token", { method: "POST", body: JSON.stringify(body) });
-	const grant = (body: object) => token(body).then((r) => r.json() as Promise<any>);
+	const grant = <T = Tokens>(body: object) => token(body).then((r) => r.json() as Promise<T>);
 
-	const methods: any = await call("/auth/methods").then((r) => r.json());
-	ok(methods.sso.some((s: any) => s.id === "authentik"));
+	const methods: AuthMethods = await call("/auth/methods").then((r) => r.json());
+	ok(methods.sso.some((s) => s.id === "authentik"));
 
 	const query = new URLSearchParams({
 		provider: "authentik",
@@ -97,8 +106,8 @@ try {
 	const code = back.searchParams.get("code") as string;
 	ok(code);
 
-	const exchange = (c: string, verifier: string) =>
-		grant({
+	const exchange = <T = Tokens>(c: string, verifier: string) =>
+		grant<T>({
 			grant_type: "authorization_code",
 			code: c,
 			code_verifier: verifier,
@@ -108,10 +117,10 @@ try {
 	const first = await exchange(code, VERIFIER);
 	eq(first.token_type, "Bearer");
 	ok(first.access_token && first.refresh_token && first.device_id);
-	eq((await exchange(code, VERIFIER)).error.code, "invalid_grant");
+	eq((await exchange<ApiError>(code, VERIFIER)).error.code, "invalid_grant");
 
 	const other = (await authorize()).searchParams.get("code") as string;
-	eq((await exchange(other, "not-the-verifier")).error.code, "invalid_grant");
+	eq((await exchange<ApiError>(other, "not-the-verifier")).error.code, "invalid_grant");
 
 	const login = (password: string) =>
 		token({
@@ -120,17 +129,17 @@ try {
 			password,
 			device_name: "Chrome",
 		});
-	const signed = await login("streamline").then((r) => r.json() as Promise<any>);
+	const signed = await login("streamline").then((r) => r.json() as Promise<Tokens>);
 	ok(signed.access_token);
 	const bad = await login("wrong");
 	eq(bad.status, 401);
-	eq(((await bad.json()) as any).error.code, "invalid_credentials");
+	eq(((await bad.json()) as ApiError).error.code, "invalid_credentials");
 
 	eq((await call("/me", { token: signed.access_token })).status, 200);
 	await new Promise((r) => setTimeout(r, 2500));
 	const expired = await call("/me", { token: signed.access_token });
 	eq(expired.status, 401);
-	eq(((await expired.json()) as any).error.code, "unauthorized");
+	eq(((await expired.json()) as ApiError).error.code, "unauthorized");
 
 	const refreshed = await grant({
 		grant_type: "refresh_token",
@@ -140,12 +149,13 @@ try {
 	eq((await call("/me", { token: refreshed.access_token })).status, 200);
 
 	eq(
-		(await grant({ grant_type: "refresh_token", refresh_token: signed.refresh_token })).error.code,
+		(await grant<ApiError>({ grant_type: "refresh_token", refresh_token: signed.refresh_token }))
+			.error.code,
 		"invalid_grant",
 	);
 	eq(
-		(await grant({ grant_type: "refresh_token", refresh_token: refreshed.refresh_token })).error
-			.code,
+		(await grant<ApiError>({ grant_type: "refresh_token", refresh_token: refreshed.refresh_token }))
+			.error.code,
 		"invalid_grant",
 	);
 
@@ -164,8 +174,10 @@ try {
 		password: "streamline",
 		device_name: "Safari",
 	});
-	const devices: any = await call("/devices", { token: kept.access_token }).then((r) => r.json());
-	const mine = devices.items.find((d: any) => d.id === kept.device_id);
+	const devices: { items: AdminDevice[] } = await call("/devices", {
+		token: kept.access_token,
+	}).then((r) => r.json());
+	const mine = devices.items.find((d) => d.id === kept.device_id);
 	eq(mine.kind, "browser");
 	eq(mine.current, true);
 	eq(mine.platform, "Web browser");

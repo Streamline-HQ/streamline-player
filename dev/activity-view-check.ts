@@ -1,6 +1,7 @@
 process.env.TZ = "America/Los_Angeles";
 // node dev/activity-view-check.ts
 import { strictEqual as eq, deepStrictEqual as same } from "node:assert";
+import { must } from "./must.ts";
 import {
 	bellLabel,
 	FILTERS,
@@ -257,12 +258,12 @@ const west = view(
 	[ev({ id: "x", kind: "scan", scan: { added: 0, upgraded: 0, errors: 0 } }, 0)],
 	"all",
 );
-eq(west.groups[0]!.group, "today");
+eq(must(west.groups[0]).group, "today");
 const late = { ...a11, at: local(11, 8, 23, 50).toISOString() };
 const lateView = view([late], "all");
-eq(lateView.groups[0]!.group, "yesterday");
-eq(lateView.groups[0]!.rows[0]!.at, "23:50");
+eq(must(lateView.groups[0]).group, "yesterday");
+eq(must(must(lateView.groups[0]).rows[0]).at, "23:50");
 const earlier = view([{ ...a11, at: local(11, 2).toISOString() }], "all");
-eq(earlier.groups[0]!.label, "Earlier");
+eq(must(earlier.groups[0]).label, "Earlier");
 
 console.log("activity-view-check: ok");

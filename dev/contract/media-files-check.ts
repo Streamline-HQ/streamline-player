@@ -7,6 +7,12 @@ import { createServer } from "node:net";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
+type Tracks = {
+	preparing?: boolean;
+	trickplay?: { url: string };
+	subtitles: { files: { vtt: string } }[];
+};
+
 const SECRET = "dev-secret-0123456789abcdef";
 const ID = "clip";
 
@@ -71,7 +77,7 @@ async function startMock(): Promise<Mock> {
 
 async function tracksOnceReady(origin: string) {
 	for (let i = 0; i < 120; i++) {
-		const t: any = await fetch(`${origin}/api/v1/playback/media/${ID}/tracks`).then((r) =>
+		const t: Tracks = await fetch(`${origin}/api/v1/playback/media/${ID}/tracks`).then((r) =>
 			r.json(),
 		);
 		if (!t.preparing && t.trickplay) return t;
@@ -101,7 +107,7 @@ try {
 
 	const index = await fetch(tracks.trickplay.url);
 	eq(index.status, 200);
-	const meta: any = await index.json();
+	const meta: { interval: number; sheets: string[] } = await index.json();
 	eq(meta.interval, 10);
 	const sheetUrl = new URL(tracks.trickplay.url);
 	sheetUrl.pathname = sheetUrl.pathname.replace(/[^/]+$/, meta.sheets[0]);

@@ -5,6 +5,9 @@ import { strictEqual as eq, notStrictEqual as ne, ok } from "node:assert";
 import { existsSync, mkdirSync, readFileSync, statSync, writeFileSync } from "node:fs";
 import { createServer } from "node:net";
 import { join } from "node:path";
+import type { ActivityEvent, DownloadJob, Title, Watch } from "../../src/lib/core/types.ts";
+
+type ApiError = { error: { code: string } };
 
 const SECRET = "dev-secret-0123456789abcdef";
 const dir = "/tmp/streamline-player/downloads";
@@ -88,13 +91,13 @@ try {
 
 	const J = { "Content-Type": "application/json" };
 	async function pair(name: string) {
-		const code: any = await fetch(`${api}/auth/device/code`, {
+		const code: { device_code: string } = await fetch(`${api}/auth/device/code`, {
 			method: "POST",
 			headers: J,
 			body: JSON.stringify({ client_id: name, name, platform: "linux" }),
 		}).then((r) => r.json());
 		eq((await fetch(`${direct}/dev/approve`, { method: "POST" })).status, 200);
-		const token: any = await fetch(`${api}/auth/device/token`, {
+		const token: { api_key: string } = await fetch(`${api}/auth/device/token`, {
 			method: "POST",
 			headers: J,
 			body: JSON.stringify({ device_code: code.device_code }),
@@ -104,13 +107,15 @@ try {
 	const mine = await pair("desktop-a");
 	const other = await pair("desktop-b");
 
-	const movies: any = await fetch(`${api}/movies`, { headers: mine }).then((r) => r.json());
-	const movie: any = await fetch(`${api}/movies/${movies.items[0].id}`, { headers: mine }).then(
+	const movies: { items: Title[] } = await fetch(`${api}/movies`, { headers: mine }).then((r) =>
+		r.json(),
+	);
+	const movie: Title = await fetch(`${api}/movies/${movies.items[0].id}`, { headers: mine }).then(
 		(r) => r.json(),
 	);
 	const mediaId: string = movie.media_files[0].id;
 
-	let tracks: any;
+	let tracks: { audio: { index: number }[] };
 	for (let i = 0; i < 60; i++) {
 		tracks = await fetch(`${api}/playback/media/${mediaId}/tracks`, { headers: mine }).then((r) =>
 			r.json(),
@@ -119,7 +124,7 @@ try {
 		await new Promise((r) => setTimeout(r, 500));
 	}
 	eq(tracks.audio.length, 2);
-	const audio: number[] = tracks.audio.map((a: any) => a.index);
+	const audio: number[] = tracks.audio.map((a) => a.index);
 	const capabilities = {
 		video: [
 			{
@@ -149,12 +154,16 @@ try {
 		fetch(`${api}/downloads`, { method: "POST", headers: { ...J, ...headers }, body: b });
 	const get = (id: string, headers: object = mine) => fetch(`${api}/downloads/${id}`, { headers });
 	const feed = async (headers: object) =>
-		((await fetch(`${api}/activity`, { headers }).then((r) => r.json())) as any).items as any[];
+		(
+			(await fetch(`${api}/activity`, { headers }).then((r) => r.json())) as {
+				items: ActivityEvent[];
+			}
+		).items;
 	async function ready(id: string, headers: object = mine) {
 		for (let i = 0; i < 120; i++) {
 			const r = await get(id, headers);
 			eq(r.status, 200);
-			const job: any = await r.json();
+			const job: DownloadJob = await r.json();
 			if (job.state !== "preparing") return job;
 			await new Promise((res) => setTimeout(res, 500));
 		}
@@ -163,7 +172,7 @@ try {
 
 	const created = await post(body());
 	eq(created.status, 201);
-	const first: any = await created.json();
+	const first: DownloadJob = await created.json();
 	const done = await ready(first.id);
 	eq(done.state, "ready");
 	eq(done.progress, 1);
@@ -178,9 +187,9 @@ try {
 	u.searchParams.set("sig", (sig[0] === "0" ? "1" : "0") + sig.slice(1));
 	eq((await fetch(u, { headers: { Range: "bytes=0-15" } })).status, 403);
 
-	const again: any = await get(first.id).then((r) => r.json());
+	const again: DownloadJob = await get(first.id).then((r) => r.json());
 	eq((await fetch(again.url, { headers: { Range: "bytes=0-15" } })).status, 206);
-	const same: any = await post(body()).then((r) => r.json());
+	const same: DownloadJob = await post(body()).then((r) => r.json());
 	eq(same.id, first.id);
 
 	for (const bad of [
@@ -195,7 +204,7 @@ try {
 			body: bad,
 		});
 		eq(r.status, 400);
-		eq(((await r.json()) as any).error.code, "invalid_request");
+		eq(((await r.json()) as ApiError).error.code, "invalid_request");
 	}
 	const unknown = await post(body({ media_id: "nope" }));
 	eq(unknown.status, 404);
@@ -203,7 +212,7 @@ try {
 	eq((await get(first.id, other)).status, 404);
 	const bearer = { Authorization: "Bearer nobody" };
 	eq((await get(first.id, bearer)).status, 401);
-	const browser: any = await fetch(`${api}/auth/token`, {
+	const browser: { access_token: string } = await fetch(`${api}/auth/token`, {
 		method: "POST",
 		headers: J,
 		body: JSON.stringify({
@@ -216,10 +225,10 @@ try {
 	const asBrowser = { Authorization: `Bearer ${browser.access_token}` };
 	for (const r of [await get(first.id, asBrowser), await post(body(), asBrowser)]) {
 		eq(r.status, 403);
-		eq(((await r.json()) as any).error.code, "forbidden");
+		eq(((await r.json()) as ApiError).error.code, "forbidden");
 	}
 
-	const slow: any = await post(body({ quality: "720p" })).then((r) => r.json());
+	const slow: DownloadJob = await post(body({ quality: "720p" })).then((r) => r.json());
 	ne(slow.id, first.id);
 	if (slow.state === "preparing") {
 		eq(
@@ -229,9 +238,9 @@ try {
 		);
 	}
 	await fetch(`${direct}/dev/downloads/fail`, { method: "POST" });
-	const broken: any = await post(body()).then((r) => r.json());
+	const broken: DownloadJob = await post(body()).then((r) => r.json());
 	eq(broken.state, "failed");
-	eq(((await get(broken.id).then((r) => r.json())) as any).error.code, "prepare_failed");
+	eq(((await get(broken.id).then((r) => r.json())) as ApiError).error.code, "prepare_failed");
 	eq(
 		(await fetch(`${api}/downloads/${broken.id}/complete`, { method: "POST", headers: mine }))
 			.status,
@@ -271,16 +280,18 @@ try {
 			body: JSON.stringify(b),
 		});
 	const now = Date.now();
-	let state: any = await put({
+	let state: Watch = await put({
 		position_seconds: 600,
 		duration_seconds: 7200,
 		at: new Date(now).toISOString(),
 	}).then((r) => r.json());
 	eq(state.position_seconds, 600);
 	const listed = async () =>
-		((await fetch(`${api}/watchstate`, { headers: mine }).then((r) => r.json())) as any).items.find(
-			(w: any) => w.media_id === mediaId,
-		);
+		(
+			(await fetch(`${api}/watchstate`, { headers: mine }).then((r) => r.json())) as {
+				items: Watch[];
+			}
+		).items.find((w) => w.media_id === mediaId);
 	eq((await listed()).position_seconds, 600);
 	state = await put({
 		position_seconds: 60,
