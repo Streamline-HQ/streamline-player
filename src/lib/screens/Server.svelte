@@ -105,14 +105,16 @@ function spy() {
 	const box = getScroll?.();
 	if (!box || Date.now() < spyHeldUntil) return;
 	const els = [...box.querySelectorAll<HTMLElement>("[data-sec]")];
-	if (!els.length) return;
+	const [first] = els;
+	const last = els.at(-1);
+	if (!first || !last) return;
 	const limit = box.getBoundingClientRect().top + SPY_OFFSET;
-	let current = els[0]!.dataset.sec as SectionKey;
-	for (const el of els)
-		if (el.getBoundingClientRect().top <= limit) current = el.dataset.sec as SectionKey;
-	if (box.scrollTop + box.clientHeight >= box.scrollHeight - 4)
-		current = els.at(-1)!.dataset.sec as SectionKey;
-	active = current;
+	const current =
+		box.scrollTop + box.clientHeight >= box.scrollHeight - 4
+			? last
+			: (els.findLast((el) => el.getBoundingClientRect().top <= limit) ?? first);
+	const sec = secs.find((s) => s.key === current.dataset.sec);
+	if (sec) active = sec.key;
 }
 
 const fail = () => toast(i18n.settings_err_unknown(), { icon: "wifi", warning: true });

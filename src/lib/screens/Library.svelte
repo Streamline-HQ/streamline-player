@@ -1,5 +1,5 @@
 <script lang="ts">
-import { isNew, nextEpisode, playUrl, watchedTitle } from "#lib/core/browse.ts";
+import { isNew, watchedTitle } from "#lib/core/browse.ts";
 import { addedText, badges, sizeText } from "#lib/core/format.ts";
 import { clickGroup, clickOne } from "#lib/core/download-ask.svelte.ts";
 import { episodeItem, episodeKey, movieItem, movieKey } from "#lib/core/download-items.ts";

@@ -31,8 +31,9 @@ const min = $derived(tiles.some((t) => t.mono) ? 300 : 180);
 
 <div class="tiles" style:grid-template-columns="repeat(auto-fit, minmax({min}px, 1fr))">
 	{#each tiles as t (t.label)}
-		{#if t.go}
-			<button type="button" class="tile go" onclick={() => ongo?.(t.go!)}>{@render body(t)}</button>
+		{@const go = t.go}
+		{#if go}
+			<button type="button" class="tile go" onclick={() => ongo?.(go)}>{@render body(t)}</button>
 		{:else}
 			<div class="tile">{@render body(t)}</div>
 		{/if}

@@ -152,15 +152,6 @@ const COLOR: Record<State, string> = {
 	color: var(--fg-muted);
 }
 
-.sl-dlpop__grid span span {
-	display: block;
-	margin-bottom: 3px;
-	font-size: 10.5px;
-	letter-spacing: 0.1em;
-	text-transform: uppercase;
-	color: var(--fg-faint);
-}
-
 .open {
 	position: absolute;
 	right: 8px;
@@ -222,6 +213,15 @@ const COLOR: Record<State, string> = {
 
 .stack > span {
 	white-space: normal;
+}
+
+.sl-dlpop__grid span span {
+	display: block;
+	margin-bottom: 3px;
+	font-size: 10.5px;
+	letter-spacing: 0.1em;
+	text-transform: uppercase;
+	color: var(--fg-faint);
 }
 
 .why {

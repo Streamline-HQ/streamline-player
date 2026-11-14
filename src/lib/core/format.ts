@@ -6,12 +6,12 @@ import type { FileSummary, Kind, Title, Watch } from "#lib/core/types.ts";
 
 /** Initials on a colour of its own, for people without a headshot (the design's monogram). */
 export function monogram(name: string) {
-	const parts = name.trim().split(/\s+/);
+	const [first = "", ...rest] = name.trim().split(/\s+/);
 	let h = 0;
-	for (const ch of name) h = (h * 31 + ch.codePointAt(0)!) >>> 0;
+	for (const ch of name) h = (h * 31 + (ch.codePointAt(0) ?? 0)) >>> 0;
 	const hue = h % 360;
 	return {
-		initials: (parts[0]![0]! + (parts.length > 1 ? parts.at(-1)![0]! : "")).toUpperCase(),
+		initials: (first.charAt(0) + (rest.at(-1) ?? "").charAt(0)).toUpperCase(),
 		bg: `oklch(0.36 0.06 ${hue})`,
 		fg: `oklch(0.92 0.04 ${hue})`,
 	};
@@ -21,10 +21,13 @@ export function monogram(name: string) {
 export function seasonSpan(seasons: number[], total: number) {
 	if (seasons.length === total)
 		return total === 1 ? i18n.common_season_n({ n: 1 }) : i18n.person_all_seasons({ count: total });
-	if (seasons.length === 1) return i18n.common_season_n({ n: seasons[0]! });
-	const run = seasons.every((n, i) => i === 0 || n === seasons[i - 1]! + 1);
+	const first = seasons[0];
+	const last = seasons.at(-1);
+	if (first === undefined || last === undefined) return "";
+	if (seasons.length === 1) return i18n.common_season_n({ n: first });
+	const run = seasons.slice(1).every((n, i) => n - 1 === seasons[i]);
 	return run
-		? i18n.person_seasons_range({ from: seasons[0]!, to: seasons.at(-1)! })
+		? i18n.person_seasons_range({ from: first, to: last })
 		: i18n.person_seasons_list({ list: seasons.join(", ") });
 }
 

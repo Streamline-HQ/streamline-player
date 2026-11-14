@@ -190,7 +190,8 @@ const pingOnce = async () => {
 	} catch {}
 };
 
-const SECTIONS: { key: string; icon: IconName; group?: () => string }[] = [
+type Section = { key: keyof typeof TITLES; icon: IconName; group?: () => string };
+const SECTIONS: Section[] = [
 	{ key: "profile", icon: "user" },
 	{ key: "playback", icon: "circle-play", group: i18n.settings_group_watching },
 	{ key: "subs", icon: "captions", group: i18n.settings_group_watching },
@@ -198,9 +199,9 @@ const SECTIONS: { key: string; icon: IconName; group?: () => string }[] = [
 		? [
 				{
 					key: "downloads",
-					icon: "arrow-down-to-line" as IconName,
+					icon: "arrow-down-to-line",
 					group: i18n.settings_group_watching,
-				},
+				} satisfies Section,
 			]
 		: []),
 	{ key: "display", icon: "eye", group: i18n.settings_group_app },
@@ -209,7 +210,7 @@ const SECTIONS: { key: string; icon: IconName; group?: () => string }[] = [
 	{ key: "device", icon: IS_WEB ? "globe" : "monitor", group: i18n.settings_account },
 	{ key: "account", icon: "user", group: i18n.settings_account },
 ];
-const TITLES: Record<string, () => string> = {
+const TITLES = {
 	profile: i18n.settings_profile,
 	playback: i18n.settings_playback,
 	subs: i18n.settings_audio_subs,
@@ -243,12 +244,15 @@ function spy() {
 	const box = getScroll?.();
 	if (!box || Date.now() < spyHeldUntil) return;
 	const els = [...box.querySelectorAll<HTMLElement>("[data-sec]")];
-	if (!els.length) return;
+	const [first] = els;
+	const last = els.at(-1);
+	if (!first || !last) return;
 	const limit = box.getBoundingClientRect().top + SPY_OFFSET;
-	let current = els[0]!.dataset.sec!;
-	for (const el of els) if (el.getBoundingClientRect().top <= limit) current = el.dataset.sec!;
-	if (box.scrollTop + box.clientHeight >= box.scrollHeight - 4) current = els.at(-1)!.dataset.sec!;
-	active = current;
+	const current =
+		box.scrollTop + box.clientHeight >= box.scrollHeight - 4
+			? last
+			: (els.findLast((el) => el.getBoundingClientRect().top <= limit) ?? first);
+	active = current.dataset.sec ?? active;
 }
 
 const choice = (key: ChoiceKey, vals: string[]) =>
@@ -364,7 +368,7 @@ onMount(() => {
 				{#each g.items as s (s.key)}
 					<button type="button" class:on={active === s.key} onclick={() => jump(s.key)}>
 						<Icon name={s.icon} />
-						<span>{TITLES[s.key]!()}</span>
+						<span>{TITLES[s.key]()}</span>
 					</button>
 				{/each}
 			</div>
@@ -410,7 +414,7 @@ onMount(() => {
 			{/if}
 		</header>
 
-		<SettingsList id="profile" title={TITLES.profile!()}>
+		<SettingsList id="profile" title={TITLES.profile()}>
 			<SettingsRow label={i18n.settings_picture()} desc={i18n.settings_picture_desc()}>
 				{#snippet control()}
 					<span class="picture">
@@ -486,7 +490,7 @@ onMount(() => {
 			</SettingsRow>
 		</SettingsList>
 
-		<SettingsList id="playback" title={TITLES.playback!()}>
+		<SettingsList id="playback" title={TITLES.playback()}>
 			<SettingsRow
 				label={i18n.settings_quality_home()}
 				desc={i18n.settings_quality_home_desc({ host })}
@@ -532,7 +536,7 @@ onMount(() => {
 			</SettingsRow>
 		</SettingsList>
 
-		<SettingsList id="subs" title={TITLES.subs!()}>
+		<SettingsList id="subs" title={TITLES.subs()}>
 			<SettingsRow label={i18n.settings_audio_language()}>
 				{#snippet control()}
 					<ChoiceMenu
@@ -629,7 +633,7 @@ onMount(() => {
 		</SettingsList>
 
 		{#if canDownload}
-			<SettingsList id="downloads" title={TITLES.downloads!()}>
+			<SettingsList id="downloads" title={TITLES.downloads()}>
 				<SettingsRow label={i18n.dl_quality_label()} desc={i18n.dl_settings_quality_desc()}>
 					{#snippet control()}
 						<ChoiceMenu
@@ -669,7 +673,7 @@ onMount(() => {
 			</SettingsList>
 		{/if}
 
-		<SettingsList id="display" title={TITLES.display!()}>
+		<SettingsList id="display" title={TITLES.display()}>
 			<SettingsRow label={i18n.settings_tech_details()} desc={i18n.settings_tech_details_desc()}>
 				{#snippet control()}
 					<Switch
@@ -686,7 +690,7 @@ onMount(() => {
 			</SettingsRow>
 		</SettingsList>
 
-		<SettingsList id="language" title={TITLES.language!()}>
+		<SettingsList id="language" title={TITLES.language()}>
 			<SettingsRow
 				label={i18n.settings_app_language()}
 				desc={i18n.settings_app_language_desc_emails()}
@@ -710,7 +714,7 @@ onMount(() => {
 			</SettingsRow>
 		</SettingsList>
 
-		<SettingsList id="devices" title={TITLES.devices!()}>
+		<SettingsList id="devices" title={TITLES.devices()}>
 			{#if selfDevice}
 				<SettingsRow
 					label={selfDevice.name}
@@ -735,7 +739,7 @@ onMount(() => {
 			{/each}
 		</SettingsList>
 
-		<SettingsList id="device" title={TITLES.device!()}>
+		<SettingsList id="device" title={TITLES.device()}>
 			{#if IS_WEB}
 				<SettingsRow label={i18n.settings_browser()}>
 					{#snippet control()}
@@ -801,7 +805,7 @@ onMount(() => {
 			</SettingsRow>
 		</SettingsList>
 
-		<SettingsList id="account" title={TITLES.account!()}>
+		<SettingsList id="account" title={TITLES.account()}>
 			<SettingsRow label={i18n.settings_signed_in_as()}>
 				{#snippet control()}
 					<span class="info">{me?.email}</span>

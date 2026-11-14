@@ -127,6 +127,8 @@ async function begin(
 	audio: number[],
 	subs: number[],
 ) {
+	const first = items[0];
+	if (!first) return;
 	const requests = requestsOf(items, tracks, fileBitRate, quality, audio, subs);
 	try {
 		await start(p.downloads, requests, await p.capabilities());
@@ -138,8 +140,8 @@ async function begin(
 		...new Set(list.map((t) => languageLabel(t.language))),
 	];
 	const named = quality === "original" ? i18n.dl_quality_original() : quality;
-	const audioLangs = langs(requests[0]!.audio).join(", ");
-	const subLangs = langs(requests[0]!.subtitles).join(", ");
+	const audioLangs = langs(requests.flatMap((r) => r.audio)).join(", ");
+	const subLangs = langs(requests.flatMap((r) => r.subtitles)).join(", ");
 	const text = subLangs
 		? i18n.dl_toast_line({ quality: named, languages: audioLangs, subs: subLangs })
 		: i18n.dl_toast_line_none({ quality: named, languages: audioLangs });
@@ -147,7 +149,7 @@ async function begin(
 	toast(
 		items.length > 1
 			? i18n.dl_toast_downloading_many({ n: items.length, size: sizeText(total) })
-			: i18n.dl_toast_downloading({ label: items[0]!.label }),
+			: i18n.dl_toast_downloading({ label: first.label }),
 		{ text },
 	);
 }

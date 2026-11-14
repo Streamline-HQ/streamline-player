@@ -114,7 +114,7 @@ const toggle = (label: string, key: ToggleKey, desc?: string): Row => ({
 });
 const show = (label: string, value: string, desc?: string): Row => ({ label, desc, value });
 
-const sections = $derived.by((): Section[] => {
+const sections = $derived.by((): [Section, ...Section[]] => {
 	const d = info?.display;
 	const self = devices.find((x) => x.current);
 	return [
@@ -294,7 +294,7 @@ const sections = $derived.by((): Section[] => {
 	];
 });
 
-const section = $derived(sections.find((s) => s.key === current) ?? sections[0]!);
+const section = $derived(sections.find((s) => s.key === current) ?? sections[0]);
 const picking = $derived(
 	pick ? sections.flatMap((s) => s.rows).find((r) => r.choice === pick) : undefined,
 );

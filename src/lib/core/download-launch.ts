@@ -22,11 +22,11 @@ export function localLaunch(
 	start: number,
 ): Launch {
 	const m = e.meta;
-	const episode = m.season != null && m.episode != null;
+	const { season, episode } = m;
 	const poster = artworkAt(m.poster);
 	const still = artworkAt(m.still);
 	const item = { mediaId: e.media_id, titleName: m.title, anime: false, choice: null, start };
-	if (!episode) {
+	if (season == null || episode == null) {
 		return {
 			key: e.media_id,
 			item,
@@ -53,14 +53,14 @@ export function localLaunch(
 			kind: m.kind,
 			id: m.title_id,
 			href: localUrl(m),
-			season: m.season!,
-			episode: m.episode!,
+			season,
+			episode,
 			heading: name,
-			eyebrow: `${m.title} · S${m.season} E${m.episode}`,
-			sub: `S${m.season} · E${m.episode} — ${name}`,
+			eyebrow: `${m.title} · S${season} E${episode}`,
+			sub: `S${season} · E${episode} — ${name}`,
 			still,
 			poster,
-			framePos: stillPos(m.episode!, m.season!),
+			framePos: stillPos(episode, season),
 			synopsis: "",
 			more: [],
 		},

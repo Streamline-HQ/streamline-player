@@ -342,7 +342,10 @@ onMount(() => {
 			<button
 				type="button"
 				class="primary go"
-				onclick={() => (stopGo(), goto("/", { replace: true }))}
+				onclick={() => {
+					stopGo();
+					goto("/", { replace: true });
+				}}
 			>
 				{#if goLeft !== null}
 					<span class="fill"></span>

@@ -43,7 +43,6 @@ const scroller = useScroll();
 let index = $state(0);
 let progress = $state(0);
 let phase = $state<"pre" | "in" | "out">("pre");
-let hero = $state<HTMLElement>();
 let reduceMotion = false;
 let swap: ReturnType<typeof setTimeout>;
 

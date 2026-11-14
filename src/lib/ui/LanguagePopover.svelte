@@ -172,38 +172,6 @@ let {
 	line-height: 1.3;
 }
 
-.wide .group {
-	gap: 2px;
-}
-
-.wide .cap {
-	padding: 0 8px 4px;
-	font-size: 10.5px;
-}
-
-.wide .subs {
-	max-height: 170px;
-}
-
-.wide .sub {
-	height: 34px;
-	gap: 10px;
-	padding: 0 8px;
-	border-radius: 8px;
-}
-
-.wide .foot {
-	justify-content: flex-end;
-	padding: 0;
-	border-top: 0;
-}
-
-.wide .apply {
-	height: 34px;
-	padding: 0 16px;
-	border-radius: 9px;
-}
-
 .group {
 	display: flex;
 	flex-direction: column;
@@ -329,5 +297,37 @@ let {
 .apply:disabled {
 	opacity: 0.5;
 	pointer-events: none;
+}
+
+.wide .group {
+	gap: 2px;
+}
+
+.wide .cap {
+	padding: 0 8px 4px;
+	font-size: 10.5px;
+}
+
+.wide .subs {
+	max-height: 170px;
+}
+
+.wide .sub {
+	height: 34px;
+	gap: 10px;
+	padding: 0 8px;
+	border-radius: 8px;
+}
+
+.wide .foot {
+	justify-content: flex-end;
+	padding: 0;
+	border-top: 0;
+}
+
+.wide .apply {
+	height: 34px;
+	padding: 0 16px;
+	border-radius: 9px;
 }
 </style>

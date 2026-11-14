@@ -351,7 +351,6 @@ const subsShort = (c: Choice) =>
 			? i18n.detail_subs_forced()
 			: i18n.detail_subs_language({ language: languageNamed(c.subs, tracks?.subtitles ?? []) });
 const audioShort = (c: Choice) => (c.audio ? languageNamed(c.audio, tracks?.audio ?? []) : "");
-const langSummary = (c: Choice) => `${audioShort(c)} · ${subsShort(c)}`.replace(/^ · /, "");
 
 const heroLang = $derived(
 	i18n.detail_lang_label({
@@ -455,17 +454,17 @@ const movieDl = $derived(
 		: null,
 );
 
-function bulkOf(list: typeof available, name: string, word: "season" | "series") {
-	const keys = list.map((e) => episodeKey(t!, e));
+function bulkOf(title: Title, list: typeof available, name: string, word: "season" | "series") {
+	const keys = list.map((e) => episodeKey(title, e));
 	return { list, keys, name, state: bulkState(keys, entry, name, word, dlWords) };
 }
 const seriesDl = $derived(
-	canDownload && series && t && available.length ? bulkOf(available, t.title, "series") : null,
+	canDownload && series && t && available.length ? bulkOf(t, available, t.title, "series") : null,
 );
 const seasonDl = $derived.by(() => {
 	const list = seasonEps.filter((e) => e.has_file).map((e) => ({ ...e, season }));
 	return canDownload && series && t && list.length
-		? bulkOf(list, i18n.common_season_n({ n: season }), "season")
+		? bulkOf(t, list, i18n.common_season_n({ n: season }), "season")
 		: null;
 });
 

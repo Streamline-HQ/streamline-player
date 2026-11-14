@@ -267,10 +267,6 @@ section {
 	color: var(--fg);
 }
 
-.done {
-	color: var(--status-available) !important;
-}
-
 .grid {
 	display: grid;
 	grid-template-columns: repeat(auto-fill, minmax(var(--min), 1fr));
@@ -461,6 +457,11 @@ section {
 
 .tiny.lang.own {
 	color: var(--accent);
+}
+
+.round.season-mark.done,
+.tiny.mark.done {
+	color: var(--status-available);
 }
 
 .syn {

@@ -26,6 +26,14 @@ export function audioRate(codec: string, _channels: number) {
 export const converts = (codec: string, q: DownloadQuality) =>
 	q !== "original" && !/^(aac|e?ac-?3)$/i.test(codec);
 
+const bytesOver = (rate: number, minutes: number) => (rate * (minutes * 60)) / 8;
+
+/** Bytes of one audio track over the runtime, as the download carries it. */
+export const audioBytes = (t: AudioTrack, q: DownloadQuality, minutes: number) =>
+	bytesOver(converts(t.codec, q) ? CONVERTED_RATE : audioRate(t.codec, t.channels), minutes);
+
+export const subBytes = (s: SubTrack) => (isImageSub(s.codec) ? IMAGE_SUB_BYTES : TEXT_SUB_BYTES);
+
 export function estimate(i: {
 	quality: DownloadQuality;
 	fileBitRate: number;
@@ -35,22 +43,17 @@ export function estimate(i: {
 	subs: SubTrack[];
 	pickedSubs: number[];
 }) {
-	const seconds = i.minutes * 60;
-	const bytes = (rate: number) => (rate * seconds) / 8;
 	const own = i.audio.reduce((n, t) => n + audioRate(t.codec, t.channels), 0);
 	const rate = Math.min(Math.max(VIDEO_FLOOR, i.fileBitRate - own), VIDEO_CAP[i.quality]);
-	const video = bytes(rate);
-	const audio = i.audio.map((t) =>
-		bytes(converts(t.codec, i.quality) ? CONVERTED_RATE : audioRate(t.codec, t.channels)),
-	);
-	const subs = i.subs.map((s) => (isImageSub(s.codec) ? IMAGE_SUB_BYTES : TEXT_SUB_BYTES));
-	const sum = (sizes: number[], on: number[], list: { index: number }[]) =>
-		sizes.reduce((n, size, at) => n + (on.includes(list[at]!.index) ? size : 0), 0);
+	const video = bytesOver(rate, i.minutes);
+	const audioOf = (t: AudioTrack) => audioBytes(t, i.quality, i.minutes);
+	const sum = <T extends { index: number }>(list: T[], on: number[], size: (t: T) => number) =>
+		list.reduce((n, t) => n + (on.includes(t.index) ? size(t) : 0), 0);
 	return {
 		video,
-		audio,
-		subs,
-		total: video + sum(audio, i.picked, i.audio) + sum(subs, i.pickedSubs, i.subs),
+		audio: i.audio.map(audioOf),
+		subs: i.subs.map(subBytes),
+		total: video + sum(i.audio, i.picked, audioOf) + sum(i.subs, i.pickedSubs, subBytes),
 	};
 }
 

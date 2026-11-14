@@ -264,13 +264,7 @@ async function toggleWatched() {
 							<RotateCcw size={26} strokeWidth={2} />{i18n.detail_from_start()}
 						</button>
 					{/if}
-					<button
-						type="button"
-						data-tv="1"
-						class="act mark"
-						style:color={watched ? "var(--status-available)" : "var(--fg)"}
-						onclick={toggleWatched}
-					>
+					<button type="button" data-tv="1" class="act mark" class:watched onclick={toggleWatched}>
 						{#if watched}
 							<CheckCheck size={26} strokeWidth={2.2} />{i18n.detail_watched()}
 						{:else}
@@ -529,9 +523,13 @@ p {
 	font-weight: 600;
 }
 
+.act.watched {
+	color: var(--status-available);
+}
+
 .act:focus {
 	background: var(--player-ink);
-	color: var(--fg-on-accent) !important;
+	color: var(--fg-on-accent);
 	transform: scale(1.06);
 }
 

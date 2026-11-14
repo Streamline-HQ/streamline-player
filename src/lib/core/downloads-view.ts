@@ -1,4 +1,4 @@
-import { converts, estimate, sizeText } from "#lib/core/download-size.ts";
+import { audioBytes, converts, estimate, sizeText, subBytes } from "#lib/core/download-size.ts";
 import type { Choice } from "#lib/core/playback/choice.ts";
 import type { AudioTrack, SubTrack, Tracks } from "#lib/core/playback/port.ts";
 import { language } from "#lib/core/playback/rules.ts";
@@ -215,26 +215,24 @@ function groupsOf(done: DownloadEntry[], w: Words): Group[] {
 			keys: movies.map((e) => e.key),
 			seasons: [{ label: null, cards: movies.map((e) => card(e, w)) }],
 		});
-	const shows = new Map<number, DownloadEntry[]>();
+	const shows = new Map<number, [DownloadEntry, ...DownloadEntry[]]>();
 	for (const e of done.filter(isEpisode)) {
-		const list = shows.get(e.meta.title_id) ?? [];
-		list.push(e);
-		shows.set(e.meta.title_id, list);
+		const list = shows.get(e.meta.title_id);
+		if (list) list.push(e);
+		else shows.set(e.meta.title_id, [e]);
 	}
-	const lists = [...shows.values()].sort((a, b) =>
-		a[0]!.meta.title.localeCompare(b[0]!.meta.title),
-	);
+	const lists = [...shows.values()].sort((a, b) => a[0].meta.title.localeCompare(b[0].meta.title));
 	for (const list of lists) {
 		list.sort(byEpisode);
 		const seasons = [...new Set(list.map((e) => e.meta.season ?? 0))];
 		out.push({
 			kind: "show",
-			title: list[0]!.meta.title,
+			title: list[0].meta.title,
 			sub: `${w.episodes(list.length)} · ${gb(total(list))}`,
-			poster: list[0]!.meta.poster,
+			poster: list[0].meta.poster,
 			titleKind: "series",
-			titleId: list[0]!.meta.title_id,
-			firstSeason: list[0]!.meta.season,
+			titleId: list[0].meta.title_id,
+			firstSeason: list[0].meta.season,
 			keys: list.map((e) => e.key),
 			seasons: seasons.map((n) => {
 				const eps = list.filter((e) => (e.meta.season ?? 0) === n);
@@ -477,8 +475,8 @@ export function pickView(
 		subs: tracks.subtitles,
 		pickedSubs,
 	});
-	const extraSubs = est.subs.reduce(
-		(n, size, at) => n + (pickedSubs.includes(tracks.subtitles[at]!.index) ? size : 0),
+	const extraSubs = tracks.subtitles.reduce(
+		(n, t) => n + (pickedSubs.includes(t.index) ? subBytes(t) : 0),
 		0,
 	);
 	const sum = est.total + extraSubs * (p.count - 1);
@@ -494,14 +492,14 @@ export function pickView(
 				index: t.index,
 				label: w.language(t.language) + (i === 0 ? w.originalSuffix : ""),
 				sub: converts(t.codec, p.quality) ? `${name} → EAC3 5.1` : name,
-				size: sizeText(est.audio[i]!),
+				size: sizeText(audioBytes(t, p.quality, minutes)),
 				on: p.audio.includes(t.index),
 				disabled: false,
 			};
 		}),
-		subs: tracks.subtitles.map((t, i): PickRow => {
+		subs: tracks.subtitles.map((t): PickRow => {
 			const ok = canShow(t);
-			const size = est.subs[i]! * p.count;
+			const size = subBytes(t) * p.count;
 			return {
 				index: t.index,
 				label: w.subName(t),

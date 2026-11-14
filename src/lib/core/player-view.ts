@@ -53,11 +53,14 @@ const KEYS: Record<string, PlayerKey> = {
 /** One segment per chapter, each running up to the next chapter's start so no gap is left in the bar. */
 export function segments(duration: number, chapters: Chapter[]): Segment[] {
 	if (duration <= 0 || chapters.length === 0) return [{ from: 0, to: 1, title: "" }];
-	return chapters.map((c, i) => ({
-		from: i === 0 ? 0 : Math.min(1, c.start / duration),
-		to: i + 1 < chapters.length ? Math.min(1, chapters[i + 1]!.start / duration) : 1,
-		title: c.title,
-	}));
+	return chapters.map((c, i) => {
+		const next = chapters[i + 1];
+		return {
+			from: i === 0 ? 0 : Math.min(1, c.start / duration),
+			to: next ? Math.min(1, next.start / duration) : 1,
+			title: c.title,
+		};
+	});
 }
 
 export function hoverAt(ratio: number, duration: number, chapters: Chapter[]) {

@@ -15,7 +15,7 @@ import {
 	RotateCw,
 } from "@lucide/svelte";
 import { rememberedThroughput } from "#lib/core/playback/auto.ts";
-import { digits, languageLabel, modeName, resBadge, subInfo } from "#lib/core/playback/names.ts";
+import { digits, modeName, resBadge, subInfo } from "#lib/core/playback/names.ts";
 import { fmtOffset, panelWords } from "#lib/core/playback/panel-words.ts";
 import {
 	type Launch,

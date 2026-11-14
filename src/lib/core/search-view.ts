@@ -25,10 +25,15 @@ export function searchTitles(all: Hit[], query: string): Hit[] {
 
 /** The genres with the most titles, each with the title whose poster stands for it. */
 export function genreTiles(all: Hit[]) {
-	const by = new Map<string, Hit[]>();
-	for (const t of all) for (const g of t.genres) by.set(g, [...(by.get(g) ?? []), t]);
+	const by = new Map<string, [Hit, ...Hit[]]>();
+	for (const t of all)
+		for (const g of t.genres) {
+			const list = by.get(g);
+			if (list) list.push(t);
+			else by.set(g, [t]);
+		}
 	return [...by]
-		.map(([name, list]) => ({ name, count: list.length, cover: list[0]! }))
+		.map(([name, list]) => ({ name, count: list.length, cover: list[0] }))
 		.sort((a, b) => b.count - a.count || a.name.localeCompare(b.name))
 		.slice(0, MAX_GENRES);
 }

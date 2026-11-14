@@ -289,14 +289,15 @@ export function clock(seconds: number) {
 
 /** Decimal units, one decimal at most: "4.5 TB", "184 MB". */
 export function sizeText(bytes: number, locale: string, w: Words) {
-	const units: Unit[] = ["B", "KB", "MB", "GB", "TB"];
+	const larger: Unit[] = ["KB", "MB", "GB", "TB"];
 	let value = bytes;
-	let i = 0;
-	while (value >= 1000 && i < units.length - 1) {
+	let unit: Unit = "B";
+	for (const next of larger) {
+		if (value < 1000) break;
 		value /= 1000;
-		i++;
+		unit = next;
 	}
-	return w.size(value.toLocaleString(locale, { maximumFractionDigits: 1 }), units[i]!);
+	return w.size(value.toLocaleString(locale, { maximumFractionDigits: 1 }), unit);
 }
 
 export function ago(iso: string, now: Date, w: Words) {

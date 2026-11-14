@@ -103,8 +103,9 @@ async function videoCap(
 ): Promise<Capabilities["video"][number] | null> {
 	const level = family.levels[0] ?? 0;
 	const profiles = family.profiles.filter(([, type]) => probe.supported(type(level)));
-	if (!profiles.length) return null;
-	const [, ladderType] = family.profiles[family.ladder] ?? profiles[0]!;
+	const fallback = profiles[0];
+	if (!fallback) return null;
+	const [, ladderType] = family.profiles[family.ladder] ?? fallback;
 	const climbed = family.levels.filter((l) => probe.supported(ladderType(l)));
 	const top = family.levels.length > 1 ? (climbed.at(-1) ?? null) : null;
 	const type = ladderType(top ?? level);
@@ -152,7 +153,9 @@ export async function buildCaps(probe: Probe): Promise<Capabilities> {
 			dv_profiles: dv,
 		},
 		audio: {
-			codecs: Object.keys(AUDIO).filter((k) => probe.supported(AUDIO[k]!)),
+			codecs: Object.entries(AUDIO)
+				.filter(([, type]) => probe.supported(type))
+				.map(([name]) => name),
 			max_channels: 6,
 			passthrough: [],
 		},

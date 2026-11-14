@@ -96,7 +96,7 @@ const quality = (f?: FileSummary) =>
 
 function episodeList(numbers: number[]) {
 	const sorted = [...numbers].sort((a, b) => a - b);
-	const run = sorted.length > 1 && sorted.every((n, i) => i === 0 || n === sorted[i - 1]! + 1);
+	const run = sorted.length > 1 && sorted.slice(1).every((n, i) => n - 1 === sorted[i]);
 	return run ? `E${sorted[0]}–E${sorted.at(-1)}` : sorted.map((n) => `E${n}`).join(", ");
 }
 

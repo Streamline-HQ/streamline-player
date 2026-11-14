@@ -1,11 +1,11 @@
 <script lang="ts">
-import type { Act, Row } from "#lib/core/server-view.ts";
+import type { Act, Row, Tone } from "#lib/core/server-view.ts";
 import { TONES } from "#lib/screens/admin/tone.ts";
 import Icon, { type IconName } from "#lib/ui/Icon.svelte";
 
 let { row, onact }: { row: Extract<Row, { t: "note" }>; onact?: (a: Act) => void } = $props();
 
-const ICONS: Record<string, IconName> = {
+const ICONS: Record<Tone, IconName> = {
 	ok: "circle-check",
 	warn: "triangle-alert",
 	err: "circle-alert",
@@ -21,11 +21,12 @@ const tone = $derived(TONES[row.tone]);
 	style:background={tone.bg}
 	style:border-color={tone.line}
 >
-	<Icon name={ICONS[row.tone]!} size={15} stroke={2} />
+	<Icon name={ICONS[row.tone]} size={15} stroke={2} />
 	<span class="text">{row.text}</span>
 	{#if row.button}
-		<button type="button" disabled={row.disabled} onclick={() => onact?.(row.button![1])}>
-			{row.button[0]}
+		{@const [label, act] = row.button}
+		<button type="button" disabled={row.disabled} onclick={() => onact?.(act)}>
+			{label}
 		</button>
 	{/if}
 </div>

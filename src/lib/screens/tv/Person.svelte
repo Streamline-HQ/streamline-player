@@ -45,9 +45,8 @@ const summary = $derived.by(() => {
 				})
 			: "",
 	].filter(Boolean);
-	return i18n.person_on_your_server({
-		list: parts.length === 2 ? i18n.person_and({ a: parts[0]!, b: parts[1]! }) : (parts[0] ?? ""),
-	});
+	const [a = "", b] = parts;
+	return i18n.person_on_your_server({ list: b ? i18n.person_and({ a, b }) : a });
 });
 const DEPARTMENTS: Record<string, () => string> = { Acting: i18n.person_acting };
 const m = $derived(monogram(p?.name ?? ""));

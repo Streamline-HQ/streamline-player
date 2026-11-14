@@ -261,13 +261,14 @@ export async function commit(port: AdminPort, row: Editable): Promise<SaveResult
 export async function stop(port: AdminPort, id: string, message?: string) {
 	const d = admin.data;
 	const at = d?.streams.findIndex((s) => s.id === id) ?? -1;
-	if (!d || at < 0) return false;
-	const [gone] = d.streams.splice(at, 1);
+	const gone = d?.streams[at];
+	if (!d || !gone) return false;
+	d.streams.splice(at, 1);
 	try {
 		await port.stopStream(id, message);
 		return true;
 	} catch {
-		admin.data?.streams.splice(Math.min(at, admin.data.streams.length), 0, gone!);
+		admin.data?.streams.splice(Math.min(at, admin.data.streams.length), 0, gone);
 		return false;
 	}
 }
@@ -275,13 +276,14 @@ export async function stop(port: AdminPort, id: string, message?: string) {
 export async function revoke(port: AdminPort, id: string) {
 	const d = admin.data;
 	const at = d?.devices.findIndex((x) => x.id === id) ?? -1;
-	if (!d || at < 0) return false;
-	const [gone] = d.devices.splice(at, 1);
+	const gone = d?.devices[at];
+	if (!d || !gone) return false;
+	d.devices.splice(at, 1);
 	try {
 		await port.adminRevokeDevice(id);
 		return true;
 	} catch {
-		admin.data?.devices.splice(Math.min(at, admin.data.devices.length), 0, gone!);
+		admin.data?.devices.splice(Math.min(at, admin.data.devices.length), 0, gone);
 		return false;
 	}
 }

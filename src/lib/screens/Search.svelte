@@ -73,6 +73,7 @@ function onkeydown(e: KeyboardEvent) {
 const all = $derived(tagged(lib.movies, lib.shows));
 const q = $derived(urlQ.trim());
 const hits = $derived(searchTitles(all, q));
+const top = $derived(hits[0]);
 const movies = $derived(hits.filter((t) => t.kind === "movies"));
 const shows = $derived(hits.filter((t) => t.kind === "series"));
 const groups = $derived(
@@ -182,8 +183,7 @@ onMount(() => {
 				</div>
 			</div>
 		</div>
-	{:else if lib.loaded && hits.length}
-		{@const top = hits[0]!}
+	{:else if lib.loaded && top}
 		<div class="results">
 			<div class="found">
 				{(hits.length === 1 ? i18n.search_in_library_one : i18n.search_in_library_other)({

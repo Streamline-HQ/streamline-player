@@ -2,7 +2,6 @@
 import { monogram, seasonSpan } from "#lib/core/format.ts";
 import type { Credit, Person } from "#lib/core/types.ts";
 import { m as i18n } from "#lib/paraglide/messages.js";
-import Art from "#lib/ui/Art.svelte";
 import Icon from "#lib/ui/Icon.svelte";
 import { goto } from "#lib/ui/nav.ts";
 import NotFound from "#lib/ui/NotFound.svelte";
@@ -70,21 +69,19 @@ const summary = $derived.by(() => {
 				})
 			: "",
 	].filter(Boolean);
-	return i18n.person_on_your_server({
-		list: parts.length === 2 ? i18n.person_and({ a: parts[0]!, b: parts[1]! }) : (parts[0] ?? ""),
-	});
+	const [a = "", b] = parts;
+	return i18n.person_on_your_server({ list: b ? i18n.person_and({ a, b }) : a });
 });
 const mono = $derived(monogram(p?.name ?? "?"));
 const known = $derived(
-	(p?.known_for ?? []).map((k) => {
-		const onServer = k.kind !== undefined && k.id !== undefined;
-		const key = `${k.kind}:${k.id}`;
+	(p?.known_for ?? []).map(({ title, year, kind, id }) => {
+		const onServer = kind !== undefined && id !== undefined;
 		return {
-			title: k.title,
-			year: k.year,
-			character: onServer ? characterOf.get(key) : undefined,
-			poster: onServer ? artwork(k.kind!, k.id!, "poster") : undefined,
-			onopen: onServer ? () => goto(`/detail/${k.kind}/${k.id}`) : undefined,
+			title,
+			year,
+			character: onServer ? characterOf.get(`${kind}:${id}`) : undefined,
+			poster: onServer ? artwork(kind, id, "poster") : undefined,
+			onopen: onServer ? () => goto(`/detail/${kind}/${id}`) : undefined,
 		};
 	}),
 );

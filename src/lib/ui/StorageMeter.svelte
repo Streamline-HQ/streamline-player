@@ -43,14 +43,6 @@ let {
 	background: transparent;
 }
 
-.plain .legend {
-	margin-top: 0;
-}
-
-.plain .meter {
-	margin-bottom: 8px;
-}
-
 .meter {
 	display: flex;
 	height: 8px;
@@ -78,6 +70,14 @@ b {
 	margin-top: 8px;
 	font: 400 11.5px var(--font-mono);
 	color: var(--fg-subtle);
+}
+
+.plain .legend {
+	margin-top: 0;
+}
+
+.plain .meter {
+	margin-bottom: 8px;
 }
 
 .me {
