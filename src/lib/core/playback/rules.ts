@@ -82,9 +82,14 @@ export function autoForcedSub(o: {
 		.filter((t) => !t.forced && language(t.language) === (o.subLanguage ?? o.myLanguage))
 		.sort((a, b) => Number(a.sdh) - Number(b.sdh))[0];
 	const forced = usable.find((t) => t.forced && language(t.language) === audio);
+	// Auto reads the lines out when they are spoken in another language than the viewer's.
+	const foreign = o.subsMode === "Auto" && !!audio && audio !== o.myLanguage;
 	// The selected audio is one of the tracks, so an anime-rule Japanese pick means the list has one.
 	const always =
-		!!o.subLanguage || o.subsMode === "Always" || (o.anime && o.animeRule && audio === "Japanese");
+		!!o.subLanguage ||
+		o.subsMode === "Always" ||
+		foreign ||
+		(o.anime && o.animeRule && audio === "Japanese");
 	const want = always ? (full ?? forced) : o.subsMode === "Off" ? undefined : forced;
 	return want ?? null;
 }

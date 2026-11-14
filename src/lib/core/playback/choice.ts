@@ -78,7 +78,12 @@ export function defaultChoice(
 	const lang = played?.language ?? original;
 	return {
 		audio: lang ? language(lang) : "",
-		subs: o.subsMode === "Off" ? "off" : o.subsMode === "Always" ? o.myLanguage : "forced",
+		subs:
+			o.subsMode === "Off"
+				? "off"
+				: o.subsMode === "Always" || (lang && language(lang) !== o.myLanguage)
+					? o.myLanguage
+					: "forced",
 	};
 }
 
@@ -89,6 +94,7 @@ export function subsRule(
 ): { subsMode: string; subLanguage?: string } {
 	if (!c) return { subsMode: deviceMode };
 	if (c.subs === "off") return { subsMode: "Off" };
-	if (c.subs === "forced") return { subsMode: "Auto" };
+	// Not "Auto", which would read a foreign audio's lines out: the viewer asked for the forced ones only.
+	if (c.subs === "forced") return { subsMode: "Forced" };
 	return { subsMode: deviceMode, subLanguage: c.subs };
 }

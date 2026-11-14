@@ -200,11 +200,15 @@ eq(audioLanguages(audio), ["Japanese", "English"]);
 eq(subtitleLanguages([sub(0, "eng"), sub(1, "eng", true), sub(2, "fre")]), ["English", "French"]);
 eq(
 	defaultChoice(audio, { audioLang: "Original language", subsMode: "Auto", myLanguage: "English" }),
-	{ audio: "Japanese", subs: "forced" },
+	{ audio: "Japanese", subs: "English" },
 );
 eq(defaultChoice(audio, { audioLang: "English", subsMode: "Always", myLanguage: "French" }), {
 	audio: "English",
 	subs: "French",
+});
+eq(defaultChoice(audio, { audioLang: "English", subsMode: "Auto", myLanguage: "English" }), {
+	audio: "English",
+	subs: "forced",
 });
 eq(defaultChoice(audio, { audioLang: "French", subsMode: "Off", myLanguage: "English" }), {
 	audio: "Japanese",

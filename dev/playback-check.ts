@@ -47,10 +47,11 @@ const sub = (index: number, language: string, forced = false, sdh = false) => ({
 	files: {},
 });
 const base = { anime: false, animeRule: false, myLanguage: "English", burnOnly: () => false };
-// Forced subtitles follow the audio's language; "Off" turns them off; "Always" picks the full track in my language, non-SDH first.
+// Under an audio in my language, forced subtitles follow it; "Off" turns them off; "Always" picks the full track in my language, non-SDH first.
 eq(
 	autoForcedSub({
 		...base,
+		myLanguage: "French",
 		subs: [sub(0, "fre", true), sub(1, "eng")],
 		audio: { ...eng, language: "fre" },
 		subsMode: "Auto",
@@ -74,6 +75,35 @@ eq(
 		subsMode: "Always",
 	})?.index,
 	1,
+);
+// Auto reads a foreign audio's lines out in my language, and falls back on its forced track.
+eq(
+	autoForcedSub({
+		...base,
+		subs: [sub(0, "jpn", true), sub(1, "eng")],
+		audio: { ...eng, language: "jpn" },
+		subsMode: "Auto",
+	})?.index,
+	1,
+);
+eq(
+	autoForcedSub({
+		...base,
+		subs: [sub(0, "jpn", true), sub(1, "fre")],
+		audio: { ...eng, language: "jpn" },
+		subsMode: "Auto",
+	})?.index,
+	0,
+);
+// The forced ones only, asked for on the title page, stay forced under a foreign audio.
+eq(
+	autoForcedSub({
+		...base,
+		subs: [sub(0, "jpn", true), sub(1, "eng")],
+		audio: { ...eng, language: "jpn" },
+		subsMode: "Forced",
+	})?.index,
+	0,
 );
 // A burn-only forced track is never picked on its own.
 eq(
