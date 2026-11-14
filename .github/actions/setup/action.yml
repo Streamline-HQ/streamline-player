@@ -1,0 +1,119 @@
+name: Setup
+description: >-
+  Installs what a job asks for, each tool at the version the repository
+  declares, which is the one file the flake reads too: rust-toolchain.toml for
+  Rust, package.json for Node (engines.node) and pnpm (packageManager),
+  biome.json's $schema for biome, ruff.toml's required-version for ruff. The
+  flake refuses to evaluate when nixpkgs ships something else, so a runner and
+  the devshell cannot drift apart unnoticed.
+inputs:
+  github-token:
+    description: Token setup-task downloads with
+    required: true
+  node:
+    description: "`true` for Node, pnpm and the JS dependencies"
+    default: "false"
+  biome:
+    description: "`true` for biome"
+    default: "false"
+  ruff:
+    description: "`true` for ruff"
+    default: "false"
+  rust:
+    description: Name of this job's cargo cache; empty for a job that compiles no Rust
+    default: ""
+  desktop-libs:
+    description: "`true` for the libraries the desktop app links (WebKitGTK, GTK, mpv)"
+    default: "false"
+  engine-tools:
+    description: "`true` for the engine's ffmpeg, ffprobe and dovi_tool, built by the flake"
+    default: "false"
+  attic-token:
+    description: Attic token with pull access to the `builder` cache, for engine-tools
+    default: ""
+runs:
+  using: composite
+  steps:
+    - name: Install Task
+      uses: arduino/setup-task@c0bc642852239c2689f73f4ea6459c29405f3c52 # v3.0.0
+      with:
+        repo-token: ${{ inputs.github-token }}
+
+    - name: Set up pnpm
+      if: inputs.node == 'true'
+      uses: pnpm/action-setup@73e46992e05b19abd31f2f3c20e0e7370d762115 # v6.1.1
+    - name: Set up Node.js
+      if: inputs.node == 'true'
+      uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+      with:
+        node-version-file: package.json
+        cache: pnpm
+    - name: Install JS dependencies
+      if: inputs.node == 'true'
+      shell: bash
+      run: pnpm install --frozen-lockfile
+
+    - name: Read the biome version
+      if: inputs.biome == 'true'
+      id: biome
+      shell: bash
+      run: echo "version=$(jq -r '."$schema"' biome.json | cut -d/ -f5)" >> "$GITHUB_OUTPUT"
+    - name: Set up biome
+      if: inputs.biome == 'true'
+      uses: biomejs/setup-biome@4c91541eaada48f67d7dbd7833600ce162b68f51 # v2.7.1
+      with:
+        version: ${{ steps.biome.outputs.version }}
+
+    - name: Set up ruff
+      if: inputs.ruff == 'true'
+      shell: bash
+      run: pipx install "ruff$(sed -n 's/^required-version = "\(.*\)"$/\1/p' ruff.toml)"
+
+    # rustup reads rust-toolchain.toml; clippy and rustfmt are not in the
+    # runner's minimal profile.
+    - name: Set up Rust
+      if: inputs.rust != ''
+      shell: bash
+      run: |
+        rustup toolchain install
+        rustup component add clippy rustfmt
+    # ponytail: one cache per job, target/ included, so they share the repository's 10 GB and
+    # the least recently used is evicted. sccache against attic if that starts to bite.
+    - name: Cargo cache
+      if: inputs.rust != ''
+      uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+      with:
+        path: |
+          ~/.cargo/registry
+          ~/.cargo/git
+          target
+        key: cargo-${{ runner.os }}-${{ inputs.rust }}-${{ hashFiles('Cargo.lock', 'rust-toolchain.toml') }}
+        restore-keys: cargo-${{ runner.os }}-${{ inputs.rust }}-
+
+    # The distribution's versions, not nixpkgs': they only have to compile and
+    # link here. The packaged app, built against nixpkgs' own, is the nix job's.
+    - name: Install the desktop libraries
+      if: inputs.desktop-libs == 'true'
+      shell: bash
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y --no-install-recommends \
+          libwebkit2gtk-4.1-dev libgtk-3-dev libsoup-3.0-dev libssl-dev librsvg2-dev \
+          libmpv-dev libegl-dev libgl-dev libdbus-1-dev libsqlite3-dev sqlite3 pkg-config
+
+    # No distribution ships an ffmpeg with what the engine needs (libplacebo,
+    # chromaprint), so the tests run the flake's own.
+    - name: Install Nix
+      if: inputs.engine-tools == 'true'
+      uses: cachix/install-nix-action@75c75c31ebece974e48ebc36b4ad125bd97bd97b # 31.11.3
+    - name: Binary cache
+      if: inputs.engine-tools == 'true'
+      uses: ./.github/actions/nix-builder
+      with:
+        attic-token: ${{ inputs.attic-token }}
+    - name: Build the engine's tools
+      if: inputs.engine-tools == 'true'
+      shell: bash
+      run: |
+        nix build .#engine.tools --out-link "$RUNNER_TEMP/engine-tools"
+        echo "$RUNNER_TEMP/engine-tools/bin" >> "$GITHUB_PATH"

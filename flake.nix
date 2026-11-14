@@ -74,6 +74,7 @@
           rust = pkgs.rust-bin.fromRustupToolchainFile ./rust-toolchain.toml;
           nodejs = pkgs.callPackage ./nix/node.nix { };
           pnpm = pkgs.callPackage ./nix/pnpm.nix { };
+          biome = pkgs.callPackage ./nix/biome.nix { };
           desktop = import ./nix/libs.nix { inherit pkgs lib; };
           mingwCc = pkgs.pkgsCross.mingwW64.stdenv.cc;
           mingwPthreads = pkgs.pkgsCross.mingwW64.windows.pthreads;
@@ -271,7 +272,7 @@
                 {
                   nativeBuildInputs = [
                     rust
-                    pkgs.biome
+                    biome
                     pkgs.ruff
                     pkgs.nixfmt
                   ];
@@ -285,7 +286,7 @@
                   touch $out
                 '';
 
-            biome-lint = pkgs.runCommandLocal "check-biome-lint" { nativeBuildInputs = [ pkgs.biome ]; } ''
+            biome-lint = pkgs.runCommandLocal "check-biome-lint" { nativeBuildInputs = [ biome ]; } ''
               cd ${./.}
               biome lint --vcs-enabled=false --error-on-warnings .
               touch $out

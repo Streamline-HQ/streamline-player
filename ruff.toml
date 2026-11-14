@@ -1,2 +1,5 @@
+# Exact, like packageManager for pnpm: CI installs this release, and a nixpkgs that ships
+# another makes ruff refuse to run.
+required-version = "==0.17.3"
 # The width biome formats the TypeScript to.
 line-length = 100

@@ -6,14 +6,293 @@ on:
   push:
     branches: [main]
 
+# No concurrency group: each run tests only the sections its own diff touches,
+# so a run replaced by a newer one would leave its commit untested for good.
+
 permissions:
   contents: read
+  pull-requests: read
 
 jobs:
-  # The flake's checks are everything `task check` runs (formatting, clippy,
-  # biome, svelte-check, the tests) plus the package builds, the engine image,
-  # the NixOS VM test and the home-manager evaluation.
+  # One diff, read once, decides which sections run. A job whose section is
+  # untouched is skipped. A push to main is filtered against the commit it
+  # replaced, like a PR against its base. `ci-ok` at the end is the one check
+  # branch protection requires.
+  changes:
+    runs-on: ubuntu-latest
+    outputs:
+      rust: ${{ steps.filter.outputs.rust }}
+      js: ${{ steps.filter.outputs.js }}
+      python: ${{ steps.filter.outputs.python }}
+      helm: ${{ steps.filter.outputs.helm }}
+      nix: ${{ steps.filter.outputs.nix }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Detect changed sections
+        id: filter
+        uses: dorny/paths-filter@ceb8a2b8f2d89434be7ff52d3de7ec3738c5cc9d # v4.0.3
+        with:
+          # Each list is everything its jobs read. `shared` is how every job
+          # gets its tools and its commands, so a change there runs them all.
+          filters: |
+            shared: &shared
+              - 'flake.nix'
+              - 'flake.lock'
+              - 'Taskfile.yaml'
+              - '.taskfiles/**'
+              - '.github/workflows/ci.yaml'
+              - '.github/actions/**'
+            rust:
+              - *shared
+              - 'engine/**'
+              - 'src-tauri/**'
+              - 'plugins/**'
+              - 'Cargo.toml'
+              - 'Cargo.lock'
+            js:
+              - *shared
+              - 'src/**'
+              - 'dev/**'
+              - 'messages/**'
+              - 'project.inlang/**'
+              - 'static/**'
+              - 'package.json'
+              - 'pnpm-lock.yaml'
+              - 'pnpm-workspace.yaml'
+              - 'biome.json'
+              - 'tsconfig.json'
+              - 'vite.config.ts'
+            python:
+              - *shared
+              - 'dev/**/*.py'
+              - 'ruff.toml'
+            helm:
+              - 'deploy/helm/**'
+              - '.github/workflows/ci.yaml'
+            nix:
+              - *shared
+              - 'nix/**'
+
+  # Two stages. The lints and the builds run side by side; the tests and the
+  # flake wait for all of them, and a failure in the first stage skips the
+  # second. A first-stage job skipped by its own filter does not: each later
+  # job's `if` names `!failure()`, which replaces the default "every need
+  # succeeded" and is true whenever no job before it failed.
+  lint-rust:
+    needs: changes
+    if: needs.changes.outputs.rust == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Setup
+        uses: ./.github/actions/setup
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          rust: clippy
+          desktop-libs: "true"
+      - name: Formatting
+        run: cargo fmt --all --check
+      # tauri's generate_context! needs the frontend directory to exist.
+      - name: Clippy
+        run: mkdir -p build && task lint:rust
+
+  lint-js:
+    needs: changes
+    if: needs.changes.outputs.js == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Setup
+        uses: ./.github/actions/setup
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          node: "true"
+          biome: "true"
+      - name: Formatting
+        run: biome format .
+      - name: Biome
+        run: task lint:js
+      - name: svelte-check and the messages
+        run: task lint:svelte
+
+  lint-python:
+    needs: changes
+    if: needs.changes.outputs.python == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Setup
+        uses: ./.github/actions/setup
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          ruff: "true"
+      - name: Formatting
+        run: ruff format --check dev
+      - name: Ruff
+        run: task lint:python
+
+  lint-nix:
+    needs: changes
+    if: needs.changes.outputs.nix == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Install Nix
+        uses: cachix/install-nix-action@75c75c31ebece974e48ebc36b4ad125bd97bd97b # 31.11.3
+      - name: Formatting
+        run: nix shell --inputs-from . nixpkgs#nixfmt -c nixfmt --check flake.nix nix/*.nix
+      # Everything `nix flake check` evaluates, without building any of it.
+      - name: Evaluate the flake
+        run: nix flake check --no-build
+
+  lint-helm:
+    needs: changes
+    if: needs.changes.outputs.helm == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Install Helm
+        uses: azure/setup-helm@9bc31f4ebc9c6b171d7bfbaa5d006ae7abdb4310 # v5.0.1
+        with:
+          version: v4.3.1
+      - name: Lint and render the engine chart
+        run: |
+          set -euo pipefail
+          chart=deploy/helm/streamline-engine
+          helm lint "$chart" -f "$chart/ci/test-values.yaml"
+          helm template engine "$chart" -f "$chart/ci/test-values.yaml" > /dev/null
+          # The chart must refuse to render without a tag and a secret.
+          if helm template engine "$chart" > /dev/null 2>&1; then
+            echo "::error::the chart rendered without image.tag and secret.existingSecret"
+            exit 1
+          fi
+
+  build-engine:
+    needs: changes
+    if: needs.changes.outputs.rust == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Setup
+        uses: ./.github/actions/setup
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          rust: engine
+      - name: Build the engine
+        run: task build:engine
+
+  build-web:
+    needs: changes
+    if: needs.changes.outputs.js == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Setup
+        uses: ./.github/actions/setup
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          node: "true"
+      - name: Build the web client
+        run: task build:web
+
+  build-desktop:
+    needs: changes
+    if: needs.changes.outputs.rust == 'true' || needs.changes.outputs.js == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Setup
+        uses: ./.github/actions/setup
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          rust: desktop
+          desktop-libs: "true"
+          node: "true"
+      # What `cargo tauri build` compiles, without the Tauri CLI and its bundlers:
+      # the packaged app is the nix job's.
+      - name: Build the web client into the app
+        run: pnpm build
+      - name: Build the desktop app
+        run: cargo build --release -p streamline-player --features tauri/custom-protocol
+
+  test-rust:
+    needs: [changes, lint-rust, lint-js, lint-python, lint-nix, lint-helm, build-engine, build-web, build-desktop]
+    if: ${{ !cancelled() && !failure() && needs.changes.outputs.rust == 'true' }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Setup
+        uses: ./.github/actions/setup
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          attic-token: ${{ secrets.ATTIC_PULL_TOKEN }}
+          rust: test
+          desktop-libs: "true"
+          engine-tools: "true"
+      - name: Rust tests of the whole workspace
+        run: mkdir -p build && task test:rust
+
+  # The rule and store checks, and the contract checks, which start the mock
+  # and a real engine: a change to the engine or to the mock runs them too.
+  test-js:
+    needs: [changes, lint-rust, lint-js, lint-python, lint-nix, lint-helm, build-engine, build-web, build-desktop]
+    if: ${{ !cancelled() && !failure() && (needs.changes.outputs.js == 'true' || needs.changes.outputs.rust == 'true' || needs.changes.outputs.python == 'true') }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Setup
+        uses: ./.github/actions/setup
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          attic-token: ${{ secrets.ATTIC_PULL_TOKEN }}
+          rust: test-js
+          node: "true"
+          engine-tools: "true"
+      # The build writes the Paraglide messages the checks import, and leaves
+      # the web bundle whose CSP the last check reads.
+      - name: Build the web client
+        run: task build:web
+      - name: UI and contract checks
+        run: task test:js
+
+  # The packages, the engine image, the modules and the NixOS VM test. The
+  # flake's own lint and test checks are left to the jobs above.
   nix:
+    needs: [changes, lint-rust, lint-js, lint-python, lint-nix, lint-helm, build-engine, build-web, build-desktop]
+    if: ${{ !cancelled() && !failure() && (needs.changes.outputs.nix == 'true' || needs.changes.outputs.rust == 'true' || needs.changes.outputs.js == 'true') }}
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
@@ -33,18 +312,17 @@ jobs:
           ssh-key: ${{ secrets.NIX_BUILDER_SSH_KEY }}
           attic-token: ${{ secrets.ATTIC_PULL_TOKEN }}
 
-      # Everything `nix flake check` evaluates, without building any of it.
-      - name: Evaluate the flake
-        run: nix flake check --no-build
-
       # The builder's `ci` account is not a trusted user: it can have the
       # daemon build what it sends (`--store`), not act as a remote builder.
       # The two packages are copied back so the VM test does not build them again.
-      - name: Every check but the VM test
+      - name: Packages, image and modules
         run: |
           set -euo pipefail
-          mapfile -t checks < <(nix eval --raw .#checks.x86_64-linux --apply \
-            'c: builtins.concatStringsSep "\n" (map (n: ".#checks.x86_64-linux.${n}") (builtins.filter (n: n != "nixos") (builtins.attrNames c)))')
+          mapfile -t checks < <(nix eval --raw .#checks.x86_64-linux --apply '
+            c: let
+              elsewhere = [ "nixos" "fmt" "clippy" "cargo-test" "biome-lint" "ruff-lint" ];
+              names = builtins.filter (n: !(builtins.elem n elsewhere)) (builtins.attrNames c);
+            in builtins.concatStringsSep "\n" (map (n: ".#checks.x86_64-linux.${n}") names)')
           if [ -n "${NIX_BUILDER_STORE:-}" ]; then
             nix build --no-link --print-build-logs --store "$NIX_BUILDER_STORE" --eval-store auto "${checks[@]}"
             nix copy --no-check-sigs --from "$NIX_BUILDER_STORE" .#engine .#streamline-player
@@ -56,53 +334,27 @@ jobs:
       - name: NixOS VM test
         run: nix build --no-link --print-build-logs .#checks.x86_64-linux.nixos
 
-      - name: Summary
-        if: always()
-        run: |
-          echo "### Nix" >> "$GITHUB_STEP_SUMMARY"
-          if [ "${{ job.status }}" = "success" ]; then
-            echo "✅ Formatting, lints, tests, packages, the engine image, the NixOS VM test and the home-manager module" >> "$GITHUB_STEP_SUMMARY"
-          else
-            echo "❌ nix checks failed" >> "$GITHUB_STEP_SUMMARY"
-          fi
-
-  helm:
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          persist-credentials: false
-
-      - name: Install Helm
-        uses: azure/setup-helm@9bc31f4ebc9c6b171d7bfbaa5d006ae7abdb4310 # v5.0.1
-        with:
-          version: v4.3.1
-
-      - name: Lint and render the engine chart
-        run: |
-          set -euo pipefail
-          chart=deploy/helm/streamline-engine
-          helm lint "$chart" -f "$chart/ci/test-values.yaml"
-          helm template engine "$chart" -f "$chart/ci/test-values.yaml" > /dev/null
-          # The chart must refuse to render without a tag and a secret.
-          if helm template engine "$chart" > /dev/null 2>&1; then
-            echo "::error::the chart rendered without image.tag and secret.existingSecret"
-            exit 1
-          fi
-
-  # The one check branch protection should require.
+  # The one check branch protection should require. A job skipped by its `if`
+  # reads as passing, and so does every job when `changes` itself fails (they
+  # are skipped for want of its outputs), so the per-job checks alone would
+  # let a broken filter through green. This fails unless `changes` succeeded
+  # and every section either passed or was skipped.
   ci-ok:
     if: always()
-    needs: [nix, helm]
+    needs: [changes, lint-rust, lint-js, lint-python, lint-nix, lint-helm, build-engine, build-web, build-desktop, test-rust, test-js, nix]
     runs-on: ubuntu-latest
     permissions: {}
     steps:
-      - name: Every job passed
+      - name: Every section passed or was skipped
         env:
+          CHANGES: ${{ needs.changes.result }}
           RESULTS: ${{ join(needs.*.result, ' ') }}
         run: |
-          echo "jobs: $RESULTS"
+          echo "changes: $CHANGES; jobs: $RESULTS"
+          [ "$CHANGES" = success ] || { echo "::error::the changes job did not succeed"; exit 1; }
           for r in $RESULTS; do
-            [ "$r" = success ] || { echo "::error::a CI job ended $r"; exit 1; }
+            case "$r" in
+              success|skipped) ;;
+              *) echo "::error::a CI job ended $r"; exit 1 ;;
+            esac
           done
