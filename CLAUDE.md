@@ -61,7 +61,7 @@ devshell (direnv), or `nix develop .#android` for the Android ones.
 - `task build:<target>` — `engine`, `desktop:linux`, `desktop:windows`,
   `android`, `web`, `image`, … (`desktop:appimage` fails on NixOS by design)
 - `task check` — everything CI runs: `fmt:check`, `lint` (clippy `-D warnings`,
-  biome with warnings as errors, ruff, svelte-check), `test`; `task fmt` writes the formatting
+  biome with warnings as errors, ruff, svelte-check), `test`; `task fmt` writes the formatting (treefmt, configured in `flake.nix`)
 - `nix flake check` — the same checks plus package builds, the NixOS VM test
   and the home-manager evaluation
 - Add JS deps with `pnpm add`, never by editing `package.json`. TypeScript stays

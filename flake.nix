@@ -6,6 +6,10 @@
       inputs.nixpkgs.follows = "nixpkgs";
     };
     flake-parts.url = "github:hercules-ci/flake-parts";
+    treefmt-nix = {
+      url = "github:numtide/treefmt-nix";
+      inputs.nixpkgs.follows = "nixpkgs";
+    };
     devshell = {
       url = "github:numtide/devshell";
       inputs.nixpkgs.follows = "nixpkgs";
@@ -20,7 +24,10 @@
   outputs =
     inputs@{ flake-parts, ... }:
     flake-parts.lib.mkFlake { inherit inputs; } {
-      imports = [ inputs.devshell.flakeModule ];
+      imports = [
+        inputs.devshell.flakeModule
+        inputs.treefmt-nix.flakeModule
+      ];
 
       # Each module defaults its package to this flake's build, so importing
       # one works without also applying the overlay.
@@ -187,7 +194,42 @@
             default = self'.packages.streamline-player;
           };
 
-          formatter = pkgs.nixfmt-tree.override { nixfmtPackage = nixfmt; };
+          # `nix fmt`, `treefmt` in the devshell and checks.treefmt, each formatter at its pinned
+          # version.
+          treefmt = {
+            projectRootFile = "flake.nix";
+            programs.nixfmt = {
+              enable = true;
+              package = nixfmt;
+            };
+            programs.rustfmt = {
+              enable = true;
+              package = rust;
+            };
+            programs.ruff-format = {
+              enable = true;
+              package = ruff;
+            };
+            # Not programs.biome: it hands biome a config generated from its own settings, in
+            # place of biome.json. biome.json's files.includes decides what is formatted.
+            settings.formatter.biome = {
+              command = lib.getExe biome;
+              options = [
+                "format"
+                "--write"
+                "--no-errors-on-unmatched"
+                "--vcs-enabled=false"
+              ];
+              includes = [
+                "*.ts"
+                "*.js"
+                "*.mjs"
+                "*.svelte"
+                "*.json"
+                "*.css"
+              ];
+            };
+          };
 
           checks = {
             build-engine = self'.packages.engine;
@@ -268,27 +310,6 @@
               touch $out
             '';
 
-            # The same three formatters as `task fmt:check`. The flake source has
-            # no .git, so biome's VCS integration is off here.
-            fmt =
-              pkgs.runCommandLocal "check-fmt"
-                {
-                  nativeBuildInputs = [
-                    rust
-                    biome
-                    ruff
-                    nixfmt
-                  ];
-                }
-                ''
-                  cd ${./.}
-                  cargo fmt --all --check
-                  biome format --vcs-enabled=false .
-                  ruff format --no-cache --check dev
-                  nixfmt --check flake.nix nix/*/*.nix
-                  touch $out
-                '';
-
             biome-lint = pkgs.runCommandLocal "check-biome-lint" { nativeBuildInputs = [ biome ]; } ''
               cd ${./.}
               biome lint --vcs-enabled=false --error-on-warnings .
@@ -326,6 +347,7 @@
                 biome
                 ruff
                 nixfmt
+                config.treefmt.build.wrapper
                 typescript-language-server
                 playwright-mcp
                 jq

@@ -17,20 +17,13 @@ tasks:
     silent: true
 
   fmt:
-    desc: Format Rust, TypeScript/Svelte, Python and Nix
-    cmds:
-      - cargo fmt --all
-      - biome format --write .
-      - ruff format dev
-      - nixfmt flake.nix nix/*/*.nix
+    desc: Format Rust, TypeScript/Svelte, Python and Nix (treefmt, configured in flake.nix)
+    cmd: treefmt
 
   fmt:check:
     desc: Check formatting without writing
     cmds:
-      - cargo fmt --all --check
-      - biome format .
-      - ruff format --check dev
-      - nixfmt --check flake.nix nix/*/*.nix
+      - treefmt --ci
 
   check:
     desc: Everything CI must pass, writing nothing (formatting, lints, tests)
