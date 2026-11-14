@@ -1,0 +1,94 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "engine.fullname" . }}
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "engine.labels" . | nindent 4 }}
+spec:
+  # One engine: sessions live in its memory and the GPU is handed to one pod, so
+  # a second replica, even for the length of a rollout, has neither.
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      {{- include "engine.selectorLabels" . | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "engine.selectorLabels" . | nindent 8 }}
+      annotations:
+        checksum/config: {{ include (print $.Template.BasePath "/configmap.yaml") . | sha256sum }}
+        {{- with .Values.podAnnotations }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
+    spec:
+      automountServiceAccountToken: false
+      securityContext:
+        {{- toYaml .Values.podSecurityContext | nindent 8 }}
+      containers:
+        - name: engine
+          image: "{{ .Values.image.repository }}:{{ required "image.tag is required" .Values.image.tag }}"
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          securityContext:
+            {{- toYaml .Values.securityContext | nindent 12 }}
+          ports:
+            - name: http
+              containerPort: 8097
+          # /v1/health wants the secret, so the probes only check the port.
+          startupProbe:
+            tcpSocket:
+              port: http
+            periodSeconds: 2
+            failureThreshold: 60
+          livenessProbe:
+            tcpSocket:
+              port: http
+          resources:
+            {{- toYaml .Values.resources | nindent 12 }}
+          volumeMounts:
+            - name: config
+              mountPath: /etc/engine
+              readOnly: true
+            - name: secret
+              mountPath: /etc/engine-secret
+              readOnly: true
+            - name: data
+              mountPath: /var/lib/engine
+            {{- range .Values.media }}
+            - name: media-{{ .name }}
+              mountPath: {{ .mountPath }}
+              readOnly: true
+            {{- end }}
+      volumes:
+        - name: config
+          configMap:
+            name: {{ include "engine.fullname" . }}
+        - name: secret
+          secret:
+            secretName: {{ required "secret.existingSecret is required" .Values.secret.existingSecret }}
+        - name: data
+          {{- if .Values.data.existingClaim }}
+          persistentVolumeClaim:
+            claimName: {{ .Values.data.existingClaim }}
+          {{- else }}
+          emptyDir:
+            {{- with .Values.data.sizeLimit }}
+            sizeLimit: {{ . }}
+            {{- end }}
+          {{- end }}
+        {{- range .Values.media }}
+        - name: media-{{ .name }}
+          persistentVolumeClaim:
+            claimName: {{ .existingClaim }}
+            readOnly: true
+        {{- end }}
+      {{- with .Values.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}

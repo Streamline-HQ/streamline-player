@@ -1,0 +1,8 @@
+image: { tag: 0.1.0 }
+secret: { existingSecret: streamline-engine }
+config: { hw_accel: vaapi, path_map: [{ from: /data/media, to: /srv }] }
+media: [{ name: media, existingClaim: media, mountPath: /srv }]
+gateway: { enabled: true, parentRefs: [{ name: gw }], hostnames: [engine.example.com] }
+resources: { limits: { devic.es/dri: 1 } }
+podSecurityContext: { runAsNonRoot: true, seccompProfile: { type: RuntimeDefault }, supplementalGroups: [303] }
+nodeSelector: { kubernetes.io/hostname: valinor }

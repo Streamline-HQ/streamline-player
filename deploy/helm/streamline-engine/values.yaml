@@ -1,0 +1,65 @@
+image:
+  repository: ghcr.io/datahearth/streamline-player/engine
+  tag: "" # required
+  pullPolicy: IfNotPresent
+
+# The key Streamline signs its calls and the playback tokens with, at least 16
+# bytes. It is read from a Secret you create, never from these values:
+#   kubectl create secret generic streamline-engine --from-literal=secret="$(openssl rand -hex 32)"
+secret:
+  existingSecret: "" # required
+  key: secret
+
+# Extra keys for the engine's config.yaml: hw_accel, hw_device, max_transcodes,
+# tonemap, path_map, job_output_ttl… The chart sets listen, secret_file, tmp_dir
+# and jobs_dir itself. The file is mounted read-only, so the engine reports its
+# settings as read-only and Server settings shows them locked.
+config: {}
+#  hw_accel: vaapi
+#  path_map:
+#    - { from: /data/media, to: /srv }
+
+# The libraries, mounted read-only. The paths Streamline sends must resolve
+# here, directly or through `config.path_map`.
+media: []
+#  - name: media
+#    existingClaim: media
+#    mountPath: /srv
+
+# Live segments and job output (trickplay sheets, prepared downloads). An
+# emptyDir loses the job output with the pod, and Streamline asks for it again.
+data:
+  existingClaim: ""
+  sizeLimit: "" # of the emptyDir, e.g. 20Gi
+
+service:
+  type: ClusterIP
+  port: 8097
+
+# The players fetch from the engine directly, so it needs an address they can
+# reach. Only the data routes are published; /v1, the control plane, stays
+# inside the cluster for Streamline.
+gateway:
+  enabled: false
+  parentRefs: [] # [{ name: my-gateway, namespace: gateway-system }]
+  hostnames: []
+
+# The GPU goes here, under whatever name the device plugin gives it, e.g.
+#   limits: { devic.es/dri: 1 }
+resources: {}
+
+podSecurityContext:
+  runAsNonRoot: true
+  seccompProfile:
+    type: RuntimeDefault
+  # The render node is usually root:render 0660: add the node's `render` gid.
+  supplementalGroups: []
+
+securityContext:
+  allowPrivilegeEscalation: false
+  capabilities:
+    drop: ["ALL"]
+
+nodeSelector: {}
+tolerations: []
+podAnnotations: {}

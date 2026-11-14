@@ -1,0 +1,14 @@
+apiVersion: v2
+name: streamline-engine
+description: Streamline's streaming engine, which reads the media files and serves HLS to the players.
+type: application
+# The chart versions on its own. There is no appVersion: `image.tag` is required,
+# so the chart never picks an engine version for you (as in Streamline's chart).
+version: 0.1.0
+kubeVersion: ">=1.27.0-0"
+home: https://github.com/DataHearth/streamline-player
+sources:
+  - https://github.com/DataHearth/streamline-player
+maintainers:
+  - name: DataHearth
+    url: https://github.com/DataHearth

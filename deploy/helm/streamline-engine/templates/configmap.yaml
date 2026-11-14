@@ -1,0 +1,21 @@
+{{- range $key := list "listen" "secret" "secret_file" "tmp_dir" "jobs_dir" }}
+{{- if hasKey $.Values.config $key }}
+{{- fail (printf "config.%s is set by the chart" $key) }}
+{{- end }}
+{{- end }}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "engine.fullname" . }}
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "engine.labels" . | nindent 4 }}
+data:
+  config.yaml: |
+    listen: 0.0.0.0:8097
+    secret_file: /etc/engine-secret/{{ .Values.secret.key }}
+    tmp_dir: /var/lib/engine/live
+    jobs_dir: /var/lib/engine/jobs
+    {{- with .Values.config }}
+    {{- toYaml . | nindent 4 }}
+    {{- end }}
