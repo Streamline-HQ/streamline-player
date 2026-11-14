@@ -69,6 +69,7 @@ jobs:
               - *shared
               - 'dev/**/*.py'
               - 'ruff.toml'
+              - '.python-version'
             helm:
               - 'deploy/helm/**'
               - '.github/workflows/ci.yaml'
@@ -280,6 +281,7 @@ jobs:
           attic-token: ${{ secrets.ATTIC_PULL_TOKEN }}
           rust: test-js
           node: "true"
+          python: "true"
           engine-tools: "true"
       # The build writes the Paraglide messages the checks import, and leaves
       # the web bundle whose CSP the last check reads.

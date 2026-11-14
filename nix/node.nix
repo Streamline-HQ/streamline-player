@@ -1,14 +1,15 @@
 { lib, buildPackages }:
-# package.json's engines.node is the floor everyone owes, with or without Nix.
-# The devshell takes the matching nixpkgs major as-is instead of rebuilding Node
-# from source: bump engines.node only to what the locked nixpkgs ships.
+# package.json's engines.node names one exact Node, with no range: the release
+# the devshell, the package builds and CI's setup-node all run. Streamline
+# rebuilds Node from source when nixpkgs ships another patch; here the flake
+# refuses instead, so bump engines.node only to what the locked nixpkgs ships.
 let
-  declared = lib.removePrefix ">=" (lib.importJSON ../package.json).engines.node;
+  declared = (lib.importJSON ../package.json).engines.node;
   attr = "nodejs_${lib.versions.major declared}";
   pkg = lib.throwIf (
     !buildPackages ? ${attr}
   ) "package.json declares Node ${declared}, but nixpkgs has no ${attr}" buildPackages.${attr};
 in
-lib.throwIf (lib.versionOlder pkg.version declared)
-  "package.json declares Node ${declared}, but the locked nixpkgs ships ${pkg.version}: update the flake lock"
+lib.throwIf (pkg.version != declared)
+  "package.json declares Node ${declared}, but the locked nixpkgs ships ${pkg.version}: set engines.node to ${pkg.version} (or update the flake lock) so both agree"
   pkg

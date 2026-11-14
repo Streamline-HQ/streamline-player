@@ -3,7 +3,8 @@ description: >-
   Installs what a job asks for, each tool at the version the repository
   declares, which is the one file the flake reads too: rust-toolchain.toml for
   Rust, package.json for Node (engines.node) and pnpm (packageManager),
-  biome.json's $schema for biome, ruff.toml's required-version for ruff. The
+  biome.json's $schema for biome, ruff.toml's required-version for ruff,
+  .python-version for Python. The
   flake refuses to evaluate when nixpkgs ships something else, so a runner and
   the devshell cannot drift apart unnoticed.
 inputs:
@@ -18,6 +19,9 @@ inputs:
     default: "false"
   ruff:
     description: "`true` for ruff"
+    default: "false"
+  python:
+    description: "`true` for the Python the dev scripts run on"
     default: "false"
   rust:
     description: Name of this job's cargo cache; empty for a job that compiles no Rust
@@ -63,6 +67,12 @@ runs:
       uses: biomejs/setup-biome@4c91541eaada48f67d7dbd7833600ce162b68f51 # v2.7.1
       with:
         version: ${{ steps.biome.outputs.version }}
+
+    - name: Set up Python
+      if: inputs.python == 'true'
+      uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
+      with:
+        python-version-file: .python-version
 
     - name: Set up ruff
       if: inputs.ruff == 'true'

@@ -75,6 +75,8 @@
           nodejs = pkgs.callPackage ./nix/node.nix { };
           pnpm = pkgs.callPackage ./nix/pnpm.nix { };
           biome = pkgs.callPackage ./nix/biome.nix { };
+          ruff = pkgs.callPackage ./nix/ruff.nix { };
+          python3 = pkgs.callPackage ./nix/python.nix { };
           desktop = import ./nix/libs.nix { inherit pkgs lib; };
           mingwCc = pkgs.pkgsCross.mingwW64.stdenv.cc;
           mingwPthreads = pkgs.pkgsCross.mingwW64.windows.pthreads;
@@ -273,7 +275,7 @@
                   nativeBuildInputs = [
                     rust
                     biome
-                    pkgs.ruff
+                    ruff
                     pkgs.nixfmt
                   ];
                 }
@@ -292,7 +294,7 @@
               touch $out
             '';
 
-            ruff-lint = pkgs.runCommandLocal "check-ruff-lint" { nativeBuildInputs = [ pkgs.ruff ]; } ''
+            ruff-lint = pkgs.runCommandLocal "check-ruff-lint" { nativeBuildInputs = [ ruff ]; } ''
               cd ${./.}
               ruff check --no-cache dev
               touch $out
