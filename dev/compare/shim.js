@@ -180,12 +180,14 @@
     remove_downloads: ({ keys }) => { dl.log.push({ call: "remove", keys }); dl.items = dl.items.filter((e) => !keys.includes(e.key)); emitDownloads(); return null; },
     retry_download: ({ key }) => { dl.log.push({ call: "retry", key }); dlSet(key, (e) => { if (e.state === "failed") { e.state = "queued"; e.error = null; } }); return null; },
     download_storage: () => ({ ...dl.storage }),
+    // window.__localUrl stands in for the file on disk; the mock is asked for tracks only while it is reachable.
     local_playback: async ({ key }) => {
       dl.log.push({ call: "local", key });
       const e = dl.items.find((i) => i.key === key && i.state === "done");
       if (!e) return null;
-      const t = await call("GET", `/playback/media/${e.media_id}/tracks`);
-      return { url: `/downloads/${key.replace(/:/g, "-")}/video.mkv`, tracks: { ...t, ...(window.__tracks || {}) }, position: e.offline?.position || 0 };
+      const t = dl.reachable ? await call("GET", `/playback/media/${e.media_id}/tracks`).catch(() => ({})) : {};
+      const saved = { preparing: false, container: "mkv", video: { codec: "h264", width: 1920, height: 1080 }, chapters: [], markers: { intro: null, credits: null }, audio: [{ index: 0, codec: "aac", channels: 2, language: "eng", default: true }], subtitles: [], fonts: [], trickplay: null };
+      return { url: window.__localUrl || `/downloads/${key.replace(/:/g, "-")}/video.mkv`, tracks: { ...saved, ...t, ...(window.__tracks || {}) }, position: e.offline?.position || 0 };
     },
     note_offline: ({ key, position, done }) => { dl.log.push({ call: "note", key, position, done }); dlSet(key, (e) => { e.offline = { position, done, at: new Date().toISOString() }; if (done) e.watched = true; }); return null; },
     sync_offline: () => {

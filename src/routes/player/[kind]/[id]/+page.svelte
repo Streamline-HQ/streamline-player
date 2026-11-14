@@ -10,6 +10,12 @@ const props = $derived({
 	id: Number(page.params.id),
 	epId: Number(page.url.searchParams.get("ep")) || null,
 	resume: page.url.searchParams.has("resume"),
+	local: page.url.searchParams.has("local")
+		? {
+				season: Number(page.url.searchParams.get("s")) || null,
+				episode: Number(page.url.searchParams.get("e")) || null,
+			}
+		: null,
 });
 </script>
 

@@ -12,6 +12,7 @@ import {
 	watchedTitle,
 } from "#lib/core/browse.ts";
 import { badges, left, runtime, stillPos } from "#lib/core/format.ts";
+import { dl } from "#lib/core/downloads.svelte.ts";
 import { lib, loadLibrary } from "#lib/core/library.svelte.ts";
 import type { Kind, Title } from "#lib/core/types.ts";
 import { getLocale } from "#lib/paraglide/runtime.js";
@@ -23,7 +24,7 @@ import PosterCard from "#lib/ui/PosterCard.svelte";
 import ResumeCard from "#lib/ui/ResumeCard.svelte";
 import Row from "#lib/ui/Row.svelte";
 import { goto } from "#lib/ui/nav.ts";
-import { artwork, home, library, title, watchState } from "#platform";
+import { artwork, canDownload, home, library, title, watchState } from "#platform";
 import { onMount } from "svelte";
 
 const PAD_X = 56;
@@ -155,9 +156,16 @@ onMount(() => {
 		<div class="state">
 			<EmptyState icon="film" title={i18n.home_error_title()} text={lib.error}>
 				{#snippet action()}
-					<Button variant="secondary" onclick={() => loadLibrary(port, true)}>
-						{i18n.halt_try_again()}
-					</Button>
+					<div class="failed-actions">
+						<Button variant="secondary" onclick={() => loadLibrary(port, true)}>
+							{i18n.halt_try_again()}
+						</Button>
+						{#if canDownload && dl.items.some((e) => e.state === "done")}
+							<Button variant="secondary" onclick={() => goto("/downloads")}>
+								{i18n.dl_watch()}
+							</Button>
+						{/if}
+					</div>
 				{/snippet}
 			</EmptyState>
 		</div>
@@ -271,6 +279,11 @@ onMount(() => {
 </div>
 
 <style>
+.failed-actions {
+	display: flex;
+	gap: 10px;
+}
+
 .home {
 	position: relative;
 	min-height: 100%;

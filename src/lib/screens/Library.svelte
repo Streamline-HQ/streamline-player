@@ -4,7 +4,7 @@ import { addedText, badges, sizeText } from "#lib/core/format.ts";
 import { clickGroup, clickOne } from "#lib/core/download-ask.svelte.ts";
 import { episodeItem, episodeKey, movieItem, movieKey } from "#lib/core/download-items.ts";
 import { bulkState, buttonState } from "#lib/core/downloads-view.ts";
-import { entry } from "#lib/core/downloads.svelte.ts";
+import { dl, entry } from "#lib/core/downloads.svelte.ts";
 import { lib, loadLibrary, loadSeasons, applyWatch } from "#lib/core/library.svelte.ts";
 import {
 	FLAGS,
@@ -356,9 +356,16 @@ const heads: { label: () => string; sort?: Sort; end?: boolean }[] = [
 		<div class="state">
 			<EmptyState icon="film" title={i18n.home_error_title()} text={lib.error}>
 				{#snippet action()}
-					<Button variant="secondary" onclick={() => loadLibrary(port, true)}>
-						{i18n.halt_try_again()}
-					</Button>
+					<div class="failed-actions">
+						<Button variant="secondary" onclick={() => loadLibrary(port, true)}>
+							{i18n.halt_try_again()}
+						</Button>
+						{#if canDownload && dl.items.some((e) => e.state === "done")}
+							<Button variant="secondary" onclick={() => goto("/downloads")}>
+								{i18n.dl_watch()}
+							</Button>
+						{/if}
+					</div>
 				{/snippet}
 			</EmptyState>
 		</div>
@@ -560,6 +567,11 @@ const heads: { label: () => string; sort?: Sort; end?: boolean }[] = [
 </div>
 
 <style>
+.failed-actions {
+	display: flex;
+	gap: 10px;
+}
+
 .library {
 	position: relative;
 	min-height: 100%;

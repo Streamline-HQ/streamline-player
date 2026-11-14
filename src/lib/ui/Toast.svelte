@@ -1,8 +1,8 @@
 <script lang="ts">
-import { CircleCheck, Cpu, Gauge, Wifi } from "@lucide/svelte";
+import { CircleCheck, Cpu, Gauge, Wifi, WifiOff } from "@lucide/svelte";
 import { activeToast } from "#lib/core/toast.svelte.ts";
 
-const ICONS = { check: CircleCheck, wifi: Wifi, cpu: Cpu, gauge: Gauge };
+const ICONS = { check: CircleCheck, wifi: Wifi, "wifi-off": WifiOff, cpu: Cpu, gauge: Gauge };
 const t = $derived(activeToast());
 const Icon = $derived(t ? ICONS[t.icon] : null);
 </script>

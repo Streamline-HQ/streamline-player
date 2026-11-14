@@ -5,7 +5,7 @@ const FADE_MS = 200;
 type Current = {
 	title: string;
 	text: string;
-	icon: "check" | "wifi" | "cpu" | "gauge";
+	icon: "check" | "wifi" | "wifi-off" | "cpu" | "gauge";
 	warning: boolean;
 	leaving: boolean;
 };

@@ -336,6 +336,25 @@ same(
 		words,
 	);
 	eq(offline.wait, "Waiting for a network · checking every 5 s");
+	same(
+		offline.actions.map((a) => a.id),
+		["retry", "back"],
+	);
+
+	const withDownloads = haltView(
+		{ ...haltFor("x", { host: "h" }, "mpv").halt, kind: "offline", body: "Back soon." },
+		{ ...ctx(), canDownload: true },
+		{
+			...words,
+			downloadsStillPlay: "Your downloads still play.",
+			watchDownload: "Watch a download",
+		},
+	);
+	eq(withDownloads.body, "Back soon. Your downloads still play.");
+	same(
+		withDownloads.actions.map((a) => a.id),
+		["retry", "downloads", "back"],
+	);
 }
 
 console.log("player-panels-check: ok");

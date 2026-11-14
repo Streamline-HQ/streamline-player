@@ -111,5 +111,7 @@ export function panelWords(playerName: string): Words {
 		offsetSeconds: (v) => fmtOffset(v, true),
 		offsetMs: (v) => fmtOffset(v, false),
 		backTo: (title) => i18n.player_back_to({ title }),
+		downloadsStillPlay: i18n.halt_downloads_still_play(),
+		watchDownload: i18n.dl_watch(),
 	};
 }

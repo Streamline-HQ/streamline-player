@@ -158,12 +158,12 @@ export async function page(ctx) {
   await card("series:1:1:1").locator(".still").click();
   await wait(1500);
   out.playUrl = await pathOf(app);
-  if (!/^\/player\/series\/1\?ep=\d+$/.test(out.playUrl)) throw new Error(`play url ${out.playUrl}`);
+  expect("play url", out.playUrl, "/player/series/1?local=1&s=1&e=1");
   await app.goBack();
   await wait(2500);
   await card("movies:3").locator(".still").click();
   await wait(1500);
-  expect("movie play", await pathOf(app), "/player/movies/3");
+  expect("movie play", await pathOf(app), "/player/movies/3?local=1");
   await app.goBack();
   await wait(2500);
   await card("series:1:1:1").locator(".text").click();

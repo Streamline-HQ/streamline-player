@@ -1,4 +1,5 @@
 import type { PlaybackPort, Session, Tracks } from "#lib/core/playback/port.ts";
+import { reportUnreachable } from "#lib/core/online.svelte.ts";
 import { decodeHere } from "#lib/core/prefs.svelte.ts";
 import type {
 	AuthMethods,
@@ -29,9 +30,27 @@ import type {
 	Title,
 	Watch,
 } from "#lib/core/types.ts";
-import { addPluginListener, convertFileSrc, invoke } from "@tauri-apps/api/core";
+import { addPluginListener, convertFileSrc, invoke as rawInvoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { getCurrentWindow } from "@tauri-apps/api/window";
+
+/** Rust gives a server's error as JSON and anything else when the request never got an answer. */
+const noAnswer = (e: unknown) => {
+	if (typeof e !== "string") return false;
+	try {
+		JSON.parse(e);
+		return false;
+	} catch {
+		return true;
+	}
+};
+
+const invoke = <T = unknown>(...args: Parameters<typeof rawInvoke>): Promise<T> =>
+	rawInvoke<T>(...args).catch((e) => {
+		const [cmd] = args;
+		if (cmd !== "reachable" && !cmd.startsWith("plugin:") && noAnswer(e)) reportUnreachable();
+		throw e;
+	});
 
 const webOnly = () => Promise.reject(new Error("not on this target"));
 

@@ -96,6 +96,9 @@ export type Words = {
 	offsetMs(v: number): string;
 	backTo(title: string): string;
 	openServerSettings?: string;
+	/** Said after the offline halt's body, and the button that goes to the downloads, where the device has any. */
+	downloadsStillPlay?: string;
+	watchDownload?: string;
 };
 
 const toneOf = (d?: Decision): Tone => (d && !d.error && !d.needs_slot ? "ok" : "conv");
@@ -373,6 +376,7 @@ export type HaltContext = {
 	position: number;
 	isAdmin: boolean;
 	routes: { serverSettings: boolean };
+	canDownload?: boolean;
 };
 
 export type HaltAction = { id: string; label: string; primary?: boolean };
@@ -397,6 +401,9 @@ export function haltView(h: Halt, ctx: HaltContext, w: Words): HaltViewModel {
 	if (h.retryLabel) actions.push({ id: "retry", label: h.retryLabel, primary: true });
 	if (h.kind === "nocodec" && ctx.isAdmin && ctx.routes.serverSettings && w.openServerSettings)
 		actions.push({ id: "server-settings", label: w.openServerSettings, primary: true });
+	const offline = h.kind === "offline" && ctx.canDownload;
+	if (ctx.canDownload && (h.kind === "offline" || h.kind === "unreachable") && w.watchDownload)
+		actions.push({ id: "downloads", label: w.watchDownload });
 	actions.push({ id: "back", label: w.backTo(ctx.title) });
 	return {
 		kind: h.kind,
@@ -404,7 +411,8 @@ export function haltView(h: Halt, ctx: HaltContext, w: Words): HaltViewModel {
 		icon: h.icon,
 		eyebrow: h.eyebrow,
 		title: h.title,
-		body: h.body,
+		body:
+			offline && w.downloadsStillPlay ? `${h.body ?? ""} ${w.downloadsStillPlay}`.trim() : h.body,
 		mono: h.mono,
 		note: h.note,
 		wait: h.wait,

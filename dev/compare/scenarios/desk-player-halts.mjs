@@ -68,7 +68,7 @@ export default async (ctx) => {
     out[kind] = await summary();
     await shot(`desk-player-halt-${kind}`);
     // Leaving cleanly: a page dropped mid-session leaves requests the single-threaded bridge keeps waiting on.
-    await app.locator(".halt .secondary").click();
+    await app.locator(".halt .secondary").last().click();
     await wait(800);
   }
 
@@ -84,7 +84,7 @@ export default async (ctx) => {
   await wait(800);
 
   await force("stop");
-  await app.locator(".halt .secondary").click();
+  await app.locator(".halt .secondary").last().click();
   await wait(1500);
   out.back = { url: await where(app), stopped: await app.evaluate(() => window.__calls.includes("stop_session")), playing: (await fake(app)).playing };
   // Going back to a page that was left mid-play aborts its in-flight session calls, which WebKit reports as page errors.
@@ -96,8 +96,8 @@ export default async (ctx) => {
     out.busy?.eyebrow === "server busy" && out.busy.title === "Waiting for a free slot" && out.busy.count?.startsWith("Trying again in") && out.busy.actions[0] === "Try now" &&
     out.nocodec?.eyebrow === "can’t play here" && out.nocodec.actions.join() === "Back to Dune: Part Two" &&
     out.missing?.eyebrow === "file missing" && out.missing.mono?.includes("Dune.2021") && out.missing.actions.join() === "Back to Dune: Part Two" &&
-    out.unreachable?.eyebrow === "can’t reach the server" && out.unreachable.count?.includes("your place is saved at 8:20") && out.unreachable.actions.join() === "Try now,Back to Dune: Part Two" &&
-    out.offline?.eyebrow === "offline" && out.offline.wait?.includes("checking every 5 s") &&
+    out.unreachable?.eyebrow === "can’t reach the server" && out.unreachable.count?.includes("your place is saved at 8:20") && out.unreachable.actions.join() === "Try now,Watch a download,Back to Dune: Part Two" &&
+    out.offline?.eyebrow === "offline" && out.offline.wait?.includes("checking every 5 s") && out.offline.body?.endsWith("Your downloads still play.") && out.offline.actions.join() === "Try again,Watch a download,Back to Dune: Part Two" &&
     Object.values(out).slice(0, 7).every((h) => h && h.chrome === 0 && h.menus === 0) &&
     !out.retry.halt && out.retry.newSession >= 1 && out.retry.loads.at(-1)?.at >= 499 && out.retry.playing &&
     out.back.url.startsWith("/detail/movies/1") && out.back.stopped && !out.back.playing &&

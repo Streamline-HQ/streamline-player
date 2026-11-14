@@ -28,7 +28,8 @@ import {
 } from "#lib/core/download-ask.svelte.ts";
 import { pickView, popoverView } from "#lib/core/downloads-view.ts";
 import { anyActive, dl, entry, initDownloads, refreshStorage } from "#lib/core/downloads.svelte.ts";
-import { watchOnline } from "#lib/core/online.svelte.ts";
+import { loadLibrary } from "#lib/core/library.svelte.ts";
+import { net, watchOnline } from "#lib/core/online.svelte.ts";
 import { activeToast, toast } from "#lib/core/toast.svelte.ts";
 import { nowPlaying, stop, toFull } from "#lib/core/playback/now-playing.svelte.ts";
 import { m as i18n } from "#lib/paraglide/messages.js";
@@ -55,12 +56,17 @@ import { provideScroll } from "#lib/ui/scroll.ts";
 import {
 	activity,
 	canDownload,
+	home,
+	library,
 	markActivityRead,
 	me,
 	myPicture,
 	playbackPort,
 	reachable,
 	signOut,
+	syncOffline,
+	title as fetchTitle,
+	watchState,
 } from "#platform";
 import type { Snippet } from "svelte";
 import { onMount, untrack } from "svelte";
@@ -446,6 +452,34 @@ const miniLabels = $derived({
 	close: i18n.player_mini_close(),
 });
 
+const LIBRARY_PORT = { library, watchState, home, title: fetchTitle };
+
+function wentOffline() {
+	if (!dl.items.some((e) => e.state === "done")) return;
+	toast(i18n.dl_offline_title(), {
+		icon: "wifi-off",
+		warning: true,
+		text: i18n.dl_toast_offline_text(),
+	});
+}
+
+async function cameBack() {
+	const n = await syncOffline().catch(() => 0);
+	toast(i18n.dl_toast_back_online(), {
+		icon: "wifi",
+		text: n === 0 ? "" : n === 1 ? i18n.dl_toast_synced_one() : i18n.dl_toast_synced({ n }),
+	});
+	loadLibrary(LIBRARY_PORT, true);
+}
+
+// Playing a download notes its position on this device; with the server there, it goes up as soon as the player closes.
+let hadLaunch = false;
+$effect(() => {
+	const has = !!nowPlaying.launch;
+	if (hadLaunch && !has && canDownload && untrack(() => net.online)) syncOffline().catch(() => {});
+	hadLaunch = has;
+});
+
 onMount(() => {
 	const stops: (() => void)[] = [];
 	if (canDownload) {
@@ -459,7 +493,7 @@ onMount(() => {
 			);
 		}).then((stop) => (gone ? stop() : stops.push(stop)));
 		stops.push(
-			watchOnline({ reachable }, () => {}),
+			watchOnline({ reachable }, (up) => (up ? cameBack() : wentOffline())),
 			() => (gone = true),
 		);
 	}

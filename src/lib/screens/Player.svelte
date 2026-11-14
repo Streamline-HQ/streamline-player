@@ -49,18 +49,30 @@ import {
 	subtitleRows,
 } from "#lib/core/player-panels.ts";
 import { prefs, setPref as savePref } from "#lib/core/prefs.svelte.ts";
-import type { Kind } from "#lib/core/types.ts";
+import type { DownloadEntry, Kind } from "#lib/core/types.ts";
 import { m as i18n } from "#lib/paraglide/messages.js";
 import { getLocale } from "#lib/paraglide/runtime.js";
 import {
 	artwork,
+	artworkAt,
+	canDownload,
 	everything,
 	isFullscreen,
+	localPlayback,
+	noteOffline,
 	playbackPort,
 	setFullscreen,
 	title as fetchTitle,
 	watchState,
 } from "#platform";
+import { localKey, localLaunch } from "#lib/core/download-launch.ts";
+import { dl } from "#lib/core/downloads.svelte.ts";
+import { episodesOf } from "#lib/core/format.ts";
+import { lib } from "#lib/core/library.svelte.ts";
+import { localPort } from "#lib/core/playback/local-port.ts";
+import { net } from "#lib/core/online.svelte.ts";
+import type { PlaybackPort } from "#lib/core/playback/port.ts";
+import { downloadsPort } from "#lib/screens/downloads-port.ts";
 import BufferingSpinner from "#lib/ui/BufferingSpinner.svelte";
 import Button from "#lib/ui/Button.svelte";
 import EmptyState from "#lib/ui/EmptyState.svelte";
@@ -78,7 +90,7 @@ import Stepper from "#lib/ui/Stepper.svelte";
 import SubtitleStyle from "#lib/ui/SubtitleStyle.svelte";
 import UpNextCard from "#lib/ui/UpNextCard.svelte";
 import { afterNavigate, beforeNavigate } from "$app/navigation";
-import { onMount } from "svelte";
+import { onMount, untrack } from "svelte";
 
 type Tab = "subs" | "audio" | "quality" | "speed";
 type Phase = "idle" | "in" | "out";
@@ -109,8 +121,20 @@ const STYLE_LABEL: Record<string, () => string> = {
 const styleText = (v: string) => STYLE_LABEL[v]?.() ?? v;
 const words = panelWords(playbackPort.playerName);
 
-let { kind, id, epId, resume }: { kind: Kind; id: number; epId: number | null; resume: boolean } =
-	$props();
+let {
+	kind,
+	id,
+	epId,
+	resume,
+	local = null,
+}: {
+	kind: Kind;
+	id: number;
+	epId: number | null;
+	resume: boolean;
+	/** Set when the Downloads screen opened this: the saved file plays, whatever the server says. */
+	local?: { season: number | null; episode: number | null } | null;
+} = $props();
 
 let launch = $state.raw<Launch | null>(null);
 let failed = $state(false);
@@ -149,16 +173,90 @@ const view = $derived(launch?.view ?? null);
 const controlsOn = $derived(!!pb && (controls || (!pb.playing && !pb.buffering) || !!menu));
 const showBar = $derived(controlsOn && !pb?.ended && !pb?.halt);
 
+// Where a launch gets its server calls: the server's, or the saved file's when that is all there is.
+async function openLocal(
+	entry: DownloadEntry,
+	resuming: boolean,
+	serverStart?: number,
+): Promise<{ launch: Launch; port: PlaybackPort }> {
+	const found = await localPlayback(entry.key);
+	if (!found) throw new Error("no local file");
+	const noted = entry.offline !== null;
+	const watched =
+		serverStart ??
+		(await watchState().catch(() => lib.watch)).find((w) => w.media_id === entry.media_id)
+			?.position_seconds ??
+		0;
+	const position = !resuming ? 0 : noted ? found.position : watched;
+	const launch = localLaunch(entry, artworkAt, position);
+	const file = {
+		key: entry.key,
+		url: found.url,
+		tracks: found.tracks,
+		position,
+		duration: entry.meta.runtime * 60,
+		size: entry.bytes,
+	};
+	return { launch, port: localPort(playbackPort, file, noteOffline) };
+}
+
+async function downloaded(key: string | null) {
+	if (!canDownload || !key) return null;
+	const items = dl.items.length > 0 ? dl.items : await downloadsPort.downloads().catch(() => []);
+	return items.find((e) => e.key === key && e.state === "done") ?? null;
+}
+
+function libraryKey(k: Kind, i: number, e: number | null) {
+	if (k === "movies") return localKey(k, i, null, null);
+	const found = lib.shows.find((t) => t.id === i);
+	const ep = found && episodesOf(found).find((x) => x.id === e);
+	return ep ? localKey(k, i, ep.season, ep.number) : null;
+}
+
+async function open(
+	k: Kind,
+	i: number,
+	e: number | null,
+	r: boolean,
+	file: { season: number | null; episode: number | null } | null,
+) {
+	if (file) {
+		const entry = await downloaded(localKey(k, i, file.season, file.episode));
+		if (!entry) throw new Error("not downloaded");
+		return openLocal(entry, true);
+	}
+	try {
+		const launch = await loadLaunch(
+			{ title: fetchTitle, watchState, artwork, everything },
+			k,
+			i,
+			e,
+			r,
+		);
+		if (!net.online) {
+			const entry = await downloaded(
+				dl.items.find((x) => x.media_id === launch.item.mediaId)?.key ?? null,
+			);
+			if (entry) return await openLocal(entry, r, launch.item.start);
+		}
+		return { launch, port: playbackPort as PlaybackPort };
+	} catch (error) {
+		const entry = net.online ? null : await downloaded(libraryKey(k, i, e));
+		if (!entry) throw error;
+		return openLocal(entry, r);
+	}
+}
+
 $effect(() => {
-	const [k, i, e, r] = [kind, id, epId, resume];
+	const [k, i, e, r, file] = [kind, id, epId, resume, local];
 	let stale = false;
 	failed = false;
 	leaving = false;
-	loadLaunch({ title: fetchTitle, watchState, artwork, everything }, k, i, e, r).then(
-		(l) => {
+	untrack(() => open(k, i, e, r, file)).then(
+		({ launch: l, port }) => {
 			if (stale) return;
 			launch = l;
-			startPlayback(l);
+			startPlayback(l, port);
 		},
 		() => {
 			if (!stale) failed = true;
@@ -169,12 +267,12 @@ $effect(() => {
 	};
 });
 
-function startPlayback(l: Launch) {
+function startPlayback(l: Launch, port: PlaybackPort) {
 	const next = l.view.next;
 	// The controller calls onEnd when the file ends, autoplay or not; without autoplay the end screen takes over.
 	const onEnd = () => (prefs.autoplay ? goNext() : nowPlaying.pb?.skip());
 	play(
-		playbackPort,
+		port,
 		{ ...l, item: { ...l.item, onEnd: next ? onEnd : undefined } },
 		{
 			started: () => show(),
@@ -282,7 +380,8 @@ const detail = $derived(`/detail/${kind}/${id}`);
 
 function leaveRoute() {
 	stop();
-	if (fromDetail) history.back();
+	if (local) goto("/downloads", { replace: true });
+	else if (fromDetail) history.back();
 	else goto(view?.season ? `${detail}?s=${view.season}` : detail, { replace: true });
 }
 
@@ -291,7 +390,8 @@ function toPip() {
 	if (fullscreen) toggleFullscreen(false);
 	closeMenu();
 	toMini();
-	if (fromDetail) history.back();
+	if (local) goto("/downloads", { replace: true });
+	else if (fromDetail) history.back();
 	else goto(view?.season ? `${detail}?s=${view.season}` : detail, { replace: true });
 }
 
@@ -667,7 +767,7 @@ const statList = $derived.by(() => {
 			audioDelay: pb.audioDelay,
 			measured: pb.measured,
 			throughput: pb.network ? rememberedThroughput(pb.network) : null,
-			host: new URL(pb.session.url).host,
+			host: URL.canParse(pb.session.url) ? new URL(pb.session.url).host : "",
 			playerName: playbackPort.playerName,
 			full: pb.full,
 			speed: pb.speed,
@@ -686,6 +786,7 @@ const haltModel = $derived(
 					position: pb.position,
 					isAdmin: account.me?.role === "Admin",
 					routes: { serverSettings: false },
+					canDownload,
 				},
 				words,
 			)
@@ -695,6 +796,10 @@ const haltModel = $derived(
 function haltAction(id: string) {
 	if (id === "retry") pb?.retry();
 	else if (id === "back") exit();
+	else if (id === "downloads") {
+		if (fullscreen) toggleFullscreen(false);
+		goto("/downloads");
+	}
 }
 
 $effect(() => {

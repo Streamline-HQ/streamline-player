@@ -3,9 +3,9 @@ import { ask } from "#lib/core/ask.svelte.ts";
 import { removeKeys } from "#lib/core/download-ask.svelte.ts";
 import { dl, retry } from "#lib/core/downloads.svelte.ts";
 import { type Card, type Group, pageView, storageView } from "#lib/core/downloads-view.ts";
-import { episodesOf, stillPos } from "#lib/core/format.ts";
+import { localUrl } from "#lib/core/download-launch.ts";
+import { stillPos } from "#lib/core/format.ts";
 import { net } from "#lib/core/online.svelte.ts";
-import { playUrl } from "#lib/core/browse.ts";
 import { toast } from "#lib/core/toast.svelte.ts";
 import { m as i18n } from "#lib/paraglide/messages.js";
 import { downloadsPort } from "#lib/screens/downloads-port.ts";
@@ -17,7 +17,7 @@ import Icon from "#lib/ui/Icon.svelte";
 import { goto } from "#lib/ui/nav.ts";
 import Art from "#lib/ui/Art.svelte";
 import StorageMeter from "#lib/ui/StorageMeter.svelte";
-import { artworkAt, title } from "#platform";
+import { artworkAt } from "#platform";
 
 const PAD_X = 56;
 const TOP = 92;
@@ -59,14 +59,10 @@ function removeAll(g: Group) {
 	});
 }
 
-// The episode's id lives in the library, which may be unreachable or no longer hold the title.
-async function play(c: Card) {
+// Play on this screen always plays the file on disk, with no library or server call.
+function play(c: Card) {
 	const m = byKey(c.key)?.meta;
-	if (!m) return;
-	if (m.kind === "movies") return goto(playUrl("movies", m.title_id));
-	const t = await title("series", m.title_id).catch(() => null);
-	const ep = t && episodesOf(t).find((e) => e.season === m.season && e.number === m.episode);
-	return goto(playUrl("series", m.title_id, ep?.id));
+	if (m) goto(localUrl(m));
 }
 
 function open(c: Card) {
