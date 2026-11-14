@@ -41,7 +41,6 @@ import { adminPort } from "#lib/screens/admin/port.ts";
 import ServerBlock from "#lib/screens/admin/ServerBlock.svelte";
 import ServerNav from "#lib/screens/admin/ServerNav.svelte";
 import { TONES } from "#lib/screens/admin/tone.ts";
-import { IS_WEB } from "#lib/platform/target.ts";
 import Button from "#lib/ui/Button.svelte";
 import EmptyState from "#lib/ui/EmptyState.svelte";
 import Icon from "#lib/ui/Icon.svelte";
@@ -49,12 +48,10 @@ import { goto } from "#lib/ui/nav.ts";
 import { useScroll } from "#lib/ui/scroll.ts";
 import { serverWords } from "#lib/ui/server-words.ts";
 import {
-	approvePairing,
-	denyPairing,
+	adminResolvePairing,
 	home,
 	library,
 	me as whoAmI,
-	openExternal,
 	serverHost,
 	title as fetchTitle,
 	watchState,
@@ -202,16 +199,16 @@ function askStop(id: string) {
 async function pair(code: string, approve: boolean) {
 	const found = data?.pairings.find((p) => p.user_code === code);
 	if (!found || !data) return;
-	if (!IS_WEB) {
-		const player = data.overview.server.player_url;
-		if (!player) return toast(i18n.server_toast_no_player());
-		openExternal(`${player.replace(/\/$/, "")}/pair?code=${encodeURIComponent(code)}`).catch(
-			() => {},
-		);
-		return toast(i18n.welcome_finish_in_browser());
-	}
 	const who = account.me?.name ?? "";
-	const result = await resolvePairing({ approvePairing, denyPairing }, code, approve, who);
+	const result = await resolvePairing(
+		{
+			approvePairing: (c) => adminResolvePairing(c, true),
+			denyPairing: (c) => adminResolvePairing(c, false),
+		},
+		code,
+		approve,
+		who,
+	);
 	if (result === "ok")
 		toast(
 			approve
@@ -482,7 +479,7 @@ onMount(() => {
 	min-height: 100%;
 	display: grid;
 	grid-template-columns: 220px minmax(0, 800px);
-	justify-content: start;
+	justify-content: center;
 	gap: 48px;
 	background: var(--bg-deep);
 	color: var(--fg);

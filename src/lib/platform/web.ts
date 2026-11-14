@@ -318,6 +318,8 @@ export const adminPairings = () =>
 	call<{ items: AdminPairing[] }>("GET", "/admin/pairings").then(listOf);
 export const adminDevices = () =>
 	call<{ items: AdminDevice[] }>("GET", "/admin/devices").then(listOf);
+export const adminResolvePairing = (code: string, approve: boolean) =>
+	call("POST", `/admin/pairings/${encodeURIComponent(code)}/${approve ? "approve" : "deny"}`);
 export const adminRevokeDevice = (id: string) =>
 	call<void>("DELETE", `/admin/devices/${encodeURIComponent(id)}`);
 export const adminLibrary = () => call<AdminLibrary>("GET", "/admin/library");

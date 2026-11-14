@@ -434,6 +434,23 @@ async fn admin_devices(api: tauri::State<'_, Api>) -> Result<Value, String> {
 }
 
 #[tauri::command]
+async fn admin_resolve_pairing(
+    api: tauri::State<'_, Api>,
+    code: String,
+    approve: bool,
+) -> Result<(), String> {
+    safe_id(&code)?;
+    let verb = if approve { "approve" } else { "deny" };
+    api.call(
+        reqwest::Method::POST,
+        &format!("/admin/pairings/{code}/{verb}"),
+        None,
+    )
+    .await
+    .map(drop)
+}
+
+#[tauri::command]
 async fn admin_revoke_device(api: tauri::State<'_, Api>, id: String) -> Result<(), String> {
     safe_id(&id)?;
     api.call(
@@ -924,6 +941,7 @@ pub fn run() {
             stop_stream,
             admin_pairings,
             admin_devices,
+            admin_resolve_pairing,
             admin_revoke_device,
             admin_library,
             admin_scan,

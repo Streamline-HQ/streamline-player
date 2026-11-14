@@ -545,7 +545,7 @@ paths:
   /admin/pairings:
     get:
       operationId: adminPairings
-      description: Server settings, Devices. Pairing requests waiting for approval. Approving stays on the bearer-only `/auth/device/{userCode}/approve`. Admin only.
+      description: Server settings, Devices. Pairing requests waiting for approval. Admin only.
       responses:
         "200":
           description: The pending requests.
@@ -558,6 +558,24 @@ paths:
                   items:
                     type: array
                     items: { $ref: "#/components/schemas/AdminPairing" }
+        default: { $ref: "#/components/responses/Error" }
+  /admin/pairings/{userCode}/approve:
+    post:
+      operationId: adminApprovePairing
+      description: Server settings, Devices. An admin approves a pairing from Server settings, with a device key or a bearer token; the device's next poll gets its key. 404 no_pending_pairing for an unknown, used or expired code. Admin only.
+      parameters:
+        - { $ref: "#/components/parameters/UserCode" }
+      responses:
+        "204": { description: Approved. }
+        default: { $ref: "#/components/responses/Error" }
+  /admin/pairings/{userCode}/deny:
+    post:
+      operationId: adminDenyPairing
+      description: Server settings, Devices. An admin denies a pairing; the device's next poll gets access_denied. Same errors as approve. Admin only.
+      parameters:
+        - { $ref: "#/components/parameters/UserCode" }
+      responses:
+        "204": { description: Denied. }
         default: { $ref: "#/components/responses/Error" }
   /admin/devices:
     get:

@@ -72,6 +72,7 @@ p.add_argument("--cors-origin", action="append", help="origin a browser may call
 p.add_argument("--access-ttl", type=int, default=900, help="seconds a browser's access token lasts")
 p.add_argument("--refresh-ttl", type=int, default=2592000, help="seconds a browser's refresh token lasts")
 p.add_argument("--password", default="streamline", help="password of the email sign-in")
+p.add_argument("--library", default=os.path.join(os.path.dirname(os.path.abspath(__file__)), "mock-library.json"), help="library JSON to serve in place of the demo one; its titles take the --clip files in order, movies first")
 p.add_argument("--empty", action="store_true", help="serve a library with no titles in it")
 p.add_argument("--demo-activity", nargs="?", const="all", choices=["all", "no-downloads"], help="serve the design's eleven activity events instead of the library's arrivals; no-downloads leaves out the download")
 p.add_argument("--demo-progress", action="store_true", help="start with Dune: Part Two and Severance S2 E4 partly watched")
@@ -134,7 +135,7 @@ DOWNLOADS = {}
 DOWNLOAD_QUALITIES = {"original": {}, "1080p": {"max_bitrate": 8_000_000, "max_height": 1080}, "720p": {"max_bitrate": 4_000_000, "max_height": 720}}
 DOWNLOAD_FAIL = {"next": False}
 
-with open(os.path.join(os.path.dirname(os.path.abspath(__file__)), "mock-library.json")) as f:
+with open(args.library) as f:
     LIBRARY = json.load(f)
 MOVIES = [] if args.empty else LIBRARY["movies"]
 SERIES = [] if args.empty else LIBRARY["series"]
@@ -1051,6 +1052,17 @@ class Handler(BaseHTTPRequestHandler):
             RESTART["admin"] = True
             note("info", "config", f"restart requested · {ME['name']}")
             return self.reply(202)
+        m = re.fullmatch(r"/pairings/([A-Za-z0-9-]+)/(approve|deny)", path)
+        if method == "POST" and m:
+            if failing():
+                return self.reply(500, {"error": {"code": "internal"}})
+            wanted = m[1].replace("-", "").upper()
+            now = time.monotonic()
+            for p in PAIRINGS.values():
+                if p["status"] == "pending" and now <= p["expires"] and p["user_code"].replace("-", "") == wanted:
+                    p["status"] = "approved" if m[2] == "approve" else "denied"
+                    return self.reply(204)
+            return self.reply(404, {"error": {"code": "no_pending_pairing"}})
         m = re.fullmatch(r"/streams/([\w-]+)/stop", path)
         if method == "POST" and m:
             message = self.body().get("message", "")
@@ -1522,4 +1534,7 @@ for show in SERIES:
     break
 
 print(f"mock streamline on {args.listen}, engine {args.engine}, media {sorted(MEDIA)}", flush=True)
-server.serve_forever()
+try:
+    server.serve_forever()
+except KeyboardInterrupt:
+    pass

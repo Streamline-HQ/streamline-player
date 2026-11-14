@@ -156,6 +156,7 @@
     stop_stream: ({ id, message }) => call("POST", `/admin/streams/${encodeURIComponent(id)}/stop`, message === undefined ? {} : { message }),
     admin_pairings: () => call("GET", "/admin/pairings"),
     admin_devices: () => call("GET", "/admin/devices"),
+    admin_resolve_pairing: ({ code, approve }) => call("POST", `/admin/pairings/${encodeURIComponent(code)}/${approve ? "approve" : "deny"}`),
     admin_revoke_device: ({ id }) => call("DELETE", `/admin/devices/${encodeURIComponent(id)}`),
     admin_library: () => call("GET", "/admin/library"),
     admin_scan: ({ folderId }) => call("POST", "/admin/library/scan", folderId === undefined ? {} : { folder_id: folderId }),

@@ -158,6 +158,8 @@ export const stopStream = (id: string, message?: string) =>
 	invoke<void>("stop_stream", { id, message });
 export const adminPairings = () => invoke<{ items: AdminPairing[] }>("admin_pairings").then(listOf);
 export const adminDevices = () => invoke<{ items: AdminDevice[] }>("admin_devices").then(listOf);
+export const adminResolvePairing = (code: string, approve: boolean) =>
+	invoke<void>("admin_resolve_pairing", { code, approve });
 export const adminRevokeDevice = (id: string) => invoke<void>("admin_revoke_device", { id });
 export const adminLibrary = () => invoke<AdminLibrary>("admin_library");
 export const adminScan = (folderId?: string) => invoke<void>("admin_scan", { folderId });
