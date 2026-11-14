@@ -1,7 +1,6 @@
 # The service body both modules share. Not a module: plain values the NixOS
 # and home-manager modules splice into their own units.
 {
-  lib,
   pkgs,
   cfg,
   secretFile,
@@ -10,7 +9,7 @@ let
   format = pkgs.formats.yaml { };
   # The package's own tools, rebuilt around the chosen ffmpeg. ffmpeg is only
   # in passthru, so this does not rebuild the engine.
-  tools = (cfg.package.override { engineFfmpeg = cfg.ffmpeg.package; }).tools;
+  inherit (cfg.package.override { engineFfmpeg = cfg.ffmpeg.package; }) tools;
 in
 {
   configFile = format.generate "streamline-engine.yaml" (

@@ -7,6 +7,7 @@ tasks:
       - task: rust
       - task: js
       - task: python
+      - task: nix
       - task: svelte
 
   rust:
@@ -16,6 +17,12 @@ tasks:
   js:
     desc: Lint TypeScript and Svelte (biome, warnings are errors)
     cmd: biome lint --error-on-warnings .
+
+  nix:
+    desc: Lint the Nix files (statix, deadnix)
+    cmds:
+      - statix check .
+      - deadnix --fail .
 
   python:
     desc: Lint the dev scripts in Python (ruff)

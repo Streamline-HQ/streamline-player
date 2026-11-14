@@ -7,7 +7,7 @@
 let
   cfg = config.services.streamline-engine;
   common = import ./common.nix {
-    inherit lib pkgs cfg;
+    inherit pkgs cfg;
     # LoadCredential's fixed location for a system unit; the YAML cannot use
     # systemd's %d.
     secretFile = "/run/credentials/streamline-engine.service/secret";

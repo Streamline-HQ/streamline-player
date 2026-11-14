@@ -1,4 +1,4 @@
-{ lib, ... }:
+_:
 let
   secret = "vm-test-secret-0123456789abcdef";
   # Every character systemd's unit syntax treats specially in a path list.

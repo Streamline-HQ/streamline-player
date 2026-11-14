@@ -84,6 +84,8 @@
           biome = pkgs.callPackage ./nix/tools/biome.nix { };
           ruff = pkgs.callPackage ./nix/tools/ruff.nix { };
           nixfmt = pkgs.callPackage ./nix/tools/nixfmt.nix { };
+          statix = pkgs.callPackage ./nix/tools/statix.nix { };
+          deadnix = pkgs.callPackage ./nix/tools/deadnix.nix { };
           python3 = pkgs.callPackage ./nix/tools/python.nix { };
           desktop = import ./nix/packages/libs.nix { inherit pkgs lib; };
           mingwCc = pkgs.pkgsCross.mingwW64.stdenv.cc;
@@ -316,6 +318,21 @@
               touch $out
             '';
 
+            nix-lint =
+              pkgs.runCommandLocal "check-nix-lint"
+                {
+                  nativeBuildInputs = [
+                    statix
+                    deadnix
+                  ];
+                }
+                ''
+                  cd ${./.}
+                  statix check .
+                  deadnix --fail .
+                  touch $out
+                '';
+
             ruff-lint = pkgs.runCommandLocal "check-ruff-lint" { nativeBuildInputs = [ ruff ]; } ''
               cd ${./.}
               ruff check --no-cache dev
@@ -347,6 +364,8 @@
                 biome
                 ruff
                 nixfmt
+                statix
+                deadnix
                 config.treefmt.build.wrapper
                 typescript-language-server
                 playwright-mcp

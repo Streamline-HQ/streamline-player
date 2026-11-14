@@ -10,7 +10,7 @@ let
   # A user unit's credentials directory depends on the UID, so the YAML could
   # not name it; the engine reads the user's own file instead.
   common = import ./common.nix {
-    inherit lib pkgs cfg;
+    inherit pkgs cfg;
     inherit (cfg) secretFile;
   };
 in
