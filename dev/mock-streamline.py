@@ -369,6 +369,8 @@ def engine(method, path, body=None):
             return r.status, json.loads(r.read() or b"null")
     except urllib.error.HTTPError as e:
         return e.code, json.loads(e.read() or b"null")
+    except OSError:
+        return 503, {"code": "engine_unreachable", "message": f"no engine at {args.engine}"}
 
 
 def job_id(kind, path):
