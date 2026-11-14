@@ -183,6 +183,7 @@ pub async fn download(
     if !path.is_file() {
         return Err(ApiError::not_found("no such file"));
     }
+    s.jobs.touch(&id);
     let Ok(res) = ServeFile::new(path).oneshot(req).await;
     Ok(res.into_response())
 }

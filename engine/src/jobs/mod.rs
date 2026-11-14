@@ -1,3 +1,4 @@
+pub mod download;
 pub mod intro;
 pub mod subtitles;
 pub mod trickplay;
@@ -38,6 +39,7 @@ pub enum JobSpec {
     Subtitles { path: String },
     Intro { paths: Vec<String> },
     Trickplay { path: String },
+    Download(Box<download::DownloadSpec>),
 }
 
 impl JobSpec {
@@ -47,11 +49,15 @@ impl JobSpec {
             Self::Subtitles { .. } => "subtitles",
             Self::Intro { .. } => "intro",
             Self::Trickplay { .. } => "trickplay",
+            Self::Download(_) => "download",
         }
     }
 
     pub fn knows(kind: &str) -> bool {
-        matches!(kind, "analyze" | "subtitles" | "intro" | "trickplay")
+        matches!(
+            kind,
+            "analyze" | "subtitles" | "intro" | "trickplay" | "download"
+        )
     }
 }
 
@@ -90,6 +96,10 @@ pub enum JobError {
     Ffmpeg { index: u32, stderr: String },
     #[error("the file has no video stream")]
     NoVideo,
+    #[error("{0}")]
+    Invalid(String),
+    #[error("ffmpeg failed: {0}")]
+    Download(String),
     #[error("cannot encode result: {0}")]
     Json(#[from] serde_json::Error),
 }
@@ -127,6 +137,7 @@ struct Entry {
     state: JobState,
     result: Option<Value>,
     error: Option<String>,
+    progress: Option<f64>,
     abort: Option<AbortHandle>,
 }
 
@@ -199,15 +210,23 @@ impl Shared {
         }
     }
 
-    async fn run(&self, id: String, spec: JobSpec) {
+    async fn run(self: &Arc<Self>, id: String, spec: JobSpec) {
+        let shared = self.clone();
+        let progress_id = id.clone();
+        let progress = move |p: f32| {
+            if let Some(e) = shared.lock().jobs.get_mut(&progress_id) {
+                e.progress = Some(f64::from(p));
+            }
+        };
         let cfg = self.cfg.clone();
         let hw = self.hw.clone();
         let dir = self.dir(&id);
         let kind = spec.kind();
         let span = tracing::info_span!("engine.job", job = %id, r#type = kind);
         let started = std::time::Instant::now();
-        let task: JoinHandle<Result<Value, JobError>> =
-            tokio::spawn(async move { execute(&cfg, &hw, &spec, &dir).await }.instrument(span));
+        let task: JoinHandle<Result<Value, JobError>> = tokio::spawn(
+            async move { execute(&cfg, &hw, &spec, &dir, &progress).await }.instrument(span),
+        );
         {
             let mut q = self.lock();
             match q.jobs.get_mut(&id) {
@@ -313,8 +332,27 @@ async fn analyze(cfg: &Config, path: &str) -> Result<Analysis, JobError> {
     Ok(run_analyze_with(&cfg.ffprobe(), &input, &lower_priority).await?)
 }
 
-async fn execute(cfg: &Config, hw: &Hw, spec: &JobSpec, dir: &Path) -> Result<Value, JobError> {
+async fn execute(
+    cfg: &Config,
+    hw: &Hw,
+    spec: &JobSpec,
+    dir: &Path,
+    progress: &(dyn Fn(f32) + Send + Sync),
+) -> Result<Value, JobError> {
     match spec {
+        JobSpec::Download(d) => {
+            let analysis = analyze(cfg, &d.path).await?;
+            download::run(
+                &cfg.ffmpeg(),
+                hw,
+                &cfg.path_map.rewrite(&d.path),
+                &analysis,
+                d,
+                dir,
+                progress,
+            )
+            .await
+        }
         JobSpec::Analyze { path } => Ok(serde_json::to_value(analyze(cfg, path).await?)?),
         JobSpec::Subtitles { path } => {
             let analysis = analyze(cfg, path).await?;
@@ -401,6 +439,7 @@ impl Jobs {
                 state: JobState::Queued,
                 result: None,
                 error: None,
+                progress: None,
                 abort: None,
             },
         );
@@ -414,7 +453,11 @@ impl Jobs {
         if let Some(e) = self.0.lock().jobs.get(id) {
             return Ok(JobStatus {
                 state: e.state,
-                progress: (e.state == JobState::Done).then_some(1.0),
+                progress: if e.state == JobState::Done {
+                    Some(1.0)
+                } else {
+                    e.progress
+                },
                 result: e.result.clone(),
                 error: e.error.clone(),
             });
@@ -456,9 +499,11 @@ impl Jobs {
             return Err(not_found());
         }
         let dir = self.0.dir(id);
-        let mp4 = dir.join("output.mp4");
-        if mp4.is_file() {
-            return Ok(mp4);
+        for name in ["download.mkv", "download.mp4", "output.mp4"] {
+            let file = dir.join(name);
+            if file.is_file() {
+                return Ok(file);
+            }
         }
         std::fs::read_to_string(dir.join("original"))
             .map(|p| self.0.cfg.path_map.rewrite(p.trim()))
@@ -554,6 +599,7 @@ mod kind_tests {
         assert!(JobSpec::knows("subtitles"));
         assert!(JobSpec::knows("intro"));
         assert!(JobSpec::knows("trickplay"));
+        assert!(JobSpec::knows("download"));
         assert!(!JobSpec::knows("nonsense"));
         let spec = JobSpec::Analyze {
             path: String::new(),

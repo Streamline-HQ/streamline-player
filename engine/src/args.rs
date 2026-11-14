@@ -255,7 +255,7 @@ fn video_copy_args(args: &mut Vec<String>, tag: CopyTag, dv: DvHandling, s: &Run
     }
 }
 
-fn video_transcode_args(args: &mut Vec<String>, plan: &Plan, s: &RunSpec, p: &Pipeline) {
+fn video_transcode_args(args: &mut Vec<String>, plan: &Plan, hw: &Hw, p: &Pipeline) {
     let VideoAction::Transcode {
         codec,
         bitrate,
@@ -265,7 +265,7 @@ fn video_transcode_args(args: &mut Vec<String>, plan: &Plan, s: &RunSpec, p: &Pi
     else {
         return;
     };
-    let b = s.hw.backend;
+    let b = hw.backend;
     args.extend(["-c:v".to_owned(), b.encoder(codec).to_owned()]);
     args.extend([
         "-b:v".to_owned(),
@@ -334,6 +334,25 @@ fn video_transcode_args(args: &mut Vec<String>, plan: &Plan, s: &RunSpec, p: &Pi
             (_, false) => "nv12",
         };
         push(args, &["-pix_fmt", fmt]);
+    }
+}
+
+/// A transcode's video for one output file: what goes before the input, and the encoder's own arguments.
+pub struct FileVideo {
+    pub before_input: Vec<String>,
+    pub encode: Vec<String>,
+}
+
+/// `plan.video` must be a transcode.
+pub fn file_video_args(plan: &Plan, a: &Analysis, hw: &Hw) -> FileVideo {
+    let pipe = pipeline(plan, a, hw);
+    let mut before_input = pipe.init.clone();
+    before_input.extend(pipe.decode.iter().cloned());
+    let mut encode = Vec::new();
+    video_transcode_args(&mut encode, plan, hw, &pipe);
+    FileVideo {
+        before_input,
+        encode,
     }
 }
 
@@ -473,7 +492,7 @@ pub fn live_args(s: &RunSpec) -> Vec<String> {
 
     match plan.video {
         VideoAction::Copy { tag, dv } => video_copy_args(&mut args, tag, dv, s),
-        VideoAction::Transcode { .. } => video_transcode_args(&mut args, plan, s, &pipe),
+        VideoAction::Transcode { .. } => video_transcode_args(&mut args, plan, s.hw, &pipe),
     }
     audio_args(&mut args, s);
 

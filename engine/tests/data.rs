@@ -427,3 +427,53 @@ async fn media_answers_cross_origin() {
         .await;
     assert_eq!(res.headers()[header::ACCESS_CONTROL_ALLOW_ORIGIN], "*");
 }
+
+#[tokio::test]
+async fn dl_serves_a_download_file_with_range() {
+    let e = env();
+    let jid = id(8);
+    let dir = e.root.join("jobs").join(&jid);
+    std::fs::create_dir_all(&dir).unwrap();
+    std::fs::write(dir.join("done.json"), r#"{"state":"done"}"#).unwrap();
+    std::fs::write(dir.join("download.mkv"), b"0123456789").unwrap();
+
+    let res = e.get(&format!("/dl/{jid}?{}", dl_query(&jid))).await;
+    assert_eq!(res.status(), StatusCode::OK);
+    assert_eq!(body_bytes(res).await, b"0123456789");
+    let res = e
+        .send(
+            Request::get(format!("/dl/{jid}?{}", dl_query(&jid)))
+                .header("range", "bytes=5-")
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await;
+    assert_eq!(res.status(), StatusCode::PARTIAL_CONTENT);
+    assert_eq!(body_bytes(res).await, b"56789");
+}
+
+#[tokio::test]
+async fn a_fetched_download_survives_the_sweep() {
+    let e = env();
+    let eight_days = std::time::Duration::from_secs(8 * 24 * 3600);
+    let aged = |n: u8| {
+        let dir = e.root.join("jobs").join(id(n));
+        std::fs::create_dir_all(&dir).unwrap();
+        std::fs::write(dir.join("done.json"), r#"{"state":"done"}"#).unwrap();
+        std::fs::write(dir.join("download.mkv"), b"x").unwrap();
+        filetime::set_file_mtime(
+            dir.join("done.json"),
+            filetime::FileTime::from_system_time(std::time::SystemTime::now() - eight_days),
+        )
+        .unwrap();
+        dir
+    };
+    let fetched = aged(1);
+    let untouched = aged(2);
+
+    let res = e.get(&format!("/dl/{}?{}", id(1), dl_query(&id(1)))).await;
+    assert_eq!(res.status(), StatusCode::OK);
+    e.jobs.sweep_ttl_once();
+    assert!(fetched.exists());
+    assert!(!untouched.exists());
+}

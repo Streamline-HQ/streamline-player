@@ -508,6 +508,7 @@ impl Sessions {
             audio_index: r.audio_index,
             burn_in_subtitle: r.burn_in_subtitle,
             max_bitrate: r.max_bitrate,
+            max_height: None,
         };
         let plan = decide(&r.capabilities, &analysis, &params, &self.inner.hw.encoders)?;
         let permit = self.permit_for(plan.mode)?;
@@ -567,6 +568,7 @@ impl Sessions {
             audio_index: r.audio_index.unwrap_or(st.params.audio_index),
             burn_in_subtitle: r.burn_in_subtitle.unwrap_or(st.params.burn_in_subtitle),
             max_bitrate: r.max_bitrate.unwrap_or(st.params.max_bitrate),
+            max_height: None,
         };
         let position = r.position.unwrap_or(st.fetched_t);
         let analysis = st.analysis.clone();

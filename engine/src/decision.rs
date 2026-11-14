@@ -39,6 +39,9 @@ pub struct SessionParams {
     pub audio_index: Option<u32>,
     pub burn_in_subtitle: Option<u32>,
     pub max_bitrate: Option<u64>,
+    /// Only downloads set it; a live session leaves the height to the ladder and the device.
+    #[serde(skip)]
+    pub max_height: Option<u32>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -364,6 +367,14 @@ fn video_fit(
             format!("capped at {} Mbit/s", max as f64 / 1_000_000.0),
         ));
     }
+    if let Some(max) = p.max_height
+        && v.height > max
+    {
+        reasons.push(Reason::new(
+            "height_cap",
+            format!("{} lines is over {max}", v.height),
+        ));
+    }
     if p.burn_in_subtitle.is_some() {
         reasons.push(Reason::new("burn_in", "subtitle is burned into the video"));
     }
@@ -475,7 +486,12 @@ fn transcode_video(
         f64::from(v.sar.0) / f64::from(v.sar.1)
     };
     let aspect = f64::from(v.width) * sar / f64::from(v.height.max(1));
-    let mut height = even_down(v.height.min(ladder).min(cap.max_height));
+    let mut height = even_down(
+        v.height
+            .min(ladder)
+            .min(cap.max_height)
+            .min(p.max_height.unwrap_or(u32::MAX)),
+    );
     let mut width = even_down((aspect * f64::from(height)).round() as u32);
     if width > cap.max_width {
         width = even_down(cap.max_width);
@@ -901,6 +917,28 @@ mod tests {
             VideoAction::Transcode { bitrate, .. } => bitrate,
             other => panic!("{other:?}"),
         }
+    }
+
+    #[test]
+    fn height_cap_beats_ladder() {
+        let a = fixture("hevc10_hdr10_truehd_pgs_ass_fonts");
+        let c = hevc_caps(&["mkv"], &["hdr10"]);
+        let height = |max_height| match plan(
+            &c,
+            &a,
+            &SessionParams {
+                max_bitrate: Some(8_000_000),
+                max_height,
+                ..Default::default()
+            },
+        )
+        .video
+        {
+            VideoAction::Transcode { height, .. } => height,
+            other => panic!("{other:?}"),
+        };
+        assert_eq!(height(Some(720)), 720);
+        assert_eq!(height(None), a.video[0].height.min(1080));
     }
 
     const UHD: (u32, u32) = (3840, 2160);

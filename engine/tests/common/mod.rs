@@ -28,6 +28,7 @@ pub struct Env {
     pub root: PathBuf,
     pub router: Router,
     pub sessions: Sessions,
+    pub jobs: Jobs,
     pub settings: Arc<Settings>,
     pub config_file: PathBuf,
 }
@@ -139,13 +140,14 @@ fn build_env(hw: Hw, yaml: Option<&str>) -> Env {
         hw,
         ffmpeg_version: Some("test".into()),
         sessions: sessions.clone(),
-        jobs,
+        jobs: jobs.clone(),
         settings: settings.clone(),
     });
     Env {
         root,
         router,
         sessions,
+        jobs,
         settings,
         config_file,
     }

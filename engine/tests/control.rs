@@ -534,3 +534,21 @@ async fn restart_answers_202_and_fires_the_shutdown() {
     .await
     .expect("the restart signal never fired");
 }
+
+#[tokio::test]
+async fn download_type_is_accepted() {
+    let e = env();
+    let mut body = job_body(1, "download");
+    body["capabilities"] = serde_json::to_value(common::caps("h264", "mkv")).unwrap();
+    body["audio_indexes"] = json!([1]);
+    body["max_bitrate"] = json!(8_000_000);
+    body["max_height"] = json!(1080);
+    let (status, _) = e.api("POST", "/v1/jobs", Some(body)).await;
+    assert_eq!(status, StatusCode::ACCEPTED);
+
+    let (status, v) = e
+        .api("POST", "/v1/jobs", Some(job_body(2, "download")))
+        .await;
+    assert_eq!(status, StatusCode::BAD_REQUEST);
+    assert_eq!(v["code"], "invalid_request");
+}
