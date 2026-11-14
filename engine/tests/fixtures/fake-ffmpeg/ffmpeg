@@ -30,16 +30,17 @@ nap=$(printf '0.%03d' "${FAKE_SEG_MS:-50}")
 limit=${FAKE_SEGMENTS:-100}
 k=$start
 count=0
-body=""
 while [ "$count" -lt "$limit" ]; do
   sleep "$nap"
   echo data > "$dir/seg_$k.m4s"
-  body="$body#EXTINF:1.0,
-seg_$k.m4s
-"
-  # Builtin write, not tmp + mv: a killed sh would leave mv running, adding
-  # an entry after the engine's final read of the playlist.
-  printf '#EXTM3U\n%s' "$body" > "$last"
+  # Appended, never rewritten: a kill between a truncate and its write would
+  # leave the playlist empty. Builtin write, not tmp + mv: a killed sh would
+  # leave mv running, adding an entry after the engine's final read.
+  if [ "$count" -eq 0 ]; then
+    printf '#EXTM3U\n#EXTINF:1.0,\nseg_%s.m4s\n' "$k" > "$last"
+  else
+    printf '#EXTINF:1.0,\nseg_%s.m4s\n' "$k" >> "$last"
+  fi
   echo "speed=1.5x"
   if [ "$FAKE_FAIL_AFTER" = 1 ]; then
     exit 1
