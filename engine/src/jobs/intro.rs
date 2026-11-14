@@ -159,6 +159,9 @@ async fn fingerprint(
         .args([
             "-map",
             "0:a:0",
+            // The chromaprint muxer refuses more than two channels.
+            "-ac",
+            "2",
             "-f",
             "chromaprint",
             "-fp_format",
