@@ -1,0 +1,52 @@
+# yaml-language-server: $schema=https://json.schemastore.org/github-workflow.json
+name: Chart
+
+# The chart versions independently of the engine: releases are tags
+# chart-v*.*.*, as in Streamline.
+on:
+  push:
+    tags: ["chart-v*.*.*"]
+
+permissions: {}
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Install Helm
+        uses: azure/setup-helm@9bc31f4ebc9c6b171d7bfbaa5d006ae7abdb4310 # v5.0.1
+        with:
+          version: v4.3.1
+
+      # The tag names the release; Chart.yaml is what actually gets packaged.
+      # If they disagree the push lands on a version nobody asked for.
+      - name: Verify tag matches Chart.yaml
+        run: |
+          chart_version=$(sed -n 's/^version: *//p' deploy/helm/streamline-engine/Chart.yaml)
+          tag_version="${GITHUB_REF_NAME#chart-v}"
+          if [ "$chart_version" != "$tag_version" ]; then
+            echo "::error::tag ${GITHUB_REF_NAME} wants chart ${tag_version}, but Chart.yaml says ${chart_version}"
+            exit 1
+          fi
+          echo "version=${chart_version}" >> "$GITHUB_ENV"
+
+      - name: Log in to GHCR
+        uses: docker/login-action@8aa5831fb8d48d8f76594c7ddde61ae58019f550 # v4.8.0
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Package + push chart
+        run: |
+          set -euo pipefail
+          helm package deploy/helm/streamline-engine --destination "$RUNNER_TEMP"
+          helm push "$RUNNER_TEMP/streamline-engine-${version}.tgz" oci://ghcr.io/datahearth/charts

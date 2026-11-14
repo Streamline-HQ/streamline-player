@@ -1,0 +1,108 @@
+# yaml-language-server: $schema=https://json.schemastore.org/github-workflow.json
+name: Image
+
+# The engine's image. A push to main publishes `main` and `sha-<commit>`; a
+# tag v1.2.3 publishes `1.2.3`, `1.2` and `latest`.
+on:
+  push:
+    branches: [main]
+    tags: ["v*.*.*"]
+    # Only what the image is built from. Tags are not filtered by path.
+    paths:
+      - "engine/**"
+      - "nix/**"
+      - "flake.nix"
+      - "flake.lock"
+      - "Cargo.toml"
+      - "Cargo.lock"
+      - ".github/workflows/image.yaml"
+      - ".github/actions/nix-builder/**"
+
+concurrency:
+  group: image-${{ github.ref }}
+  cancel-in-progress: false
+
+permissions: {}
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_NAME: datahearth/streamline-player/engine
+
+jobs:
+  publish:
+    # x86_64 only: the image carries Mesa's radeon drivers for one kind of host.
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Install Nix
+        uses: cachix/install-nix-action@75c75c31ebece974e48ebc36b4ad125bd97bd97b # 31.11.3
+        with:
+          # `nix copy --no-check-sigs` below needs the runner to be trusted.
+          extra_nix_config: trusted-users = root runner
+
+      - name: Remote builder
+        uses: ./.github/actions/nix-builder
+        with:
+          ssh-key: ${{ secrets.NIX_BUILDER_SSH_KEY }}
+          attic-token: ${{ secrets.ATTIC_PULL_TOKEN }}
+
+      # dockerTools builds a script that streams the image, so nothing the size
+      # of the image is written to the runner's disk.
+      - name: Build the image
+        run: |
+          set -euo pipefail
+          if [ -n "${NIX_BUILDER_STORE:-}" ]; then
+            nix build --no-link --print-build-logs --store "$NIX_BUILDER_STORE" --eval-store auto .#engine-image
+            nix copy --no-check-sigs --from "$NIX_BUILDER_STORE" .#engine-image
+          fi
+          nix build --print-build-logs .#engine-image
+
+      - name: Log in to GHCR
+        uses: docker/login-action@8aa5831fb8d48d8f76594c7ddde61ae58019f550 # v4.8.0
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Extract image metadata
+        id: meta
+        uses: docker/metadata-action@dc802804100637a589fabce1cb79ff13a1411302 # v6.2.0
+        with:
+          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+          tags: |
+            type=ref,event=branch
+            type=sha
+            type=semver,pattern={{version}}
+            type=semver,pattern={{major}}.{{minor}}
+
+      # The image goes up once; the other tags are copies inside the registry.
+      - name: Push
+        env:
+          TAGS: ${{ steps.meta.outputs.tags }}
+        run: |
+          set -euo pipefail
+          mapfile -t tags <<< "$TAGS"
+          ./result | skopeo copy docker-archive:/dev/stdin "docker://${tags[0]}"
+          for tag in "${tags[@]:1}"; do
+            skopeo copy "docker://${tags[0]}" "docker://$tag"
+          done
+
+      - name: Summary
+        if: always()
+        env:
+          TAGS: ${{ steps.meta.outputs.tags }}
+        run: |
+          echo "### Engine image" >> "$GITHUB_STEP_SUMMARY"
+          if [ "${{ job.status }}" = "success" ]; then
+            echo "✅ Pushed:" >> "$GITHUB_STEP_SUMMARY"
+            while read -r tag; do echo "- \`$tag\`"; done <<< "$TAGS" >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "❌ The image was not published" >> "$GITHUB_STEP_SUMMARY"
+          fi
