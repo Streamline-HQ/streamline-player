@@ -27,7 +27,8 @@ let {
 	icon?: IconName;
 	label?: string;
 	title?: string;
-	dot?: boolean;
+	/** A colour (any CSS value) tints the dot. */
+	dot?: boolean | string;
 	disabled?: boolean;
 	active?: boolean;
 	onclick?: (e: MouseEvent) => void;
@@ -50,7 +51,11 @@ let {
 	{/if}
 	{@render children?.()}
 	{#if variant === "icon" && dot}
-		<span class="sl-btn__dot" aria-hidden="true"></span>
+		<span
+			class="sl-btn__dot"
+			aria-hidden="true"
+			style:--c={typeof dot === "string" ? dot : undefined}
+		></span>
 	{/if}
 </button>
 

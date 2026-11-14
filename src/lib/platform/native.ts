@@ -92,6 +92,8 @@ export const setWatched = (mediaId: string, watched: boolean) =>
 const ARTWORK = convertFileSrc("", "artwork");
 export const artwork = (kind: Kind, id: number, name: "poster" | "backdrop") =>
 	`${ARTWORK}${kind}/${id}/${name}.jpg`;
+/** A picture by the path a download saved it under, as the `artwork` scheme takes it. */
+export const artworkAt = (path: string) => `${ARTWORK}${path.replace(/^\//, "")}`;
 export const myPicture = (version: number) => `${ARTWORK}users/me/photo.jpg?v=${version}`;
 export const headshot = (person: string) => `${ARTWORK}people/${person}/photo.jpg`;
 

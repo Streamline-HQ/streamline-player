@@ -15,11 +15,14 @@ import { loadActivity, resetActivity, unread } from "#lib/core/activity.svelte.t
 import { bellLabel } from "#lib/core/activity-view.ts";
 import { account, clearMe, initialsOf, setMe } from "#lib/core/me.svelte.ts";
 import { loadPendingPairs, pendingPairs, resetAdmin } from "#lib/core/admin.svelte.ts";
+import { anyActive, dl, initDownloads, refreshStorage } from "#lib/core/downloads.svelte.ts";
+import { watchOnline } from "#lib/core/online.svelte.ts";
 import { activeToast, toast } from "#lib/core/toast.svelte.ts";
 import { nowPlaying, stop, toFull } from "#lib/core/playback/now-playing.svelte.ts";
 import { m as i18n } from "#lib/paraglide/messages.js";
 import { IS_WEB, TARGET } from "#lib/platform/target.ts";
 import { adminPort } from "#lib/screens/admin/port.ts";
+import { downloadsPort } from "#lib/screens/downloads-port.ts";
 import { keyAction } from "#lib/shells/desktop/shortcuts.ts";
 import WindowButtons from "#lib/shells/desktop/WindowButtons.svelte";
 import AppBar from "#lib/ui/AppBar.svelte";
@@ -34,7 +37,16 @@ import ShortcutList from "#lib/ui/ShortcutList.svelte";
 import { activityWords } from "#lib/ui/activity-words.ts";
 import { presence } from "#lib/ui/presence.svelte.ts";
 import { provideScroll } from "#lib/ui/scroll.ts";
-import { activity, markActivityRead, me, myPicture, playbackPort, signOut } from "#platform";
+import {
+	activity,
+	canDownload,
+	markActivityRead,
+	me,
+	myPicture,
+	playbackPort,
+	reachable,
+	signOut,
+} from "#platform";
 import type { Snippet } from "svelte";
 import { onMount, untrack } from "svelte";
 
@@ -117,6 +129,7 @@ const PATHS: Record<string, string> = {
 	settings: "/settings",
 	server: "/admin",
 	activity: "/activity",
+	downloads: "/downloads",
 };
 
 const kb = (keys: string[], label: string) => ({ keys, label });
@@ -323,6 +336,22 @@ const miniLabels = $derived({
 });
 
 onMount(() => {
+	const stops: (() => void)[] = [];
+	if (canDownload) {
+		let gone = false;
+		initDownloads(downloadsPort, (e) => {
+			const m = e.meta;
+			toast(
+				i18n.dl_toast_available({
+					label: m.season != null ? `${m.title} S${m.season} E${m.episode}` : m.title,
+				}),
+			);
+		}).then((stop) => (gone ? stop() : stops.push(stop)));
+		stops.push(
+			watchOnline({ reachable }, () => {}),
+			() => (gone = true),
+		);
+	}
 	const zoom = () =>
 		document.documentElement.style.setProperty(
 			"--tv-zoom",
@@ -350,7 +379,17 @@ onMount(() => {
 		window.removeEventListener("keydown", onKey, true);
 		document.removeEventListener("fullscreenchange", onFullscreen);
 		clearTimeout(hint);
+		for (const stop of stops) stop();
 	};
+});
+
+const doneSignature = $derived(
+	`${dl.items.length}:${dl.items.filter((e) => e.state === "done").length}`,
+);
+$effect(() => {
+	if (!canDownload || route !== "/downloads") return;
+	doneSignature;
+	untrack(() => refreshStorage(downloadsPort));
 });
 
 const toastNow = $derived(activeToast());
@@ -392,7 +431,9 @@ if (import.meta.env.DEV)
 					activityDot={unread() > 0}
 					activityOn={route === "/activity"}
 					downloadsLabel={i18n.shell_downloads()}
-					showDownloads={!web}
+					showDownloads={canDownload}
+					downloadsDot={anyActive()}
+					downloadsOn={route === "/downloads"}
 					account={{ name, email: account.me?.email ?? "", initials, color: AVATAR_COLOR, picture }}
 					accountLabel={i18n.shell_account_menu()}
 					{menuOpen}
@@ -401,7 +442,7 @@ if (import.meta.env.DEV)
 					ontab={go}
 					onsearch={search}
 					onactivity={() => go("activity")}
-					ondownloads={() => {}}
+					ondownloads={() => go("downloads")}
 					onmenu={() => (menuOpen = !menuOpen)}
 				/>
 			{/if}

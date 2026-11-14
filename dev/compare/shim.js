@@ -66,7 +66,7 @@
   const dlSet = (key, apply) => { const e = dl.items.find((i) => i.key === key); if (e) { apply(e); emitDownloads(); } };
   window.__shim = {
     downloads: {
-      seed: (entries) => { dl.items = clone(entries); emitDownloads(); },
+      seed: (entries, rate = 0) => { dl.items = clone(entries); dl.rate = rate; emitDownloads(); },
       advance: (bytes, rate = 8e6) => {
         const e = dl.items.find((i) => ["queued", "preparing", "downloading", "waiting"].includes(i.state));
         if (!e) return;
@@ -74,10 +74,18 @@
         e.bytes = Math.min(e.size, e.bytes + bytes);
         e.progress = e.bytes / e.size;
         dl.rate = rate;
-        if (e.bytes >= e.size) { e.state = "done"; e.progress = 1; dl.rate = 0; }
+        if (e.bytes >= e.size) {
+          e.state = "done"; e.progress = 1; dl.rate = 0;
+          const next = dl.items.find((i) => i.state === "queued");
+          if (next) next.state = "downloading";
+        }
         emitDownloads();
       },
-      fail: (key, code) => dlSet(key, (e) => { e.state = "failed"; e.error = code; dl.rate = 0; }),
+      fail: (key, code) => {
+        dlSet(key, (e) => { e.state = "failed"; e.error = code; dl.rate = 0; });
+        const next = dl.items.find((i) => i.state === "queued");
+        if (next && !dl.items.some((i) => i.state === "downloading")) { next.state = "downloading"; emitDownloads(); }
+      },
       storage: (used, other, free) => { dl.storage = { used, other, free }; },
       reach: (on) => { dl.reachable = !!on; },
       log: dl.log,

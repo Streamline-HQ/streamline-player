@@ -13,7 +13,16 @@ import ChoicePills from "#lib/ui/ChoicePills.svelte";
 import EmptyState from "#lib/ui/EmptyState.svelte";
 import type { IconName } from "#lib/ui/Icon.svelte";
 import { goto } from "#lib/ui/nav.ts";
-import { activity, artwork, home, library, markActivityRead, title, watchState } from "#platform";
+import {
+	activity,
+	artwork,
+	canDownload,
+	home,
+	library,
+	markActivityRead,
+	title,
+	watchState,
+} from "#platform";
 import { onMount } from "svelte";
 
 const PAD_X = 56;
@@ -43,6 +52,10 @@ async function open(r: RowView) {
 	});
 	const to = r.open;
 	if (!to) return;
+	if (to.to === "downloads" && canDownload) {
+		await goto("/downloads");
+		return;
+	}
 	if (to.to === "detail")
 		await goto(`/detail/${to.kind}/${to.id}${to.season ? `?s=${to.season}` : ""}`);
 	else await goto(`/detail/${to.kind}/${to.id}`);

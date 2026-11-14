@@ -20,6 +20,8 @@ let {
 	activityOn,
 	downloadsLabel,
 	showDownloads,
+	downloadsDot = false,
+	downloadsOn = false,
 	account,
 	accountLabel,
 	menuOpen,
@@ -42,6 +44,8 @@ let {
 	activityOn: boolean;
 	downloadsLabel: string;
 	showDownloads: boolean;
+	downloadsDot?: boolean;
+	downloadsOn?: boolean;
 	account: { name: string; email: string; initials: string; color: string; picture?: string };
 	accountLabel: string;
 	menuOpen: boolean;
@@ -90,6 +94,8 @@ let {
 				icon="download"
 				label={downloadsLabel}
 				title={downloadsLabel}
+				dot={downloadsDot ? "var(--status-downloading)" : false}
+				active={downloadsOn}
 				onclick={ondownloads}
 			/>
 		{/if}

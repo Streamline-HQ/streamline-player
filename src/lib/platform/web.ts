@@ -253,6 +253,8 @@ export const setWatched = (mediaId: string, watched: boolean) =>
 
 export const artwork = (kind: Kind, id: number, name: "poster" | "backdrop") =>
 	`${streamline}/api/v1/posters/${kind}/${id}/${name}.jpg`;
+export const artworkAt = (path: string) =>
+	`${streamline}/api/v1/posters/${path.replace(/^\//, "")}`;
 export const myPicture = (version: number) =>
 	`${streamline}/api/v1/posters/users/me/photo.jpg?v=${version}`;
 export const headshot = (person: string) =>
