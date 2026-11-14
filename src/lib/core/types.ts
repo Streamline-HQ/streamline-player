@@ -298,3 +298,43 @@ export type DownloadJob = {
 	url: string | null;
 	error?: { code: string; message?: string };
 };
+
+export type DownloadState = "queued" | "preparing" | "downloading" | "waiting" | "failed" | "done";
+export type DownloadError = "prepare_failed" | "no_space" | "gone";
+export type DownloadEntry = {
+	/** "movies:3" or "series:1:2:4": kind, title id, season, episode. */
+	key: string;
+	media_id: string;
+	quality: DownloadQuality;
+	audio: { index: number; language: string; codec: string; converted: boolean }[];
+	subtitles: { index: number; language: string; codec: string }[];
+	state: DownloadState;
+	/** 0 to 1: the server's while preparing, bytes over size while downloading. */
+	progress: number;
+	bytes: number;
+	/** The estimate until the server gives the real one. */
+	size: number;
+	error: DownloadError | null;
+	added_at: string;
+	meta: {
+		kind: Kind;
+		title_id: number;
+		title: string;
+		year: number | null;
+		runtime: number;
+		season: number | null;
+		episode: number | null;
+		episode_title: string | null;
+		poster: string;
+		still: string;
+	};
+	watched: boolean;
+	offline: { position: number; done: boolean; at: string } | null;
+};
+export type DownloadRequest = Pick<
+	DownloadEntry,
+	"key" | "media_id" | "quality" | "audio" | "subtitles" | "size" | "meta" | "watched"
+>;
+/** `rate` is the active download's smoothed bytes per second. */
+export type DownloadsEvent = { items: DownloadEntry[]; rate: number };
+export type DownloadStorage = { used: number; other: number; free: number };

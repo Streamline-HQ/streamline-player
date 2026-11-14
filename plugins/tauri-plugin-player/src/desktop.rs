@@ -37,6 +37,7 @@ pub struct Player {
     volume: Mutex<(f64, bool)>,
     fonts: PathBuf,
     subtitles: PathBuf,
+    downloads: PathBuf,
 }
 
 impl Player {
@@ -241,6 +242,7 @@ pub fn setup<R: Runtime>(app: &tauri::AppHandle<R>) -> Result<(), Box<dyn std::e
         volume: Mutex::new(initial),
         fonts,
         subtitles,
+        downloads: app.path().app_data_dir()?.join("downloads"),
     });
     let watcher = player.clone();
     thread::Builder::new()
@@ -426,13 +428,19 @@ pub async fn subtitle(
     };
     // libass reads the fonts directory when a track opens, so they land before `sub-add`.
     for font in fonts.unwrap_or_default() {
-        if let Err(e) = fetch_cached(&font, &p.fonts).await {
-            eprintln!("subtitle font {font}: {e}");
+        match fetch_cached(&font, &p.fonts, &p.downloads).await {
+            Ok(file) if !file.starts_with(&p.fonts) => {
+                // libass reads one fonts directory, so a download's fonts are copied into it.
+                let name = file.file_name().unwrap_or_default().to_string_lossy();
+                let _ = std::fs::copy(&file, p.fonts.join(format!("{}-{name}", cache_name(&font))));
+            }
+            Ok(_) => {}
+            Err(e) => eprintln!("subtitle font {font}: {e}"),
         }
     }
     // A local file, as on Android: mpv opens a subtitle URL by seeking around in it, which a
     // server without range requests answers with a failure.
-    let file = match fetch_cached(&url, &p.subtitles).await {
+    let file = match fetch_cached(&url, &p.subtitles, &p.downloads).await {
         Ok(file) => file,
         Err(e) => {
             eprintln!("subtitle {url}: {e}");
@@ -468,8 +476,18 @@ fn cache_name(url: &str) -> String {
     format!("{:x}-{last}", hash.finish())
 }
 
-/// Downloads `url` into `dir` once, named by a hash of the URL and its last path segment.
-async fn fetch_cached(url: &str, dir: &Path) -> Result<PathBuf, String> {
+/// Downloads `url` into `dir` once, named by a hash of the URL and its last path segment. A
+/// path inside `downloads` is a file a download saved: it is used where it lies.
+async fn fetch_cached(url: &str, dir: &Path, downloads: &Path) -> Result<PathBuf, String> {
+    if !url.starts_with("http://") && !url.starts_with("https://") {
+        let file = Path::new(url).canonicalize().map_err(|e| e.to_string())?;
+        let root = downloads.canonicalize().map_err(|e| e.to_string())?;
+        return if file.starts_with(root) {
+            Ok(file)
+        } else {
+            Err("not a download".into())
+        };
+    }
     let file = dir.join(cache_name(url));
     if file.exists() {
         return Ok(file);

@@ -5,6 +5,7 @@
   const cbs = new Map();
   let next = 1;
   const listeners = {};
+  const evListeners = {};
   const send = (event, payload) => (listeners[event] || []).forEach((l) => cbs.get(l.id)?.({ message: payload, index: l.i++ }));
   const call = async (method, path, body) => {
     const r = await fetch(B + "/api/v1" + path, { method, headers: body ? { "Content-Type": "application/json" } : {}, body: body ? JSON.stringify(body) : undefined });
@@ -58,6 +59,31 @@
     viewport: (rect) => { window.__fake.viewport = rect; if (document.getElementById("__fake-picture")) picture(rect); },
     deviceInfo: () => ({ name: "Living room", model: "Ugoos AM9 Pro", platform: "Android TV", player: "ExoPlayer 1.8.0", display: { name: "HDMI", width: 3840, height: 2160, refresh_hz: 60, hdr: ["HDR10", "HLG", "Dolby Vision"] }, ...(window.__deviceInfo || {}) }),
   };
+  // window.__shim.downloads: a fake of the desktop's download queue, driven by the scenarios.
+  const dl = { items: [], rate: 0, storage: { used: 0, other: 0, free: 0 }, reachable: true, log: [] };
+  const clone = (v) => JSON.parse(JSON.stringify(v));
+  const emitDownloads = () => (evListeners.downloads || []).forEach((id) => cbs.get(id)?.({ event: "downloads", id, payload: { items: clone(dl.items), rate: dl.rate } }));
+  const dlSet = (key, apply) => { const e = dl.items.find((i) => i.key === key); if (e) { apply(e); emitDownloads(); } };
+  window.__shim = {
+    downloads: {
+      seed: (entries) => { dl.items = clone(entries); emitDownloads(); },
+      advance: (bytes, rate = 8e6) => {
+        const e = dl.items.find((i) => ["queued", "preparing", "downloading", "waiting"].includes(i.state));
+        if (!e) return;
+        e.state = "downloading";
+        e.bytes = Math.min(e.size, e.bytes + bytes);
+        e.progress = e.bytes / e.size;
+        dl.rate = rate;
+        if (e.bytes >= e.size) { e.state = "done"; e.progress = 1; dl.rate = 0; }
+        emitDownloads();
+      },
+      fail: (key, code) => dlSet(key, (e) => { e.state = "failed"; e.error = code; dl.rate = 0; }),
+      storage: (used, other, free) => { dl.storage = { used, other, free }; },
+      reach: (on) => { dl.reachable = !!on; },
+      log: dl.log,
+      get items() { return clone(dl.items); },
+    },
+  };
   const kp = (k) => (k === "movies" ? "/movies" : "/series");
   // __holdStart parks start_session until __releaseStart(), to press Back while it is in flight.
   const startSession = ({ mediaId, capabilities, position, tracks }) => window.__failStart ? Promise.reject(window.__failStart) : call("POST", "/playback/sessions", { media_id: mediaId, capabilities, position, ...(tracks || {}) });
@@ -98,8 +124,8 @@
     open_external: ({ url }) => { (window.__opened ||= []).push(url); return null; },
     pair_poll: () => window.__realPair ? realPairPoll() : (window.__pairAnswer || "pending"),
     sign_out: () => { if (window.__realPair) window.__auth = { ...(window.__auth || {}), paired: false }; return null; },
-    "plugin:event|listen": () => 1,
-    "plugin:event|unlisten": () => null,
+    "plugin:event|listen": ({ event, handler }) => { (evListeners[event] ||= []).push(handler); return handler; },
+    "plugin:event|unlisten": ({ event, eventId }) => { evListeners[event] = (evListeners[event] || []).filter((h) => h !== eventId); return null; },
     library: ({ kind }) => call("GET", kp(kind)),
     title: ({ kind, id }) => call("GET", `${kp(kind)}/${id}`),
     person: ({ id }) => call("GET", `/people/${id}`),
@@ -136,6 +162,33 @@
     patch_session: ({ id, changes }) => window.__failStart ? Promise.reject(window.__failStart) : call("PATCH", `/playback/sessions/${id}`, changes),
     session_info: ({ id }) => call("GET", `/playback/sessions/${id}`),
     stop_session: ({ id }) => call("DELETE", `/playback/sessions/${id}`).then(() => null),
+    list_downloads: () => clone(dl.items),
+    start_downloads: ({ items, capabilities }) => {
+      dl.log.push({ call: "start", keys: items.map((i) => i.key), capabilities });
+      for (const r of items) if (!dl.items.some((e) => e.key === r.key)) dl.items.push({ ...clone(r), state: "queued", progress: 0, bytes: 0, error: null, added_at: new Date().toISOString(), offline: null });
+      emitDownloads();
+      return null;
+    },
+    remove_downloads: ({ keys }) => { dl.log.push({ call: "remove", keys }); dl.items = dl.items.filter((e) => !keys.includes(e.key)); emitDownloads(); return null; },
+    retry_download: ({ key }) => { dl.log.push({ call: "retry", key }); dlSet(key, (e) => { if (e.state === "failed") { e.state = "queued"; e.error = null; } }); return null; },
+    download_storage: () => ({ ...dl.storage }),
+    local_playback: async ({ key }) => {
+      dl.log.push({ call: "local", key });
+      const e = dl.items.find((i) => i.key === key && i.state === "done");
+      if (!e) return null;
+      const t = await call("GET", `/playback/media/${e.media_id}/tracks`);
+      return { url: `/downloads/${key.replace(/:/g, "-")}/video.mkv`, tracks: { ...t, ...(window.__tracks || {}) }, position: e.offline?.position || 0 };
+    },
+    note_offline: ({ key, position, done }) => { dl.log.push({ call: "note", key, position, done }); dlSet(key, (e) => { e.offline = { position, done, at: new Date().toISOString() }; if (done) e.watched = true; }); return null; },
+    sync_offline: () => {
+      dl.log.push({ call: "sync" });
+      if (!dl.reachable) return 0;
+      const noted = dl.items.filter((e) => e.offline);
+      noted.forEach((e) => { e.offline = null; });
+      if (noted.length) emitDownloads();
+      return noted.length;
+    },
+    reachable: () => dl.reachable,
     heartbeat: ({ id, position, paused }) => call("POST", `/playback/sessions/${id}/progress`, { position, paused }).then(() => null),
   };
 

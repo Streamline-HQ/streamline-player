@@ -7,6 +7,8 @@ use std::{
 use tauri::{AppHandle, Emitter, Manager};
 
 mod auth;
+#[cfg(desktop)]
+mod downloads;
 
 #[derive(Clone, Default)]
 struct Conn {
@@ -53,22 +55,18 @@ impl Kind {
 
 // Images load through <img>, which can't carry the device key, so they pass through here.
 async fn artwork(app: AppHandle, path: String) -> tauri::http::Response<Vec<u8>> {
-    let api = app.state::<Api>();
-    let conn = api.conn().await;
-    let fetched = async {
-        let mut req = api.http.get(format!(
-            "{}/api/v1/posters{path}",
-            conn.server.unwrap_or_default()
-        ));
-        if let Some(key) = &conn.key {
-            req = req.header("X-API-Key", key);
-        }
-        req.send().await?.error_for_status()?.bytes().await
-    };
-    match fetched.await {
+    #[cfg(desktop)]
+    if let Some(bytes) = app.state::<Downloads>().0.local_artwork(&path) {
+        return jpeg(Ok(bytes));
+    }
+    jpeg(app.state::<Api>().picture(&path).await)
+}
+
+fn jpeg(bytes: Result<Vec<u8>, String>) -> tauri::http::Response<Vec<u8>> {
+    match bytes {
         Ok(bytes) => tauri::http::Response::builder()
             .header("Content-Type", "image/jpeg")
-            .body(bytes.to_vec()),
+            .body(bytes),
         Err(_) => tauri::http::Response::builder()
             .status(404)
             .body(Vec::new()),
@@ -77,6 +75,20 @@ async fn artwork(app: AppHandle, path: String) -> tauri::http::Response<Vec<u8>>
 }
 
 impl Api {
+    /// A picture of the server's, fetched with the device key.
+    async fn picture(&self, path: &str) -> Result<Vec<u8>, String> {
+        let conn = self.conn().await;
+        let mut req = self.http.get(format!(
+            "{}/api/v1/posters{path}",
+            conn.server.unwrap_or_default()
+        ));
+        if let Some(key) = &conn.key {
+            req = req.header("X-API-Key", key);
+        }
+        let bytes = async { req.send().await?.error_for_status()?.bytes().await };
+        bytes.await.map(|b| b.to_vec()).map_err(|e| e.to_string())
+    }
+
     /// Reads the server address and the key on first use: the key store can block, and on
     /// Android it answers on the main thread, so never during setup.
     async fn conn(&self) -> Conn {
@@ -652,7 +664,17 @@ async fn fetch_text(http: &reqwest::Client, url: &str) -> Result<String, String>
 }
 
 #[tauri::command]
-async fn media_text(api: tauri::State<'_, Api>, url: String) -> Result<String, String> {
+async fn media_text(
+    app: AppHandle,
+    api: tauri::State<'_, Api>,
+    url: String,
+) -> Result<String, String> {
+    #[cfg(desktop)]
+    if downloads::is_local(&url) {
+        let dir = downloads_dir(&app)?;
+        return downloads::read_local_text(&dir, &url);
+    }
+    let _ = &app;
     fetch_text(&api.http, &url).await
 }
 
@@ -713,6 +735,114 @@ async fn heartbeat(
     .map(drop)
 }
 
+#[tauri::command]
+async fn reachable(api: tauri::State<'_, Api>) -> Result<bool, String> {
+    let answer = api
+        .call(reqwest::Method::GET, "/playback/status", None)
+        .await;
+    Ok(answer.as_ref().err().is_none_or(|e| downloads_is_answer(e)))
+}
+
+#[cfg(desktop)]
+fn downloads_is_answer(e: &str) -> bool {
+    downloads::is_answer(e)
+}
+
+#[cfg(not(desktop))]
+fn downloads_is_answer(e: &str) -> bool {
+    serde_json::from_str::<Value>(e).is_ok()
+}
+
+#[cfg(desktop)]
+struct Downloads(downloads::Queue);
+
+#[cfg(desktop)]
+fn downloads_dir(app: &AppHandle) -> Result<PathBuf, String> {
+    app.path()
+        .app_data_dir()
+        .map(|d| d.join("downloads"))
+        .map_err(|e| e.to_string())
+}
+
+#[cfg(desktop)]
+struct AppServer(AppHandle);
+
+#[cfg(desktop)]
+impl downloads::Server for AppServer {
+    fn call(
+        &self,
+        method: reqwest::Method,
+        path: String,
+        body: Option<Value>,
+    ) -> downloads::BoxFuture<Result<Value, String>> {
+        let app = self.0.clone();
+        Box::pin(async move { app.state::<Api>().call(method, &path, body).await })
+    }
+
+    fn picture(&self, path: String) -> downloads::BoxFuture<Result<Vec<u8>, String>> {
+        let app = self.0.clone();
+        Box::pin(async move { app.state::<Api>().picture(&path).await })
+    }
+}
+
+#[cfg(desktop)]
+#[tauri::command]
+fn list_downloads(queue: tauri::State<'_, Downloads>) -> Vec<downloads::DownloadEntry> {
+    queue.0.items()
+}
+
+#[cfg(desktop)]
+#[tauri::command]
+fn start_downloads(
+    queue: tauri::State<'_, Downloads>,
+    items: Vec<downloads::DownloadRequest>,
+    capabilities: Value,
+) {
+    queue.0.start(items, capabilities);
+}
+
+#[cfg(desktop)]
+#[tauri::command]
+async fn remove_downloads(
+    queue: tauri::State<'_, Downloads>,
+    keys: Vec<String>,
+) -> Result<(), String> {
+    queue.0.remove(keys).await;
+    Ok(())
+}
+
+#[cfg(desktop)]
+#[tauri::command]
+fn retry_download(queue: tauri::State<'_, Downloads>, key: String) {
+    queue.0.retry(&key);
+}
+
+#[cfg(desktop)]
+#[tauri::command]
+async fn download_storage(
+    queue: tauri::State<'_, Downloads>,
+) -> Result<downloads::Storage, String> {
+    Ok(queue.0.storage())
+}
+
+#[cfg(desktop)]
+#[tauri::command]
+fn local_playback(queue: tauri::State<'_, Downloads>, key: String) -> Option<downloads::Local> {
+    queue.0.local_playback(&key)
+}
+
+#[cfg(desktop)]
+#[tauri::command]
+fn note_offline(queue: tauri::State<'_, Downloads>, key: String, position: f64, done: bool) {
+    queue.0.note_offline(&key, position, done);
+}
+
+#[cfg(desktop)]
+#[tauri::command]
+async fn sync_offline(queue: tauri::State<'_, Downloads>) -> Result<usize, String> {
+    Ok(queue.0.sync_offline().await)
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
@@ -724,6 +854,19 @@ pub fn run() {
                 conn: RwLock::default(),
                 pairing: Mutex::default(),
             });
+            #[cfg(desktop)]
+            {
+                let handle = app.handle().clone();
+                let emitter = handle.clone();
+                app.manage(Downloads(downloads::Queue::new(
+                    downloads_dir(&handle)?,
+                    std::sync::Arc::new(AppServer(handle)),
+                    std::sync::Arc::new(move |snapshot| {
+                        let _ = emitter.emit("downloads", snapshot);
+                    }),
+                    downloads::Config::default(),
+                )));
+            }
             #[cfg(target_os = "linux")]
             // WebKitGTK (seen on 2.54.1) zooms pages by gtk-xft-dpi / 96, and GTK reports -1
             // when no XSETTINGS daemon runs (Hyprland, sway): pages get a zoom of -1/96, a
@@ -795,7 +938,24 @@ pub fn run() {
             patch_session,
             session_info,
             stop_session,
-            heartbeat
+            heartbeat,
+            reachable,
+            #[cfg(desktop)]
+            list_downloads,
+            #[cfg(desktop)]
+            start_downloads,
+            #[cfg(desktop)]
+            remove_downloads,
+            #[cfg(desktop)]
+            retry_download,
+            #[cfg(desktop)]
+            download_storage,
+            #[cfg(desktop)]
+            local_playback,
+            #[cfg(desktop)]
+            note_offline,
+            #[cfg(desktop)]
+            sync_offline
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

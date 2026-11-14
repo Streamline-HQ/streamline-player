@@ -17,6 +17,10 @@ import type {
 	AdminStream,
 	Device,
 	DeviceInfo,
+	DownloadEntry,
+	DownloadRequest,
+	DownloadStorage,
+	DownloadsEvent,
 	HomeFeed,
 	Kind,
 	LogLine,
@@ -501,3 +505,28 @@ export const setFullscreen = (on: boolean): Promise<unknown> =>
 			? document.exitFullscreen()
 			: Promise.resolve();
 export const isFullscreen = (): Promise<boolean> => Promise.resolve(!!document.fullscreenElement);
+
+export const canDownload: boolean = false;
+export const downloads = (): Promise<DownloadEntry[]> => Promise.resolve([]);
+export const onDownloads = (_cb: (e: DownloadsEvent) => void): Promise<() => void> =>
+	Promise.resolve(() => {});
+export const startDownloads = (
+	_items: DownloadRequest[],
+	_capabilities: unknown,
+): Promise<unknown> => Promise.reject(new Error("not on this target"));
+export const removeDownloads = (_keys: string[]): Promise<unknown> => Promise.resolve();
+export const retryDownload = (_key: string): Promise<unknown> => Promise.resolve();
+export const downloadStorage = (): Promise<DownloadStorage> =>
+	Promise.resolve({ used: 0, other: 0, free: 0 });
+export const localPlayback = (
+	_key: string,
+): Promise<{ url: string; tracks: Tracks; position: number } | null> => Promise.resolve(null);
+export const noteOffline = (_key: string, _position: number, _done: boolean): Promise<unknown> =>
+	Promise.resolve();
+export const syncOffline = (): Promise<number> => Promise.resolve(0);
+/** Any HTTP answer from Streamline counts, whatever its status. */
+export const reachable = (): Promise<boolean> =>
+	fetch(url("/playback/status")).then(
+		() => true,
+		() => false,
+	);

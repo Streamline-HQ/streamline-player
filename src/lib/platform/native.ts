@@ -14,6 +14,10 @@ import type {
 	AdminStream,
 	Device,
 	DeviceInfo,
+	DownloadEntry,
+	DownloadRequest,
+	DownloadStorage,
+	DownloadsEvent,
 	HomeFeed,
 	Kind,
 	LogLine,
@@ -154,6 +158,23 @@ export const voice = (language: string) =>
 
 export const onPlayer = <T = undefined>(event: string, cb: (e: T) => void) =>
 	addPluginListener<T>("player", event, cb).then((h) => () => h.unregister());
+
+/** Only the desktop app downloads; Android and iOS builds have no queue behind these calls. */
+export const canDownload: boolean = !/Android|iPhone|iPad/.test(navigator.userAgent);
+export const downloads = () => invoke<DownloadEntry[]>("list_downloads");
+export const onDownloads = (cb: (e: DownloadsEvent) => void): Promise<() => void> =>
+	listen<DownloadsEvent>("downloads", (e) => cb(e.payload));
+export const startDownloads = (items: DownloadRequest[], capabilities: unknown) =>
+	invoke("start_downloads", { items, capabilities });
+export const removeDownloads = (keys: string[]) => invoke("remove_downloads", { keys });
+export const retryDownload = (key: string) => invoke("retry_download", { key });
+export const downloadStorage = () => invoke<DownloadStorage>("download_storage");
+export const localPlayback = (key: string) =>
+	invoke<{ url: string; tracks: Tracks; position: number } | null>("local_playback", { key });
+export const noteOffline = (key: string, position: number, done: boolean) =>
+	invoke("note_offline", { key, position, done });
+export const syncOffline = () => invoke<number>("sync_offline");
+export const reachable = () => invoke<boolean>("reachable");
 
 export const playbackPort: PlaybackPort = {
 	playerName: PLAYER_NAME,
