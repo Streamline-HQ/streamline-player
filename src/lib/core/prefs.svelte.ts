@@ -17,6 +17,8 @@ const DEFAULTS = {
 	passEAC3: "Pass through",
 	passTrueHD: "Pass through",
 	passDTS: "Decode here",
+	dlQuality: "1080p",
+	dlPick: true,
 };
 export type Prefs = typeof DEFAULTS;
 export type ChoiceKey = { [K in keyof Prefs]: Prefs[K] extends string ? K : never }[keyof Prefs];
@@ -44,12 +46,19 @@ function load(): Prefs {
  */
 export const prefs = $state({ ...load(), language: getLocale() === "fr" ? "Français" : "English" });
 
+// The TV's stored settings stay byte for byte what they were: download settings are written once changed.
+const DOWNLOAD_KEYS: (keyof Prefs)[] = ["dlQuality", "dlPick"];
+const stored = (key: string, value: unknown) =>
+	DOWNLOAD_KEYS.includes(key as keyof Prefs) && value === DEFAULTS[key as keyof Prefs]
+		? undefined
+		: value;
+
 export function setPref<K extends keyof Prefs>(key: K, value: Prefs[K]) {
 	prefs[key] = value;
 	// Reloads the app: messages are read when a page renders, not reactively.
 	if (key === "language") return setLocale(value === "Français" ? "fr" : "en");
 	try {
-		localStorage.setItem(KEY, JSON.stringify(prefs));
+		localStorage.setItem(KEY, JSON.stringify(prefs, stored));
 	} catch {
 		// Applies until the app closes.
 	}
