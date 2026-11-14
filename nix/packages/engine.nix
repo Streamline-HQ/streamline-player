@@ -16,13 +16,13 @@
 }:
 let
   source = callPackage ./source.nix { };
-  manifest = (lib.importTOML ../engine/Cargo.toml).package;
+  manifest = (lib.importTOML ../../engine/Cargo.toml).package;
 in
 rustPlatform.buildRustPackage {
   pname = "streamline-engine";
   inherit (manifest) version;
   src = source.rust;
-  cargoLock.lockFile = ../Cargo.lock;
+  cargoLock.lockFile = ../../Cargo.lock;
   cargoBuildFlags = [
     "-p"
     "engine"

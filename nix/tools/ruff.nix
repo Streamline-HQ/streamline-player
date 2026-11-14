@@ -4,7 +4,7 @@
 # ruff fails when it is evaluated, not when someone next lints.
 let
   line = lib.findFirst (lib.hasPrefix "required-version") (throw "no required-version in ruff.toml") (
-    lib.splitString "\n" (builtins.readFile ../ruff.toml)
+    lib.splitString "\n" (builtins.readFile ../../ruff.toml)
   );
   declared = lib.removePrefix "==" (builtins.elemAt (lib.splitString "\"" line) 1);
 in

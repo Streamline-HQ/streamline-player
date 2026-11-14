@@ -31,7 +31,7 @@ stdenvNoCC.mkDerivation (finalAttrs: {
     # deps wherever they are already in a store. Naming it after the lockfile
     # forces the fetch, and with it the hash check, whenever the lock moves.
     pname = "${finalAttrs.pname}-${
-      builtins.substring 0 12 (builtins.hashFile "sha256" ../pnpm-lock.yaml)
+      builtins.substring 0 12 (builtins.hashFile "sha256" ../../pnpm-lock.yaml)
     }-${pnpm.version}";
     inherit (finalAttrs) version src;
     inherit pnpm;

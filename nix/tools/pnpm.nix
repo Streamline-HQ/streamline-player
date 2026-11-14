@@ -5,7 +5,7 @@
 # the devshell and every package build must be that release too.
 let
   declared = lib.head (
-    lib.splitString "+" (lib.removePrefix "pnpm@" (lib.importJSON ../package.json).packageManager)
+    lib.splitString "+" (lib.removePrefix "pnpm@" (lib.importJSON ../../package.json).packageManager)
   );
   attr = "pnpm_${lib.versions.major declared}";
   pkg = lib.throwIf (

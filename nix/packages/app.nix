@@ -19,7 +19,7 @@ rustPlatform.buildRustPackage {
   pname = "streamline-player";
   inherit (source) version;
   src = source.app;
-  cargoLock.lockFile = ../Cargo.lock;
+  cargoLock.lockFile = ../../Cargo.lock;
   buildAndTestSubdir = "src-tauri";
 
   inherit (web) pnpmDeps prePnpmInstall;

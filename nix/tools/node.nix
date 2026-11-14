@@ -4,7 +4,7 @@
 # rebuilds Node from source when nixpkgs ships another patch; here the flake
 # refuses instead, so bump engines.node only to what the locked nixpkgs ships.
 let
-  declared = (lib.importJSON ../package.json).engines.node;
+  declared = (lib.importJSON ../../package.json).engines.node;
   attr = "nodejs_${lib.versions.major declared}";
   pkg = lib.throwIf (
     !buildPackages ? ${attr}

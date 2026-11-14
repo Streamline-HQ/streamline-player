@@ -156,7 +156,7 @@ jobs:
       - name: Install Nix
         uses: cachix/install-nix-action@75c75c31ebece974e48ebc36b4ad125bd97bd97b # 31.11.3
       - name: Formatting
-        run: nix shell --inputs-from . nixpkgs#nixfmt -c nixfmt --check flake.nix nix/*.nix
+        run: nix shell --inputs-from . nixpkgs#nixfmt -c nixfmt --check flake.nix nix/*/*.nix
       # Everything `nix flake check` evaluates, without building any of it.
       - name: Evaluate the flake
         run: nix flake check --no-build

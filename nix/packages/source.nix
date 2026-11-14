@@ -6,31 +6,31 @@ let
   # Every workspace member: cargo refuses a workspace whose members are missing,
   # even when building one of them.
   rust = lib.fileset.unions [
-    ../Cargo.toml
-    ../Cargo.lock
-    ../engine
-    ../src-tauri
-    ../plugins
+    ../../Cargo.toml
+    ../../Cargo.lock
+    ../../engine
+    ../../src-tauri
+    ../../plugins
   ];
   web = lib.fileset.unions [
-    ../package.json
-    ../pnpm-lock.yaml
-    ../vite.config.ts
-    ../src-tauri/tauri.conf.json
-    ../tsconfig.json
-    ../project.inlang/settings.json
-    ../messages
-    ../src
-    ../static
-    ../dev/auto-check.ts
-    ../dev/messages-check.ts
-    ../dev/shaka-caps-check.ts
-    ../dev/web-build-check.ts
+    ../../package.json
+    ../../pnpm-lock.yaml
+    ../../vite.config.ts
+    ../../src-tauri/tauri.conf.json
+    ../../tsconfig.json
+    ../../project.inlang/settings.json
+    ../../messages
+    ../../src
+    ../../static
+    ../../dev/auto-check.ts
+    ../../dev/messages-check.ts
+    ../../dev/shaka-caps-check.ts
+    ../../dev/web-build-check.ts
   ];
   toSource =
     fileset:
     lib.fileset.toSource {
-      root = ../.;
+      root = ../../.;
       inherit fileset;
     };
 in
@@ -38,5 +38,5 @@ in
   rust = toSource rust;
   web = toSource web;
   app = toSource (lib.fileset.union rust web);
-  version = (lib.importTOML ../src-tauri/Cargo.toml).package.version;
+  version = (lib.importTOML ../../src-tauri/Cargo.toml).package.version;
 }

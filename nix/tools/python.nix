@@ -1,9 +1,9 @@
 { lib, buildPackages }:
 # .python-version decides the Python the dev scripts run on (the mock Streamline
 # and the compare bridge): pyenv, uv and CI's setup-python all read that file.
-# Same contract as nix/node.nix: the flake refuses a nixpkgs that ships another.
+# Same contract as nix/tools/node.nix: the flake refuses a nixpkgs that ships another.
 let
-  declared = lib.trim (builtins.readFile ../.python-version);
+  declared = lib.trim (builtins.readFile ../../.python-version);
   attr = "python${lib.replaceStrings [ "." ] [ "" ] (lib.versions.majorMinor declared)}";
   pkg = lib.throwIf (
     !buildPackages ? ${attr}

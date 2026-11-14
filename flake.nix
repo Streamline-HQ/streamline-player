@@ -28,7 +28,7 @@
         engine =
           { lib, pkgs, ... }:
           {
-            imports = [ ./nix/module.nix ];
+            imports = [ ./nix/modules/nixos.nix ];
             services.streamline-engine.package =
               lib.mkDefault
                 inputs.self.packages.${pkgs.stdenv.hostPlatform.system}.engine;
@@ -43,7 +43,7 @@
             own = inputs.self.packages.${pkgs.stdenv.hostPlatform.system};
           in
           {
-            imports = [ ./nix/hm-module.nix ];
+            imports = [ ./nix/modules/home-manager.nix ];
             services.streamline-engine.package = lib.mkDefault own.engine;
             programs.streamline-player.package = lib.mkDefault own.streamline-player;
           };
@@ -72,12 +72,12 @@
         }:
         let
           rust = pkgs.rust-bin.fromRustupToolchainFile ./rust-toolchain.toml;
-          nodejs = pkgs.callPackage ./nix/node.nix { };
-          pnpm = pkgs.callPackage ./nix/pnpm.nix { };
-          biome = pkgs.callPackage ./nix/biome.nix { };
-          ruff = pkgs.callPackage ./nix/ruff.nix { };
-          python3 = pkgs.callPackage ./nix/python.nix { };
-          desktop = import ./nix/libs.nix { inherit pkgs lib; };
+          nodejs = pkgs.callPackage ./nix/tools/node.nix { };
+          pnpm = pkgs.callPackage ./nix/tools/pnpm.nix { };
+          biome = pkgs.callPackage ./nix/tools/biome.nix { };
+          ruff = pkgs.callPackage ./nix/tools/ruff.nix { };
+          python3 = pkgs.callPackage ./nix/tools/python.nix { };
+          desktop = import ./nix/packages/libs.nix { inherit pkgs lib; };
           mingwCc = pkgs.pkgsCross.mingwW64.stdenv.cc;
           mingwPthreads = pkgs.pkgsCross.mingwW64.windows.pthreads;
 
@@ -111,8 +111,8 @@
             cargo = rustBuild;
             rustc = rustBuild;
           };
-          web = pkgs.callPackage ./nix/web.nix { inherit nodejs pnpm; };
-          engine = pkgs.callPackage ./nix/engine.nix { inherit rustPlatform; };
+          web = pkgs.callPackage ./nix/packages/web.nix { inherit nodejs pnpm; };
+          engine = pkgs.callPackage ./nix/packages/engine.nix { inherit rustPlatform; };
 
           # `task lint:rust` and `task test:rust` over the whole workspace, on the
           # engine's derivation so the vendored crates are reused. src-tauri is a
@@ -122,7 +122,7 @@
             name: command:
             engine.overrideAttrs (old: {
               pname = "streamline-workspace-${name}";
-              src = (pkgs.callPackage ./nix/source.nix { }).app;
+              src = (pkgs.callPackage ./nix/packages/source.nix { }).app;
               nativeBuildInputs = old.nativeBuildInputs ++ [
                 # The sandbox has no CA bundle, and the app's HTTP client refuses to start without one.
                 pkgs.cacert
@@ -173,7 +173,7 @@
 
           packages = {
             inherit engine web;
-            streamline-player = pkgs.callPackage ./nix/app.nix {
+            streamline-player = pkgs.callPackage ./nix/packages/app.nix {
               inherit
                 rustPlatform
                 nodejs
@@ -182,7 +182,7 @@
                 web
                 ;
             };
-            engine-image = pkgs.callPackage ./nix/image.nix { inherit engine; };
+            engine-image = pkgs.callPackage ./nix/packages/image.nix { inherit engine; };
             default = self'.packages.streamline-player;
           };
 
@@ -204,7 +204,7 @@
             '';
 
             nixos = pkgs.testers.runNixOSTest {
-              imports = [ ./nix/test.nix ];
+              imports = [ ./nix/checks/nixos.nix ];
               node.specialArgs.engineModule = inputs.self.nixosModules.engine;
             };
 
@@ -284,7 +284,7 @@
                   cargo fmt --all --check
                   biome format --vcs-enabled=false .
                   ruff format --no-cache --check dev
-                  nixfmt --check flake.nix nix/*.nix
+                  nixfmt --check flake.nix nix/*/*.nix
                   touch $out
                 '';
 
@@ -307,7 +307,7 @@
             # loaded direnv is where missing search paths show up.
             devshell-env = pkgs.runCommandLocal "check-devshell-env" { } ''
               env -i HOME=$TMPDIR PATH=${pkgs.coreutils}/bin ${self'.devShells.default}/entrypoint \
-                ${pkgs.bash}/bin/bash ${./nix/devshell-env-check.sh}
+                ${pkgs.bash}/bin/bash ${./nix/checks/devshell-env.sh}
               touch $out
             '';
           };

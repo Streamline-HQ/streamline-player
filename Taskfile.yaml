@@ -22,7 +22,7 @@ tasks:
       - cargo fmt --all
       - biome format --write .
       - ruff format dev
-      - nixfmt flake.nix nix/*.nix
+      - nixfmt flake.nix nix/*/*.nix
 
   fmt:check:
     desc: Check formatting without writing
@@ -30,7 +30,7 @@ tasks:
       - cargo fmt --all --check
       - biome format .
       - ruff format --check dev
-      - nixfmt --check flake.nix nix/*.nix
+      - nixfmt --check flake.nix nix/*/*.nix
 
   check:
     desc: Everything CI must pass, writing nothing (formatting, lints, tests)
