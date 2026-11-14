@@ -76,6 +76,7 @@
           pnpm = pkgs.callPackage ./nix/tools/pnpm.nix { };
           biome = pkgs.callPackage ./nix/tools/biome.nix { };
           ruff = pkgs.callPackage ./nix/tools/ruff.nix { };
+          nixfmt = pkgs.callPackage ./nix/tools/nixfmt.nix { };
           python3 = pkgs.callPackage ./nix/tools/python.nix { };
           desktop = import ./nix/packages/libs.nix { inherit pkgs lib; };
           mingwCc = pkgs.pkgsCross.mingwW64.stdenv.cc;
@@ -186,7 +187,7 @@
             default = self'.packages.streamline-player;
           };
 
-          formatter = pkgs.nixfmt-tree;
+          formatter = pkgs.nixfmt-tree.override { nixfmtPackage = nixfmt; };
 
           checks = {
             build-engine = self'.packages.engine;
@@ -276,7 +277,7 @@
                     rust
                     biome
                     ruff
-                    pkgs.nixfmt
+                    nixfmt
                   ];
                 }
                 ''
