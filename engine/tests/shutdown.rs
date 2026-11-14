@@ -4,7 +4,6 @@ mod common;
 
 use std::io::{Read, Write};
 use std::net::{SocketAddr, TcpStream};
-use std::os::unix::fs::PermissionsExt;
 use std::path::Path;
 use std::process::{Child, Command, Stdio};
 use std::time::{Duration, Instant};
@@ -76,15 +75,13 @@ fn start_engine(name: &str) -> (Engine, std::path::PathBuf) {
         "/tests/fixtures/fake-ffmpeg/ffmpeg"
     );
     let ffmpeg = bin.join("ffmpeg");
-    std::fs::write(
+    common::write_executable(
         &ffmpeg,
-        format!(
+        &format!(
             "#!/bin/sh\ncase \"$*\" in\n*-hls_segment_filename*) echo $$ > {}; exec {fixture} \"$@\" >/dev/null ;;\n*) echo 'ffmpeg version fake'; exit 0 ;;\nesac\n",
             pidfile.display()
         ),
-    )
-    .unwrap();
-    std::fs::set_permissions(&ffmpeg, std::fs::Permissions::from_mode(0o755)).unwrap();
+    );
 
     let conf = root.join("engine.yaml");
     std::fs::write(

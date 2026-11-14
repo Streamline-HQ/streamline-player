@@ -222,7 +222,6 @@ pub async fn run(
 
 #[cfg(all(test, unix))]
 mod tests {
-    use std::os::unix::fs::PermissionsExt;
     use std::path::PathBuf;
     use std::process::Command as StdCommand;
 
@@ -320,7 +319,7 @@ mod tests {
     fn fake_ffmpeg(dir: &Path) -> PathBuf {
         std::fs::create_dir_all(dir).unwrap();
         let bin = dir.join("ffmpeg");
-        std::fs::write(
+        crate::jobs::write_executable(
             &bin,
             r#"#!/bin/sh
 d=$(dirname "$0")
@@ -336,9 +335,7 @@ case "$*" in
 esac
 : > "$out/sheet_000.jpg"
 "#,
-        )
-        .unwrap();
-        std::fs::set_permissions(&bin, std::fs::Permissions::from_mode(0o755)).unwrap();
+        );
         bin
     }
 

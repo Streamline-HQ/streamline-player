@@ -324,3 +324,19 @@ pub fn spawn_engine(config: &std::path::Path) -> (std::process::Child, std::net:
         .unwrap();
     (child, addr)
 }
+
+/// Writes an executable script for a test. A child `sh` writes it, never this process: a test
+/// thread forking at that moment would inherit the open write handle, and running the script
+/// while any process holds one fails with ETXTBSY ("Text file busy").
+pub fn write_executable(path: &std::path::Path, text: &str) {
+    use std::io::Write;
+    let mut sh = std::process::Command::new("sh")
+        .arg("-c")
+        .arg("cat > \"$0\" && chmod 755 \"$0\"")
+        .arg(path)
+        .stdin(std::process::Stdio::piped())
+        .spawn()
+        .unwrap();
+    sh.stdin.take().unwrap().write_all(text.as_bytes()).unwrap();
+    assert!(sh.wait().unwrap().success(), "writing {}", path.display());
+}

@@ -295,7 +295,6 @@ pub async fn run(
 
 #[cfg(all(test, unix))]
 mod tests {
-    use std::os::unix::fs::PermissionsExt;
     use std::process::Command as StdCommand;
     use std::sync::atomic::{AtomicUsize, Ordering};
 
@@ -327,12 +326,10 @@ mod tests {
         /// Logs its arguments next to itself, writes its last argument, fails when `fail` exists.
         fn fake_ffmpeg(&self) -> std::path::PathBuf {
             let bin = self.0.join("ffmpeg");
-            std::fs::write(
+            crate::jobs::write_executable(
                 &bin,
                 "#!/bin/sh\ndir=$(dirname \"$0\")\necho \"$*\" >> \"$dir/argv.txt\"\nfor a in \"$@\"; do last=$a; done\necho data > \"$last\"\necho out_time_us=1000000\n[ -e \"$dir/fail\" ] && { echo boom >&2; exit 1; }\nexit 0\n",
-            )
-            .unwrap();
-            std::fs::set_permissions(&bin, std::fs::Permissions::from_mode(0o755)).unwrap();
+            );
             bin
         }
 
