@@ -350,6 +350,7 @@ struct Shared {
     rate: Rate,
     active: Option<Active>,
     last_emit: Option<Instant>,
+    changes: u64,
 }
 
 struct Inner {
@@ -360,6 +361,9 @@ struct Inner {
     emit: Emit,
     cfg: Config,
     shared: Mutex<Shared>,
+    /// The change the index file holds. The index is written outside `shared`, so a slow disk
+    /// never blocks a reader; this keeps a write that lost the race from replacing a newer list.
+    saved: Mutex<u64>,
     wake: Notify,
 }
 
@@ -397,6 +401,17 @@ fn dir_size(dir: &Path) -> u64 {
             Err(_) => 0,
         })
         .sum()
+}
+
+/// Runs file I/O that can stall on a busy disk without parking an async worker: on a runtime
+/// worker, its other tasks move to another thread meanwhile.
+fn blocking<T>(f: impl FnOnce() -> T) -> T {
+    match tokio::runtime::Handle::try_current() {
+        Ok(h) if h.runtime_flavor() == tokio::runtime::RuntimeFlavor::MultiThread => {
+            tokio::task::block_in_place(f)
+        }
+        _ => f(),
+    }
 }
 
 fn write_atomic(path: &Path, bytes: &[u8]) -> io::Result<()> {
@@ -442,6 +457,7 @@ impl Queue {
             server,
             engine: reqwest::Client::builder()
                 .connect_timeout(Duration::from_secs(10))
+                .read_timeout(Duration::from_secs(30))
                 .build()
                 .expect("a client with no TLS options builds"),
             emit,
@@ -452,7 +468,9 @@ impl Queue {
                 rate: Rate::default(),
                 active: None,
                 last_emit: None,
+                changes: 0,
             }),
+            saved: Mutex::new(0),
             wake: Notify::new(),
         });
         let worker = tauri::async_runtime::spawn(inner.clone().work());
@@ -700,10 +718,16 @@ impl Inner {
         }
     }
 
-    fn save_index(&self, shared: &Shared) {
-        match serde_json::to_vec(&shared.items) {
+    fn save_index(&self, items: &[DownloadEntry], change: u64) {
+        let mut saved = self.saved.lock().unwrap();
+        if *saved >= change {
+            return;
+        }
+        *saved = change;
+        match serde_json::to_vec(items) {
             Ok(bytes) => {
-                if let Err(e) = write_atomic(&self.dir.join("index.json"), &bytes) {
+                let path = self.dir.join("index.json");
+                if let Err(e) = blocking(|| write_atomic(&path, &bytes)) {
                     eprintln!("downloads: the index was not saved: {e}");
                 }
             }
@@ -713,11 +737,12 @@ impl Inner {
 
     /// Saves and announces the list.
     fn changed(&self) {
-        let snapshot = {
+        let (snapshot, change) = {
             let mut shared = self.shared.lock().unwrap();
-            self.save_index(&shared);
-            self.snapshot(&mut shared)
+            shared.changes += 1;
+            (self.snapshot(&mut shared), shared.changes)
         };
+        self.save_index(&snapshot.items, change);
         (self.emit)(&snapshot);
     }
 
@@ -973,12 +998,12 @@ impl Inner {
                     Err(_) => break,
                     Ok(Err(_)) | Ok(Ok(None)) => break,
                     Ok(Ok(Some(bytes))) => {
-                        writer.write_all(&bytes).map_err(io_stop)?;
+                        blocking(|| writer.write_all(&bytes)).map_err(io_stop)?;
                         self.arrived(key, bytes.len() as u64);
                     }
                 }
             }
-            writer.flush().map_err(io_stop)?;
+            blocking(|| writer.flush()).map_err(io_stop)?;
             drop(writer);
             let now = file_len(&part);
             moved |= now > start.max(before);
@@ -991,7 +1016,7 @@ impl Inner {
             }
         }
         if let Ok(file) = fs::File::open(&part) {
-            let _ = file.sync_all();
+            let _ = blocking(|| file.sync_all());
         }
         let ext = job
             .container
@@ -1535,7 +1560,14 @@ mod tests {
     }
 
     fn scratch(name: &str) -> PathBuf {
-        let dir = std::env::temp_dir().join(format!("downloads-{name}-{}", std::process::id()));
+        // tmpfs where there is one: on a loaded build machine one disk write can outlast a test's wait.
+        let base = Path::new("/dev/shm");
+        let base = if base.is_dir() {
+            base.to_owned()
+        } else {
+            std::env::temp_dir()
+        };
+        let dir = base.join(format!("downloads-{name}-{}", std::process::id()));
         let _ = fs::remove_dir_all(&dir);
         fs::create_dir_all(&dir).unwrap();
         dir
@@ -1708,7 +1740,11 @@ mod tests {
         thread::sleep(Duration::from_millis(200));
         assert_ne!(state_of(&q, "movies:1"), Some(State::Done));
         assert!(find_video(&dir.join("movies-1")).is_none());
-        assert_eq!(file_len(&dir.join("movies-1/video.part")), 60_000);
+        // Each retry gets a 200 to its Range and so restarts the part from zero: sample it between attempts.
+        until("the wait again", || {
+            state_of(&q, "movies:1") == Some(State::Waiting)
+                && file_len(&dir.join("movies-1/video.part")) == 60_000
+        });
     }
 
     #[test]

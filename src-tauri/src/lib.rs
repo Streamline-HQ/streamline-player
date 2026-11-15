@@ -866,7 +866,11 @@ pub fn run() {
         .plugin(tauri_plugin_player::init())
         .setup(|app| {
             app.manage(Api {
-                http: reqwest::Client::new(),
+                http: reqwest::Client::builder()
+                    .connect_timeout(std::time::Duration::from_secs(10))
+                    .read_timeout(std::time::Duration::from_secs(30))
+                    .build()
+                    .expect("the default TLS backend builds"),
                 app: app.handle().clone(),
                 conn: RwLock::default(),
                 pairing: Mutex::default(),
