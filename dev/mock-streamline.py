@@ -1,6 +1,6 @@
 """Stands in for Streamline's playback API until the server side lands.
 
-Proxies /api/v1/playback/* to the engine's control plane and mints the HLS
+Proxies /extensions/player/playback/* to the engine's control plane and mints the HLS
 token like Streamline will (HMAC-SHA256 over "hls|<id>|<exp>"). Pairing hands out
 device keys; a request with an unknown key gets 401, one with no key passes (the
 headless harness sends none). Approve, deny and revoke from the command line:
@@ -15,7 +15,7 @@ own file. --art points at p/<slug>.jpg and b/<slug>.jpg artwork, and c/<person>.
     python3 dev/mock-streamline.py --secret <engine secret> --art /path/to/img \
         --clip /path/to/clip.mkv [--clip ...] [--media film=/path/to/film.mkv ...]
 
-Server settings (/api/v1/admin) answers 403 to a member (--role member, or POST /dev/role/member|admin).
+Server settings (/extensions/player/admin) answers 403 to a member (--role member, or POST /dev/role/member|admin).
 --demo-admin serves the design's sample; --read-only[=streamline|engine] locks settings; --restart-hangs
 keeps an admin restart from ever returning (until then every admin call answers 503 server_restarting, and the
 settings that wait for a restart apply and started_at moves only when it ends); --engine-settings forwards the engine's four keys and the
@@ -27,7 +27,7 @@ until /dev/admin/fail/off, POST /dev/admin/scan/finish ends running scans at onc
 /dev/admin/restart-hangs/on|off and /dev/admin/restart/finish
 reshape the demo while it runs.
 
-Downloads (/api/v1/downloads) are for a device key and prepared by the engine's download job; POST /dev/downloads/fail makes
+Downloads (/extensions/player/downloads) are for a device key and prepared by the engine's download job; POST /dev/downloads/fail makes
 the next one end failed. A download event reaches only the device that made it.
 
 The public URL defaults to 10.0.2.2, the Android emulator's alias for the host.
@@ -998,7 +998,7 @@ DEMO_LOGS = [
         "10:44:58",
         "info",
         "http",
-        "GET /api/v1/stream/severance/s02e04/seg-187.m4s 206 · 1.9 MB · SHIELD",
+        "GET /extensions/player/stream/severance/s02e04/seg-187.m4s 206 · 1.9 MB · SHIELD",
     ),
     (
         "10:44:51",
@@ -1006,7 +1006,7 @@ DEMO_LOGS = [
         "transcode",
         "dune2 · HEVC Main10 HDR10 → H.264 1080p SDR · vaapi · 2.1× · Chrome on Linux",
     ),
-    ("10:44:40", "debug", "http", "GET /api/v1/capabilities 200 · Galaxy Tab S9"),
+    ("10:44:40", "debug", "http", "GET /extensions/player/capabilities 200 · Galaxy Tab S9"),
     (
         "10:43:30",
         "info",
@@ -1020,10 +1020,10 @@ DEMO_LOGS = [
     ("08:15:03", "info", "scanner", "Movies · Alien: Romulus replaced · 2160p Dolby Vision"),
 ]
 PLAIN_LOGS = [
-    ("11:58:40", "info", "http", "GET /api/v1/home 200"),
-    ("11:58:12", "debug", "http", "GET /api/v1/capabilities 200"),
+    ("11:58:40", "info", "http", "GET /extensions/player/home 200"),
+    ("11:58:12", "debug", "http", "GET /extensions/player/capabilities 200"),
     ("11:52:31", "info", "session", f"signed in · {USER_EMAIL}"),
-    ("11:40:09", "info", "http", "GET /api/v1/movies 200 · 17 titles"),
+    ("11:40:09", "info", "http", "GET /extensions/player/movies 200 · 17 titles"),
     ("11:31:55", "warn", "transcode", "vaapi test encode took 2.4 s"),
     ("10:31:17", "error", "scanner", "Severance S02E09 · ffprobe: moov atom not found · skipped"),
     ("10:12:44", "info", "pairing", "request K7FQ2M · Living room · approved"),
@@ -1555,7 +1555,7 @@ def device_items(headers):
 class Handler(BaseHTTPRequestHandler):
     def end_headers(self):
         origin = self.headers.get("Origin")
-        if origin in CORS_ORIGINS and self.path.startswith("/api/v1"):
+        if origin in CORS_ORIGINS and self.path.startswith("/extensions/player"):
             self.send_header("Access-Control-Allow-Origin", origin)
             self.send_header("Vary", "Origin")
             self.send_header("Access-Control-Expose-Headers", "Content-Disposition")
@@ -1587,7 +1587,7 @@ class Handler(BaseHTTPRequestHandler):
         return json.loads(self.rfile.read(n) or b"{}")
 
     def refused(self):
-        if self.path.startswith("/api/v1/auth/"):
+        if self.path.startswith("/extensions/player/auth/"):
             return False
         if self.headers.get("Authorization") is not None:
             if bearer_device(self.headers) is not None:
@@ -1685,7 +1685,7 @@ class Handler(BaseHTTPRequestHandler):
         return None
 
     def admin(self, method):
-        """Server settings: /api/v1/admin/*, for an admin only."""
+        """Server settings: /extensions/player/admin/*, for an admin only."""
         if ME["role"] != "Admin":
             return self.reply(403, {"error": {"code": "forbidden"}})
         if RESTART["admin"]:
@@ -1698,7 +1698,9 @@ class Handler(BaseHTTPRequestHandler):
         url = urllib.parse.urlsplit(self.path)
         try:
             return self.admin_route(
-                method, url.path[len("/api/v1/admin") :], urllib.parse.parse_qs(url.query)
+                method,
+                url.path[len("/extensions/player/admin") :],
+                urllib.parse.parse_qs(url.query),
             )
         except (OSError, EngineDown):
             return self.reply(502, {"error": {"code": "engine_unavailable"}})
@@ -1820,11 +1822,11 @@ class Handler(BaseHTTPRequestHandler):
     def do_GET(self):
         if self.refused():
             return
-        if self.path.startswith("/api/v1/admin/"):
+        if self.path.startswith("/extensions/player/admin/"):
             return self.admin("GET")
-        if self.path.startswith("/api/v1/downloads"):
+        if self.path.startswith("/extensions/player/downloads"):
             return self.downloads("GET")
-        m = re.fullmatch(r"/api/v1/auth/device/([A-Za-z0-9-]+)", self.path)
+        m = re.fullmatch(r"/extensions/player/auth/device/([A-Za-z0-9-]+)", self.path)
         if m and m[1] not in ("code", "token"):
             found = self.approver_pairing(m[1])
             if found is None:
@@ -1841,11 +1843,11 @@ class Handler(BaseHTTPRequestHandler):
             )
         if self.path == "/health":
             return self.reply(200, {"status": "ok"})
-        if self.path == "/api/v1/movies":
+        if self.path == "/extensions/player/movies":
             return self.reply(200, {"items": [summary(m) for m in MOVIES], "total": len(MOVIES)})
-        if self.path == "/api/v1/series":
+        if self.path == "/extensions/player/series":
             return self.reply(200, {"items": [summary(s) for s in SERIES], "total": len(SERIES)})
-        m = re.fullmatch(r"/api/v1/(movies|series)/(\d+)", self.path)
+        m = re.fullmatch(r"/extensions/player/(movies|series)/(\d+)", self.path)
         if m:
             found = next(
                 (i for i in (MOVIES if m[1] == "movies" else SERIES) if str(i["id"]) == m[2]), None
@@ -1855,11 +1857,11 @@ class Handler(BaseHTTPRequestHandler):
                 if found
                 else self.reply(404, {"error": {"code": "not_found"}})
             )
-        if self.path == "/api/v1/watchstate":
+        if self.path == "/extensions/player/watchstate":
             return self.reply(
                 200, {"items": sorted(WATCH.values(), key=lambda w: w["updated_at"], reverse=True)}
             )
-        m = re.fullmatch(r"/api/v1/people/([a-z0-9-]+)", self.path)
+        m = re.fullmatch(r"/extensions/player/people/([a-z0-9-]+)", self.path)
         if m:
             found = person(m[1])
             return (
@@ -1867,15 +1869,15 @@ class Handler(BaseHTTPRequestHandler):
                 if found
                 else self.reply(404, {"error": {"code": "not_found"}})
             )
-        if self.path == "/api/v1/home":
+        if self.path == "/extensions/player/home":
             return self.reply(200, home())
         url = urllib.parse.urlsplit(self.path)
-        if url.path == "/api/v1/posters/users/me/photo.jpg":
+        if url.path == "/extensions/player/posters/users/me/photo.jpg":
             if PICTURE["data"] is None:
                 return self.reply(404, {"error": {"code": "not_found"}})
             return self.image(PICTURE["data"], PICTURE["type"])
         m = re.fullmatch(
-            r"/api/v1/posters/(movies|series|people)/([\w-]+)/(poster|backdrop|photo)\.jpg",
+            r"/extensions/player/posters/(movies|series|people)/([\w-]+)/(poster|backdrop|photo)\.jpg",
             self.path,
         )
         if m:
@@ -1890,18 +1892,18 @@ class Handler(BaseHTTPRequestHandler):
                 return self.reply(404, {"error": {"code": "not_found"}})
             with open(path, "rb") as image:
                 return self.image(image.read(), "image/jpeg")
-        if self.path == "/api/v1/playback/status":
+        if self.path == "/extensions/player/playback/status":
             st, _ = engine("GET", "/v1/health")
             return self.reply(
                 200, {"available": st == 200, "media": sorted(MEDIA), "network": args.network}
             )
-        if url.path == "/api/v1/auth/methods":
+        if url.path == "/extensions/player/auth/methods":
             return self.reply(200, {"sso": SSO, "email": True, "register_url": None})
-        if url.path == "/api/v1/auth/authorize":
+        if url.path == "/extensions/player/authorize":
             return self.authorize(urllib.parse.parse_qs(url.query))
-        if self.path == "/api/v1/me":
+        if self.path == "/extensions/player/me":
             return self.reply(200, profile())
-        if self.path == "/api/v1/activity":
+        if self.path == "/extensions/player/activity":
             me = self.headers.get("X-API-Key") or ""
             return self.reply(
                 200,
@@ -1913,12 +1915,12 @@ class Handler(BaseHTTPRequestHandler):
                     ][:100]
                 },
             )
-        if self.path == "/api/v1/devices":
+        if self.path == "/extensions/player/devices":
             return self.reply(200, {"items": device_items(self.headers)})
-        m = re.fullmatch(r"/api/v1/playback/media/([^/]+)/tracks", self.path)
+        m = re.fullmatch(r"/extensions/player/playback/media/([^/]+)/tracks", self.path)
         if m and m[1] in MEDIA:
             return self.reply(200, tracks(m[1], MEDIA[m[1]]))
-        m = re.fullmatch(r"/api/v1/playback/sessions/([0-9a-f]{32})", self.path)
+        m = re.fullmatch(r"/extensions/player/playback/sessions/([0-9a-f]{32})", self.path)
         if m:
             _, resp = engine("GET", "/v1/sessions")
             found = next((i for i in resp["sessions"] if i["session_id"] == m[1]), None)
@@ -1932,9 +1934,9 @@ class Handler(BaseHTTPRequestHandler):
     def do_POST(self):
         if self.refused():
             return
-        if self.path.startswith("/api/v1/admin/"):
+        if self.path.startswith("/extensions/player/admin/"):
             return self.admin("POST")
-        if self.path.startswith("/api/v1/downloads"):
+        if self.path.startswith("/extensions/player/downloads"):
             return self.downloads("POST")
         # Dev only: what an admin does from Streamline's web app. Both answer the next heartbeat.
         m = re.fullmatch(r"/dev/stop(?:/([0-9a-f]{32}))?", self.path)
@@ -1945,7 +1947,9 @@ class Handler(BaseHTTPRequestHandler):
                 LAST_BEAT.pop(sid, None)
                 engine("DELETE", f"/v1/sessions/{sid}")
             return self.reply(204)
-        m = re.fullmatch(r"/api/v1/auth/device/([A-Za-z0-9-]+)/(approve|deny)", self.path)
+        m = re.fullmatch(
+            r"/extensions/player/auth/device/([A-Za-z0-9-]+)/(approve|deny)", self.path
+        )
         if m:
             found = self.approver_pairing(m[1])
             if found is None:
@@ -2018,7 +2022,7 @@ class Handler(BaseHTTPRequestHandler):
             for event in ACTIVITY:
                 event["read"] = False
             return self.reply(204)
-        if self.path == "/api/v1/activity/read":
+        if self.path == "/extensions/player/activity/read":
             ids = self.body().get("ids")
             if (
                 not isinstance(ids, list)
@@ -2037,9 +2041,9 @@ class Handler(BaseHTTPRequestHandler):
         if self.path == "/dev/revoke":
             KEYS.clear()
             return self.reply(204)
-        if self.path == "/api/v1/auth/token":
+        if self.path == "/extensions/player/auth/token":
             return self.token()
-        if self.path == "/api/v1/auth/device/code":
+        if self.path == "/extensions/player/auth/device/code":
             b = self.body()
             code = "".join(secrets.choice(CODE_ALPHABET) for _ in range(6))
             code = f"{code[:3]}-{code[3:]}"
@@ -2068,7 +2072,7 @@ class Handler(BaseHTTPRequestHandler):
                     "interval": PAIR_INTERVAL,
                 },
             )
-        if self.path == "/api/v1/auth/device/token":
+        if self.path == "/extensions/player/auth/device/token":
             found = PAIRINGS.get(self.body().get("device_code", ""))
             if not found or time.monotonic() > found["expires"]:
                 return self.reply(400, {"error": {"code": "expired_token"}})
@@ -2090,7 +2094,7 @@ class Handler(BaseHTTPRequestHandler):
             )
             return self.reply(204)
         if time.monotonic() < RESTART["until"] and self.path.startswith(
-            "/api/v1/playback/sessions"
+            "/extensions/player/playback/sessions"
         ):
             left = (
                 10
@@ -2108,7 +2112,7 @@ class Handler(BaseHTTPRequestHandler):
                     }
                 },
             )
-        if self.path == "/api/v1/playback/decisions":
+        if self.path == "/extensions/player/playback/decisions":
             b = self.body()
             path = MEDIA.get(b.pop("media_id", None))
             if path is None:
@@ -2119,7 +2123,7 @@ class Handler(BaseHTTPRequestHandler):
                 b["analysis"] = ANALYSIS[path]
             st, resp = engine("POST", "/v1/decisions", {"path": path, **b})
             return self.reply(st, resp)
-        if self.path == "/api/v1/playback/sessions":
+        if self.path == "/extensions/player/playback/sessions":
             b = self.body()
             media_id = b.pop("media_id", None)
             path = MEDIA.get(media_id)
@@ -2133,7 +2137,7 @@ class Handler(BaseHTTPRequestHandler):
             if st < 300:
                 LAST_BEAT[sid] = time.monotonic()
             return self.reply(st, with_url(sid, resp) if st < 300 else resp)
-        m = re.fullmatch(r"/api/v1/playback/sessions/([0-9a-f]{32})/progress", self.path)
+        m = re.fullmatch(r"/extensions/player/playback/sessions/([0-9a-f]{32})/progress", self.path)
         if m:
             if m[1] in STOPPED:
                 # An admin stop lets the player learn of it on this call; killing the engine session earlier makes it recover instead.
@@ -2160,7 +2164,7 @@ class Handler(BaseHTTPRequestHandler):
     def do_PUT(self):
         if self.refused():
             return
-        if self.path == "/api/v1/me/picture":
+        if self.path == "/extensions/player/me/picture":
             data = self.rfile.read(int(self.headers.get("Content-Length") or 0))
             kind = self.headers.get("Content-Type", "").split(";")[0].strip()
             if kind not in PICTURE_TYPES:
@@ -2171,7 +2175,7 @@ class Handler(BaseHTTPRequestHandler):
                 )
             PICTURE.update(data=data, type=kind)
             return self.reply(204)
-        m = re.fullmatch(r"/api/v1/watchstate/(.+)", self.path)
+        m = re.fullmatch(r"/extensions/player/watchstate/(.+)", self.path)
         if not m or m[1] not in MEDIA:
             return self.reply(404, {"error": {"code": "not_found"}})
         b = self.body()
@@ -2212,14 +2216,14 @@ class Handler(BaseHTTPRequestHandler):
         self.reply(200, WATCH[media_id])
 
     def downloads(self, method):
-        """Downloads: /api/v1/downloads/*, for an app's device key; a browser has none."""
+        """Downloads: /extensions/player/downloads/*, for an app's device key; a browser has none."""
         if bearer_device(self.headers) is not None:
             return self.reply(403, {"error": {"code": "forbidden"}})
         key = self.headers.get("X-API-Key")
         device = key or ""
         invalid = lambda: self.reply(400, {"error": {"code": "invalid_request"}})
         not_found = lambda: self.reply(404, {"error": {"code": "not_found"}})
-        if self.path == "/api/v1/downloads" and method == "POST":
+        if self.path == "/extensions/player/downloads" and method == "POST":
             b = self.body()
             indexes, quality, caps = b.get("audio_indexes"), b.get("quality"), b.get("capabilities")
             if (
@@ -2277,7 +2281,7 @@ class Handler(BaseHTTPRequestHandler):
                 )
             DOWNLOADS[entry["id"]] = entry
             return self.reply(201, download_view(entry))
-        m = re.fullmatch(r"/api/v1/downloads/([0-9a-f]{32})(/complete)?", self.path)
+        m = re.fullmatch(r"/extensions/player/downloads/([0-9a-f]{32})(/complete)?", self.path)
         if not m:
             return not_found()
         entry = DOWNLOADS.get(m[1])
@@ -2308,9 +2312,9 @@ class Handler(BaseHTTPRequestHandler):
     def do_PATCH(self):
         if self.refused():
             return
-        if self.path.startswith("/api/v1/admin/"):
+        if self.path.startswith("/extensions/player/admin/"):
             return self.admin("PATCH")
-        if self.path == "/api/v1/me":
+        if self.path == "/extensions/player/me":
             b = self.body()
             email = b.get("email")
             if email is not None:
@@ -2339,7 +2343,7 @@ class Handler(BaseHTTPRequestHandler):
             if email is not None:
                 ME["email"] = email
             return self.reply(200, profile())
-        m = re.fullmatch(r"/api/v1/playback/sessions/([0-9a-f]{32})", self.path)
+        m = re.fullmatch(r"/extensions/player/playback/sessions/([0-9a-f]{32})", self.path)
         if not m:
             return self.reply(404, {"error": {"code": "not_found"}})
         st, resp = engine("PATCH", f"/v1/sessions/{m[1]}", self.body())
@@ -2348,26 +2352,26 @@ class Handler(BaseHTTPRequestHandler):
     def do_DELETE(self):
         if self.refused():
             return
-        if self.path.startswith("/api/v1/admin/"):
+        if self.path.startswith("/extensions/player/admin/"):
             return self.admin("DELETE")
-        if self.path.startswith("/api/v1/downloads"):
+        if self.path.startswith("/extensions/player/downloads"):
             return self.downloads("DELETE")
-        if self.path == "/api/v1/me/picture":
+        if self.path == "/extensions/player/me/picture":
             PICTURE.update(data=None, type="")
             return self.reply(204)
-        if self.path == "/api/v1/devices/current":
+        if self.path == "/extensions/player/devices/current":
             caller = bearer_device(self.headers)
             if caller:
                 revoke_browser(caller)
             else:
                 KEYS.pop(self.headers.get("X-API-Key"), None)
             return self.reply(204)
-        m = re.fullmatch(r"/api/v1/devices/([\w-]+)", self.path)
+        m = re.fullmatch(r"/extensions/player/devices/([\w-]+)", self.path)
         if m:
             if revoke_browser(m[1]) or m[1] in ("dev-phone", "dev-laptop", "dev-parents"):
                 return self.reply(204)
             return self.reply(404, {"error": {"code": "not_found"}})
-        m = re.fullmatch(r"/api/v1/playback/sessions/([0-9a-f]{32})", self.path)
+        m = re.fullmatch(r"/extensions/player/playback/sessions/([0-9a-f]{32})", self.path)
         if not m:
             return self.reply(404, {"error": {"code": "not_found"}})
         LAST_BEAT.pop(m[1], None)

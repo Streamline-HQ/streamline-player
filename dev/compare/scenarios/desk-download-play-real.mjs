@@ -8,7 +8,7 @@ export { mockArgs, target };
 export const engine = true;
 export const realClock = true;
 
-const MOCK = "http://127.0.0.1:8081/api/v1";
+const MOCK = "http://127.0.0.1:8081/extensions/player";
 const get = (path) => fetch(`${MOCK}${path}`).then((r) => r.json());
 const CAPS = {
   video: [{ codec: "h264", profiles: ["high", "main"], max_level: 52, max_width: 3840, max_height: 2160, max_fps: 60 }],

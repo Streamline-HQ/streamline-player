@@ -8,9 +8,9 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 
 const replies: Record<string, unknown> = {
-	"/api/v1/me": { name: 1 },
-	"/api/v1/watchstate": { items: [] },
-	"/api/v1/nowhere": {},
+	"/extensions/player/me": { name: 1 },
+	"/extensions/player/watchstate": { items: [] },
+	"/extensions/player/nowhere": {},
 };
 const upstream = createServer((req, res) => {
 	res.setHeader("Content-Type", "application/json");
@@ -61,8 +61,8 @@ try {
 		lines = read();
 	}
 	eq(lines.length, 2);
-	ok(lines.some((l) => l.path === "/api/v1/me" && l.where === "response"));
-	ok(lines.some((l) => l.path === "/api/v1/nowhere" && l.where === "undocumented"));
+	ok(lines.some((l) => l.path === "/extensions/player/me" && l.where === "response"));
+	ok(lines.some((l) => l.path === "/extensions/player/nowhere" && l.where === "undocumented"));
 	console.log("proxy-check: ok");
 } finally {
 	proxy.kill();

@@ -3,7 +3,7 @@ import { engine, listen, mockArgs, playMovie, realClock, target, until } from ".
 
 export { engine, mockArgs, realClock, target };
 
-const API = "http://localhost:8098/api/v1";
+const API = "http://localhost:8098/extensions/player";
 const MESSAGE = "Need the bandwidth";
 
 export default async (ctx) => {

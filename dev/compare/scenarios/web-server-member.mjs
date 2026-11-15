@@ -12,7 +12,7 @@ export default async (ctx) => {
   const { app, shot, wait } = ctx;
   const side = targets.web;
   const calls = [];
-  app.on("response", (r) => r.url().includes("/api/v1/admin/") && calls.push(r.status()));
+  app.on("response", (r) => r.url().includes("/extensions/player/admin/") && calls.push(r.status()));
   await app.setViewportSize({ width: 1440, height: 900 });
   await side.open(ctx);
   await wait(1500);
@@ -42,7 +42,7 @@ export default async (ctx) => {
   await wait(2500);
   expect("url leaves", await pathOf(app), "/settings");
   expect("no admin text", await app.locator(".server").count(), 0);
-  const direct = await fetch(`${MOCK}/api/v1/admin/overview`);
+  const direct = await fetch(`${MOCK}/extensions/player/admin/overview`);
   expect("mock says 403", [direct.status, calls], [403, []]);
 
   await dev("role/admin");

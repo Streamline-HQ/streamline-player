@@ -33,12 +33,14 @@ updates `../streamline`.
 ## Constraints that shape the code
 
 - **Every REST call goes through Rust**, never `fetch` from the webview.
-  `/api/v1` sends no CORS headers, and the credential stays out of JavaScript.
+  The credential stays out of JavaScript. The player's API is the `player`
+  Streamline extension under `/extensions/player`.
   The webview only fetches HLS, from the engine: `/hls` has CORS and the
   playback token Streamline minted rides the URL.
-- **Auth is device pairing**, the app's only login on every platform. The
-  `device` API key lives in OS secure storage, never in plaintext. No password
-  ever passes through the app.
+- **Auth is Streamline's own sign-in page** (authorization code + PKCE in the
+  system browser) on web, desktop, tablet and phone; the TV uses device
+  pairing. A native app's device key lives in OS secure storage, never in
+  plaintext. No password ever passes through the app.
 - **Capabilities come from the running webview** (`MediaCapabilities`,
   `isTypeSupported`, `matchMedia`), never from a per-platform table: the
   server picks copy vs transcode from them. WebKitGTK's codecs are whatever

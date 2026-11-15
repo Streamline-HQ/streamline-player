@@ -14,8 +14,8 @@ const norm = (s) => (s ?? "").replace(/\s+/g, " ").trim();
 export function recorder(app) {
   const all = [];
   app.on("request", (r) => {
-    const path = new URL(r.url()).pathname.replace("/api/v1", "");
-    if (r.url().includes("/api/v1/") && !path.startsWith("/dev/")) all.push({ method: r.method(), path, body: r.postData() });
+    const path = new URL(r.url()).pathname.replace("/extensions/player", "");
+    if (r.url().includes("/extensions/player/") && !path.startsWith("/dev/")) all.push({ method: r.method(), path, body: r.postData() });
   });
   return {
     all,

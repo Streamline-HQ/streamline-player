@@ -6,7 +6,7 @@ export { targets };
 const MOCK = "http://127.0.0.1:8081";
 const dev = (path) => fetch(`${MOCK}/dev/${path}`, { method: "POST" });
 const post = (path, body) =>
-  fetch(`${MOCK}/api/v1${path}`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
+  fetch(`${MOCK}/extensions/player${path}`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
 const pathOf = (app) => app.evaluate(() => location.pathname + location.search);
 const bell = (app) => app.locator('.bar .actions button[aria-label^="Activity"]');
 const norm = (s) => (s ?? "").replace(/\s+/g, " ").trim();
@@ -146,7 +146,7 @@ export async function feed(ctx, side, { noDownloads = false } = {}) {
   await app.reload();
   await wait(2500);
   expect("dot back", (await bellState(app)).dot, 1);
-  const items = await (await fetch(`${MOCK}/api/v1/activity`)).json();
+  const items = await (await fetch(`${MOCK}/extensions/player/activity`)).json();
   await post("/activity/read", { ids: items.items.map((e) => e.id) });
   await app.clock.runFor(61000);
   await app.evaluate(() => document.dispatchEvent(new Event("visibilitychange")));
@@ -177,8 +177,8 @@ export async function empty(ctx, side) {
 export async function errors(ctx, side) {
   const { app, shot, wait } = ctx;
   await app.setViewportSize({ width: 1440, height: 900 });
-  const feedUrl = "**/api/v1/activity";
-  const readUrl = "**/api/v1/activity/read";
+  const feedUrl = "**/extensions/player/activity";
+  const readUrl = "**/extensions/player/activity/read";
   await app.route(feedUrl, (r) => r.abort());
   await side.open(ctx);
   await wait(1500);
@@ -217,14 +217,14 @@ export async function realTime(ctx, side) {
   await wait(1500);
   const out = { shown: await count(app), summary: await summary(app) };
   expect("real clock feed", [out.shown, out.summary], [11, "3 unread"]);
-  await app.route("**/api/v1/activity/read", (r) => r.abort());
+  await app.route("**/extensions/player/activity/read", (r) => r.abort());
   await app.getByRole("button", { name: "Mark all as read" }).click();
   await wait(800);
   out.toast = norm(await app.locator('[role="status"]').textContent());
   out.after = { summary: await summary(app), bell: await bellState(app) };
   expect("unsaved", [out.after.summary, out.after.bell.dot], ["3 unread", 1]);
   if (!out.toast.includes("That didn’t save. Try again.")) throw new Error(`toast: ${out.toast}`);
-  await app.unroute("**/api/v1/activity/read");
+  await app.unroute("**/extensions/player/activity/read");
   await app.getByRole("button", { name: "Mark all as read" }).click();
   await wait(1000);
   out.read = { summary: await summary(app), bell: await bellState(app) };

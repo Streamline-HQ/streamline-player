@@ -145,7 +145,7 @@ window.addEventListener("storage", (e) => {
 const inLock = <T>(job: () => Promise<T>): Promise<T> =>
 	navigator.locks ? navigator.locks.request(LOCK, job) : job();
 
-const url = (path: string) => `${streamline}/api/v1${path}`;
+const url = (path: string) => `${streamline}/extensions/player${path}`;
 
 const fail = (text: string): never => {
 	throw text;
@@ -252,13 +252,13 @@ export const setWatched = (mediaId: string, watched: boolean) =>
 	call("PUT", `/watchstate/${mediaId}`, { watched });
 
 export const artwork = (kind: Kind, id: number, name: "poster" | "backdrop") =>
-	`${streamline}/api/v1/posters/${kind}/${id}/${name}.jpg`;
+	`${streamline}/extensions/player/posters/${kind}/${id}/${name}.jpg`;
 export const artworkAt = (path: string) =>
-	`${streamline}/api/v1/posters/${path.replace(/^\//, "")}`;
+	`${streamline}/extensions/player/posters/${path.replace(/^\//, "")}`;
 export const myPicture = (version: number) =>
-	`${streamline}/api/v1/posters/users/me/photo.jpg?v=${version}`;
+	`${streamline}/extensions/player/posters/users/me/photo.jpg?v=${version}`;
 export const headshot = (person: string) =>
-	`${streamline}/api/v1/posters/people/${person}/photo.jpg`;
+	`${streamline}/extensions/player/posters/people/${person}/photo.jpg`;
 
 export const everything = async () => {
 	const [movies, shows] = await Promise.all([library("movies"), library("series")]);
@@ -460,7 +460,7 @@ export async function startSso(provider: string, next: string) {
 		code_challenge: challenge,
 		code_challenge_method: "S256",
 	});
-	location.assign(url(`/auth/authorize?${query}`));
+	location.assign(url(`/authorize?${query}`));
 }
 
 export async function finishSso(query: URLSearchParams): Promise<string> {

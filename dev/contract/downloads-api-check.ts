@@ -86,7 +86,7 @@ try {
 	);
 	children.push(proxy);
 	const root = `http://${await firstLine(proxy, /listening on (\S+)/)}`;
-	const api = `${root}/api/v1`;
+	const api = `${root}/extensions/player`;
 	const direct = `http://${mockAt}`;
 
 	const J = { "Content-Type": "application/json" };
@@ -198,7 +198,7 @@ try {
 		JSON.stringify({ media_id: mediaId, audio_indexes: audio, capabilities }),
 	]) {
 		// The proxy rightly reports these as breaking the contract, so they skip it.
-		const r = await fetch(`${direct}/api/v1/downloads`, {
+		const r = await fetch(`${direct}/extensions/player/downloads`, {
 			method: "POST",
 			headers: { ...J, ...mine },
 			body: bad,

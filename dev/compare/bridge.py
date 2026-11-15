@@ -1,4 +1,4 @@
-# Stands in for the Rust side when the UI runs in a plain browser: forwards /api/v1 to the mock with CORS,
+# Stands in for the Rust side when the UI runs in a plain browser: forwards /extensions/player to the mock with CORS,
 # through the contract proxy (dev/contract/proxy.ts) that run.sh starts.
 import http.client
 import http.server
@@ -23,7 +23,7 @@ class H(http.server.BaseHTTPRequestHandler):
         if path.startswith("/raw/"):
             path = path[len("/raw/") :]
         elif path.startswith("/artwork/"):
-            path = "/api/v1/posters/" + path[len("/artwork/") :]
+            path = "/extensions/player/posters/" + path[len("/artwork/") :]
         path = path.replace("http://10.0.2.2:8097", "http://127.0.0.1:8097")
         n = int(self.headers.get("Content-Length") or 0)
         body = self.rfile.read(n) if n else None

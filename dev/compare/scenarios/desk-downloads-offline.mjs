@@ -7,7 +7,7 @@ import { jump, mockArgs, open, prepare, target } from "./player-lib.mjs";
 
 export { mockArgs, target };
 
-const OFFLINE_RAW = "error sending request for url (http://127.0.0.1:8081/api/v1/playback/sessions)";
+const OFFLINE_RAW = "error sending request for url (http://127.0.0.1:8081/extensions/player/playback/sessions)";
 const NO_NOTES = () => sample().map((e) => ({ ...e, offline: null }));
 
 export default async (ctx) => {

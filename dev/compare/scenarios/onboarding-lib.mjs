@@ -43,7 +43,7 @@ export async function approveOnScreen(app, wait) {
 }
 
 export const WEB = "http://localhost:1430";
-const API = "http://localhost:8098/api/v1";
+const API = "http://localhost:8098/extensions/player";
 
 /** A device (a TV) asking for a code, as Streamline's pairing endpoints see it. */
 export async function startDevice() {

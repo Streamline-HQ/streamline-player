@@ -8,7 +8,7 @@
   const evListeners = {};
   const send = (event, payload) => (listeners[event] || []).forEach((l) => cbs.get(l.id)?.({ message: payload, index: l.i++ }));
   const call = async (method, path, body) => {
-    const r = await fetch(B + "/api/v1" + path, { method, headers: body ? { "Content-Type": "application/json" } : {}, body: body ? JSON.stringify(body) : undefined });
+    const r = await fetch(B + "/extensions/player" + path, { method, headers: body ? { "Content-Type": "application/json" } : {}, body: body ? JSON.stringify(body) : undefined });
     const text = await r.text();
     const v = text ? JSON.parse(text) : null;
     if (!r.ok) throw JSON.stringify(v);
@@ -103,7 +103,7 @@
   // window.__realPair: pairing goes to the mock as the Rust side does it; __pairDown makes it fail as a dead network does.
   let deviceCode = null;
   const realPairStart = async () => {
-    if (window.__pairDown) throw "error sending request for url (http://127.0.0.1:8081/api/v1/auth/device/code)";
+    if (window.__pairDown) throw "error sending request for url (http://127.0.0.1:8081/extensions/player/auth/device/code)";
     const name = "framework-13";
     const r = await call("POST", "/auth/device/code", { client_id: "shim-desktop", name, platform: "Linux" });
     deviceCode = r.device_code;
@@ -142,7 +142,7 @@
     me: () => call("GET", "/me"),
     home: () => call("GET", "/home"),
     update_me: ({ name, email }) => call("PATCH", "/me", { ...(name === undefined ? {} : { display_name: name }), ...(email === undefined ? {} : { email: email }) }),
-    set_picture: (bytes, options) => fetch(`${B}/api/v1/me/picture`, { method: "PUT", headers: { "Content-Type": options.headers["x-picture-type"] }, body: bytes }).then(async (r) => { if (!r.ok) throw await r.text(); return null; }),
+    set_picture: (bytes, options) => fetch(`${B}/extensions/player/me/picture`, { method: "PUT", headers: { "Content-Type": options.headers["x-picture-type"] }, body: bytes }).then(async (r) => { if (!r.ok) throw await r.text(); return null; }),
     remove_picture: () => call("DELETE", "/me/picture"),
     revoke_device: ({ id }) => call("DELETE", `/devices/${encodeURIComponent(id)}`),
     devices: () => call("GET", "/devices"),
@@ -162,7 +162,7 @@
     admin_scan: ({ folderId }) => call("POST", "/admin/library/scan", folderId === undefined ? {} : { folder_id: folderId }),
     admin_clear_cache: () => call("POST", "/admin/cache/clear"),
     admin_logs: ({ level, after }) => call("GET", `/admin/logs?level=${level}${after === undefined ? "" : `&after=${after}`}`),
-    admin_logs_download: () => fetch(`${B}/api/v1/admin/logs/download`).then((r) => { if (!r.ok) throw "download failed"; return "streamline-logs.zip"; }),
+    admin_logs_download: () => fetch(`${B}/extensions/player/admin/logs/download`).then((r) => { if (!r.ok) throw "download failed"; return "streamline-logs.zip"; }),
     playback_status: () => call("GET", "/playback/status"),
     start_session: (a) => window.__holdStart ? new Promise((r) => { window.__releaseStart = r; }).then(() => startSession(a)) : startSession(a),
     decisions: ({ mediaId, capabilities, options }) => call("POST", "/playback/decisions", { media_id: mediaId, capabilities, options }),

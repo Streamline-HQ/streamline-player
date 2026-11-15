@@ -60,7 +60,7 @@ async function start(name: string, ...extra: string[]) {
 	);
 	children.push(proxy);
 	const root = `http://${await firstLine(proxy, /listening on (\S+)/)}`;
-	return { api: `${root}/api/v1`, report };
+	return { api: `${root}/extensions/player`, report };
 }
 
 const violations = (report: string) =>

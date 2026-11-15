@@ -68,9 +68,9 @@ async function start(name: string, ...extra: string[]) {
 	children.push(proxy);
 	const root = `http://${await firstLine(proxy, /listening on (\S+)/)}`;
 	return {
-		api: `${root}/api/v1`,
+		api: `${root}/extensions/player`,
 		dev: `http://${mockAt}/dev`,
-		admin: `${root}/api/v1/admin`,
+		admin: `${root}/extensions/player/admin`,
 		report,
 	};
 }

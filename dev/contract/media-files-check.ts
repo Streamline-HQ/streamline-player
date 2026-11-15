@@ -77,8 +77,8 @@ async function startMock(): Promise<Mock> {
 
 async function tracksOnceReady(origin: string) {
 	for (let i = 0; i < 120; i++) {
-		const t: Tracks = await fetch(`${origin}/api/v1/playback/media/${ID}/tracks`).then((r) =>
-			r.json(),
+		const t: Tracks = await fetch(`${origin}/extensions/player/playback/media/${ID}/tracks`).then(
+			(r) => r.json(),
 		);
 		if (!t.preparing && t.trickplay) return t;
 		await new Promise((r) => setTimeout(r, 1000));
@@ -103,7 +103,10 @@ try {
 	u.searchParams.set("sig", (sig[0] === "0" ? "1" : "0") + sig.slice(1));
 	eq((await fetch(u)).status, 403);
 
-	eq((await fetch(`${mock.origin}/api/v1/playback/media/${ID}/subtitles/x.vtt`)).status, 404);
+	eq(
+		(await fetch(`${mock.origin}/extensions/player/playback/media/${ID}/subtitles/x.vtt`)).status,
+		404,
+	);
 
 	const index = await fetch(tracks.trickplay.url);
 	eq(index.status, 200);

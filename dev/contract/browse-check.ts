@@ -80,7 +80,7 @@ const violations = (report: string) =>
 
 try {
 	const full = await start("full");
-	const api = `${full.root}/api/v1`;
+	const api = `${full.root}/extensions/player`;
 	const login = (await fetch(`${api}/auth/token`, {
 		method: "POST",
 		headers: { "Content-Type": "application/json" },
@@ -156,7 +156,7 @@ try {
 	eq(lines.length, 0, lines.join("\n"));
 
 	const empty = await start("empty", "--empty");
-	const emptyApi = `${empty.root}/api/v1`;
+	const emptyApi = `${empty.root}/extensions/player`;
 	const feed = await fetch(`${emptyApi}/home`).then((r) => r.json() as Promise<HomeFeed>);
 	eq(feed.featured.length, 0);
 	eq(feed.arrivals.length, 0);

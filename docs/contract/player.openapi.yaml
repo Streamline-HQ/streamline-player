@@ -5,11 +5,11 @@ info:
   version: 0.1.0
   description: |
     What the player's clients send and read, as the mock (dev/mock-streamline.py) serves it today.
-    Paths and shapes are provisional until Streamline's extension system decides where they live.
+    Served by the `player` Streamline extension under /extensions/player: /authorize on a session mount (Streamline signs the browser in), everything else on a self mount where the extension checks its own credentials.
     dev/contract/proxy.ts checks the mock and every client against this file.
 
 servers:
-  - url: /api/v1
+  - url: /extensions/player
 
 security:
   - deviceKey: []
@@ -723,10 +723,10 @@ paths:
                   email: { type: boolean }
                   register_url: { type: string, nullable: true }
         default: { $ref: "#/components/responses/Error" }
-  /auth/authorize:
+  /authorize:
     get:
       operationId: authorize
-      description: Web sign-in. The browser is sent here to sign in with a provider (PKCE); it comes back to redirect_uri with a code, or with error=access_denied.
+      description: Web sign-in, on the extension's session mount, so Streamline's own login runs first. The browser is sent here to sign in with a provider (PKCE); it comes back to redirect_uri with a code, or with error=access_denied.
       security: []
       parameters:
         - { name: provider, in: query, required: true, schema: { type: string } }

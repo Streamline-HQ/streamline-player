@@ -29,7 +29,7 @@ export async function openServer(ctx, side) {
 const adminWrites = (app) => {
   const writes = [];
   app.on("request", (r) => {
-    if (r.method() !== "GET" && r.url().includes("/api/v1/admin/")) writes.push(`${r.method()} ${new URL(r.url()).pathname}`);
+    if (r.method() !== "GET" && r.url().includes("/extensions/player/admin/")) writes.push(`${r.method()} ${new URL(r.url()).pathname}`);
   });
   return writes;
 };

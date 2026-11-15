@@ -68,12 +68,12 @@ export default async (ctx) => {
   const writes = rec.writes().filter((c) => c.path.startsWith("/admin/settings"));
   out.patches = writes.length;
 
-  await app.route("**/api/v1/admin/overview", (r) => r.abort());
+  await app.route("**/extensions/player/admin/overview", (r) => r.abort());
   await app.goto(`${side.url}/admin`);
   await wait(2500);
   expect("load failed", [await text(app.locator(".server")).then((t) => t.includes("Couldn’t load server settings")), await app.getByRole("button", { name: "Try again" }).count()], [true, 1]);
   await shot("desk-server-load-failed");
-  await app.unroute("**/api/v1/admin/overview");
+  await app.unroute("**/extensions/player/admin/overview");
   await app.getByRole("button", { name: "Try again" }).click();
   await wait(2000);
   expect("loads once requests pass", [await app.locator("nav .item").count(), await app.getByRole("button", { name: "Try again" }).count()], [6, 0]);

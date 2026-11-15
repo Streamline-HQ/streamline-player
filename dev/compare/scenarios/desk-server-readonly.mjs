@@ -9,7 +9,7 @@ export default async (ctx) => {
   const { app, shot, wait } = ctx;
   const side = targets.desktop;
   const writes = [];
-  app.on("request", (r) => r.method() !== "GET" && r.url().includes("/api/v1/admin/") && writes.push(`${r.method()} ${new URL(r.url()).pathname}`));
+  app.on("request", (r) => r.method() !== "GET" && r.url().includes("/extensions/player/admin/") && writes.push(`${r.method()} ${new URL(r.url()).pathname}`));
   const out = {};
 
   const locked = () =>

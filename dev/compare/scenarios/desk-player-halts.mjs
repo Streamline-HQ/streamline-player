@@ -12,8 +12,8 @@ const KINDS = {
   busy: JSON.stringify({ error: { code: "transcode_limit", message: "busy", retry_after: 60 } }),
   nocodec: JSON.stringify({ error: { code: "transcode_unavailable", message: "its GPU doesn’t handle it" } }),
   missing: JSON.stringify({ error: { code: "file_not_found", message: "/media/movies/Dune (2021)/Dune.2021.2160p.mkv" } }),
-  unreachable: "error sending request for url (http://127.0.0.1:8081/api/v1/playback/sessions)",
-  offline: "error sending request for url (http://127.0.0.1:8081/api/v1/playback/sessions)",
+  unreachable: "error sending request for url (http://127.0.0.1:8081/extensions/player/playback/sessions)",
+  offline: "error sending request for url (http://127.0.0.1:8081/extensions/player/playback/sessions)",
 };
 
 export default async (ctx) => {

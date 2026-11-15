@@ -1,6 +1,6 @@
 // Shared by the web sign-in scenarios.
 export const ORIGIN = "http://localhost:1430";
-export const API = "http://localhost:8098/api/v1";
+export const API = "http://localhost:8098/extensions/player";
 
 export const here = (app) => app.evaluate(() => location.pathname + location.search);
 export const refreshKey = (app) => app.evaluate(() => localStorage.getItem("auth:refresh"));

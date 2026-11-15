@@ -1,4 +1,4 @@
-// Forwards to the mock and checks each /api/v1 exchange against the OpenAPI contract.
+// Forwards to the mock and checks each /extensions/player exchange against the OpenAPI contract.
 //   node dev/contract/proxy.ts --listen 127.0.0.1:8098 --upstream http://127.0.0.1:8081 \
 //     --spec docs/contract/player.openapi.yaml --report <file>
 import Ajv from "ajv";

@@ -79,7 +79,7 @@ impl Api {
     async fn picture(&self, path: &str) -> Result<Vec<u8>, String> {
         let conn = self.conn().await;
         let mut req = self.http.get(format!(
-            "{}/api/v1/posters{path}",
+            "{}/extensions/player/posters{path}",
             conn.server.unwrap_or_default()
         ));
         if let Some(key) = &conn.key {
@@ -123,7 +123,7 @@ impl Api {
         let Some(server) = conn.server else {
             return Err(json!({ "error": { "code": "no_server" } }).to_string());
         };
-        let mut req = self.http.get(format!("{server}/api/v1{path}"));
+        let mut req = self.http.get(format!("{server}/extensions/player{path}"));
         if let Some(key) = &conn.key {
             req = req.header("X-API-Key", key);
         }
@@ -182,7 +182,9 @@ impl Api {
         let Some(server) = conn.server else {
             return Err(json!({ "error": { "code": "no_server" } }).to_string());
         };
-        let mut req = self.http.request(method, format!("{server}/api/v1{path}"));
+        let mut req = self
+            .http
+            .request(method, format!("{server}/extensions/player{path}"));
         if let Some(key) = &conn.key {
             req = req.header("X-API-Key", key);
         }

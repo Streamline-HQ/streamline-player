@@ -38,7 +38,7 @@ export default async (ctx) => {
 
   // The server's watch position is written by every beat, so only one sent as the tab closes lands on the last time seen.
   const saved = async () => {
-    const res = await fetch("http://127.0.0.1:8081/api/v1/watchstate", { headers: { Authorization: seen.auth } });
+    const res = await fetch("http://127.0.0.1:8081/extensions/player/watchstate", { headers: { Authorization: seen.auth } });
     return (await res.json()).items.find((w) => w.media_id === "movie-2")?.position_seconds ?? null;
   };
   const lastSeen = (await video(app)).at;

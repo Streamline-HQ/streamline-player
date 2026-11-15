@@ -1330,7 +1330,7 @@ mod tests {
             let base = format!("http://{addr}");
             let route = path.split('?').next().unwrap().to_owned();
 
-            if let Some(rest) = route.strip_prefix("/api/v1") {
+            if let Some(rest) = route.strip_prefix("/extensions/player") {
                 Fake::streamline(&mut stream, &world, &base, &method, rest, &body);
             } else if let Some(job) = route.strip_prefix("/dl/") {
                 Fake::engine(&mut stream, &world, job, &path, &headers);
@@ -1520,7 +1520,7 @@ mod tests {
             path: String,
             body: Option<Value>,
         ) -> BoxFuture<Result<Value, String>> {
-            let url = format!("{}/api/v1{path}", self.base);
+            let url = format!("{}/extensions/player{path}", self.base);
             let mut req = self.client.request(method, url).header("X-API-Key", "key");
             if let Some(b) = body {
                 req = req.json(&b);
@@ -1545,7 +1545,7 @@ mod tests {
         fn picture(&self, path: String) -> BoxFuture<Result<Vec<u8>, String>> {
             let req = self
                 .client
-                .get(format!("{}/api/v1/posters{path}", self.base))
+                .get(format!("{}/extensions/player/posters{path}", self.base))
                 .header("X-API-Key", "key");
             Box::pin(async move {
                 let r = req
@@ -1883,7 +1883,7 @@ mod tests {
         let seen = fake.seen();
         let engine: Vec<&Seen> = seen
             .iter()
-            .filter(|s| !s.path.starts_with("/api/v1"))
+            .filter(|s| !s.path.starts_with("/extensions/player"))
             .collect();
         assert!(engine.len() >= 3, "{engine:?}");
         for s in engine {
@@ -1892,7 +1892,10 @@ mod tests {
                 "{s:?}"
             );
         }
-        for s in seen.iter().filter(|s| s.path.starts_with("/api/v1")) {
+        for s in seen
+            .iter()
+            .filter(|s| s.path.starts_with("/extensions/player"))
+        {
             assert_eq!(
                 s.headers.get("x-api-key").map(String::as_str),
                 Some("key"),

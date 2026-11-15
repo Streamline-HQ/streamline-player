@@ -68,7 +68,7 @@ try {
 		],
 		{ stdio: ["ignore", "pipe", "inherit"] },
 	);
-	const api = `http://${await firstLine(proxy, /listening on (\S+)/)}/api/v1`;
+	const api = `http://${await firstLine(proxy, /listening on (\S+)/)}/extensions/player`;
 
 	const call = (path: string, init: RequestInit & { token?: string } = {}) => {
 		const { token, ...rest } = init;
@@ -97,7 +97,7 @@ try {
 		code_challenge_method: "S256",
 	});
 	const authorize = async () => {
-		const r = await call(`/auth/authorize?${query}`);
+		const r = await call(`/authorize?${query}`);
 		eq(r.status, 302);
 		return new URL(r.headers.get("location") as string);
 	};
