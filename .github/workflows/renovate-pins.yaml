@@ -1,0 +1,175 @@
+name: Renovate pins
+
+# Upstream decides each toolchain's patch and nixpkgs decides which lines exist.
+# Renovate bumps every copy of a version itself (engines.node from nodejs.org, packageManager and pnpm/action-setup from the npm registry). What it cannot compute,
+# this job derives on renovate's own branch, before CI reads any of it:
+#
+#   1. a check that the locked nixpkgs has each declared line and that every
+#      copy agrees with its source
+#   2. nix/toolchains.json: the hashes nix/tools/{node,pnpm}.nix override nixpkgs' package with,
+#      for every tool whose declared version differs from the locked one —
+#      rebuilt from scratch each run, so a lock that has caught up drops its
+#      entry
+#   3. web.pnpmDeps.hash, which follows pnpm-lock.yaml and the pnpm that lays
+#      out the store (so after step 2)
+#
+# The push goes out under a GitHub App when one is configured (PINS_APP_CLIENT_ID
+# variable, PINS_APP_PRIVATE_KEY secret; an App with Contents: Read and write and
+# nothing else). A push made with the Actions token starts CI only after someone
+# approves the run, so each derived pin would leave its PR without checks.
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - flake.lock
+      - package.json
+      - pnpm-lock.yaml
+      - nix/packages/web.nix
+      - nix/toolchains.json
+permissions:
+  contents: write
+
+jobs:
+  pins:
+    # Only renovate's own branches: on any other PR a stale pin is a mistake
+    # worth seeing, not something to paper over with a commit the author did
+    # not write. The throws in nix/ name the missing line or hash.
+    if: startsWith(github.head_ref, 'renovate/')
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Push token
+        id: app
+        if: vars.PINS_APP_CLIENT_ID != ''
+        uses: actions/create-github-app-token@64ab729a6294000f5aa4a4bc0b73d1f32bc45510 # v3.3.0
+        with:
+          client-id: ${{ vars.PINS_APP_CLIENT_ID }}
+          private-key: ${{ secrets.PINS_APP_PRIVATE_KEY }}
+          permission-contents: write
+
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.head_ref }}
+          token: ${{ steps.app.outputs.token || github.token }}
+
+      - name: Install Nix
+        uses: cachix/install-nix-action@3dc140bfc76c49fbd4dd958429132e3746bcb086 # v31.11.5
+
+      - name: Binary cache
+        uses: ./.github/actions/nix-builder
+        with:
+          attic-token: ${{ secrets.ATTIC_PULL_TOKEN }}
+
+      - name: Toolchain declarations
+        id: toolchains
+        run: |
+          set -euo pipefail
+
+          node=$(jq -r '.engines.node' package.json)
+          pnpm=$(jq -r '.packageManager' package.json | sed 's/^pnpm@//; s/+.*//')
+
+          # What the locked nixpkgs ships on a line — empty when it has no such
+          # line, which is the one thing that must wait for nixpkgs. Runs before
+          # anything writes to the tree: `builtins.getFlake` on a dirty working
+          # copy ingests the whole checkout first.
+          locked() {
+            nix eval --raw --impure --expr \
+              "let p = (builtins.getFlake (toString ./.)).inputs.nixpkgs.legacyPackages.\${builtins.currentSystem}; in p.$1.version or \"\""
+          }
+          for attr in "nodejs_${node%%.*}" "pnpm_${pnpm%%.*}"; do
+            v=$(locked "$attr")
+            if [ -z "$v" ]; then
+              echo "::error::the locked nixpkgs has no ${attr} — a new line waits for nixpkgs to package it"
+              exit 1
+            fi
+            echo "Locked nixpkgs: ${attr} = ${v}"
+            printf 'locked_%s=%s\n' "${attr%%_*}" "$v" >> "$GITHUB_OUTPUT"
+          done
+          {
+            echo "node=$node"
+            echo "pnpm=$pnpm"
+          } >> "$GITHUB_OUTPUT"
+
+      # Node is upstream's own source tarball, so its hash is a download. pnpm
+      # is its prebuilt @pnpm/exe binary (nix/tools/pnpm.nix says why), whose
+      # hashes are npm's own `integrity`, one per platform the flake builds.
+      - name: Toolchain hashes
+        env:
+          NODE: ${{ steps.toolchains.outputs.node }}
+          PNPM: ${{ steps.toolchains.outputs.pnpm }}
+          LOCKED_NODE: ${{ steps.toolchains.outputs.locked_nodejs }}
+          LOCKED_PNPM: ${{ steps.toolchains.outputs.locked_pnpm }}
+        run: |
+          set -euo pipefail
+
+          prefetch() { nix store prefetch-file --json "$1" | jq -r .hash; }
+
+          tc='{"node": {}, "pnpm": {}}'
+          if [ "$NODE" != "$LOCKED_NODE" ]; then
+            tc=$(jq --arg v "$NODE" --arg h "$(prefetch "https://nodejs.org/dist/v${NODE}/node-v${NODE}.tar.xz")" '.node[$v] = $h' <<< "$tc")
+          fi
+          if [ "$PNPM" != "$LOCKED_PNPM" ]; then
+            integrity() { curl -fsS "https://registry.npmjs.org/@pnpm/exe.$1/${PNPM}" | jq -r .dist.integrity; }
+            tc=$(jq --arg v "$PNPM" --arg x "$(integrity linux-x64)" --arg a "$(integrity linux-arm64)" \
+              '.pnpm[$v] = {"x86_64-linux": $x, "aarch64-linux": $a}' <<< "$tc")
+          fi
+          printf '%s\n' "$tc" | jq --indent 2 . > nix/toolchains.json
+          cat nix/toolchains.json
+
+      # pnpmDeps.hash follows pnpm-lock.yaml and the pnpm that lays out the
+      # store (so after the step above). It is a fixed-output derivation: built
+      # against a placeholder, it fails and reports the real hash.
+      - name: Package hashes
+        run: |
+          set -euo pipefail
+
+          file=nix/packages/web.nix
+          fake="sha256-$(printf 'A%.0s' $(seq 43))="
+          log="$RUNNER_TEMP/pnpm-deps.log"
+          sed -i "s|^\( *\)hash = \"sha256-[^\"]*\";|\1hash = \"${fake}\";|" "$file"
+
+          echo "::group::nix build .#web.pnpmDeps"
+          if nix build --no-link -L .#web.pnpmDeps 2>&1 | tee "$log"; then
+            echo "::endgroup::"
+            echo "::error::web.pnpmDeps built against the placeholder hash — nothing to derive"
+            exit 1
+          fi
+          echo "::endgroup::"
+
+          # `|| true` is load-bearing: a build that failed for any other reason
+          # has no `got:` line, and the empty grep would abort here instead of
+          # reaching the error below.
+          got=$(grep -oE 'got: +sha256-[A-Za-z0-9+/=]+' "$log" | tail -1 | grep -oE 'sha256-[A-Za-z0-9+/=]+' || true)
+          if [ -z "$got" ]; then
+            echo "::error::web.pnpmDeps failed for a reason other than a hash mismatch (log in the group above)"
+            exit 1
+          fi
+          sed -i "s|^\( *\)hash = \"${fake}\";|\1hash = \"${got}\";|" "$file"
+          echo "pnpmDeps.hash = ${got}"
+
+      - name: Commit
+        id: commit
+        run: |
+          if git diff --quiet; then
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          echo "changed=true" >> "$GITHUB_OUTPUT"
+          git diff --name-only | sed 's/^/  /' >> "$GITHUB_STEP_SUMMARY"
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git commit -am "chore(deps): derive the pins renovate cannot compute"
+          git push
+
+      - name: Summary
+        if: always()
+        run: |
+          echo "### Renovate pins" >> "$GITHUB_STEP_SUMMARY"
+          if [ "${{ steps.commit.outputs.changed }}" = "true" ]; then
+            echo "✅ Derived — see the files above" >> "$GITHUB_STEP_SUMMARY"
+          elif [ "${{ job.status }}" = "success" ]; then
+            echo "⏭️ All pins already current" >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "❌ Could not derive the pins" >> "$GITHUB_STEP_SUMMARY"
+          fi

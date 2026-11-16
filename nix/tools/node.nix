@@ -1,15 +1,58 @@
-{ lib, buildPackages }:
-# package.json's engines.node names one exact Node, with no range: the release
-# the devshell, the package builds and CI's setup-node all run. Streamline
-# rebuilds Node from source when nixpkgs ships another patch; here the flake
-# refuses instead, so bump engines.node only to what the locked nixpkgs ships.
+{
+  lib,
+  buildPackages,
+  fetchurl,
+}:
+# Streamline's contract (its nix/node.nix): package.json's engines.node decides
+# the version (renovate bumps it from nodejs.org's release list), and the locked
+# nixpkgs only decides which majors exist — `nodejs_NN`, or this throws. Within
+# the major, nixpkgs' package is overridden onto the declared version when the
+# two differ, so setup-node, the package builds and the devshell agree.
+#
+# `nodejs_NN` is a symlinkJoin over `nodejs-slim_NN` (node itself) and its npm
+# and corepack outputs, so the override goes on the slim build and the wrapper
+# is rebuilt around it. nixpkgs computes a few configure flags from the version
+# it was written for; within one major those agree, which is the only range
+# this overrides across. An overridden node is compiled from source — the
+# homelab builder keeps it, so CI pays that once per version.
 let
   declared = (lib.importJSON ../../package.json).engines.node;
-  attr = "nodejs_${lib.versions.major declared}";
-  pkg = lib.throwIf (
-    !buildPackages ? ${attr}
-  ) "package.json declares Node ${declared}, but nixpkgs has no ${attr}" buildPackages.${attr};
+  major = lib.versions.major declared;
+  attr = "nodejs_${major}";
+
+  pkg = lib.throwIf (!buildPackages ? ${attr}) ''
+    package.json declares Node ${declared}, but nixpkgs has no ${attr}.
+    A new Node major waits for nixpkgs to package it: hold engines.node on a
+    major the locked nixpkgs has, or move the lock once it ships ${attr}.
+  '' buildPackages.${attr};
+
+  hash =
+    (lib.importJSON ../toolchains.json).node.${declared} or (throw ''
+      package.json declares Node ${declared}, but the locked nixpkgs has ${pkg.version},
+      and nix/toolchains.json has no source hash for ${declared}.
+      Add it under "node": `nix store prefetch-file https://nodejs.org/dist/v${declared}/node-v${declared}.tar.xz`.
+    '');
 in
-lib.throwIf (pkg.version != declared)
-  "package.json declares Node ${declared}, but the locked nixpkgs ships ${pkg.version}: set engines.node to ${pkg.version} (or update the flake lock) so both agree"
+if pkg.version == declared then
   pkg
+else
+  pkg.override {
+    nodejs-slim = buildPackages."nodejs-slim_${major}".overrideAttrs (old: {
+      version = declared;
+      src = fetchurl {
+        url = "https://nodejs.org/dist/v${declared}/node-v${declared}.tar.xz";
+        inherit hash;
+      };
+      # Node compiles against the brotli it bundles, not nixpkgs' shared one: a
+      # patch release can move its bundled copy ahead of the brotli nixpkgs
+      # ships, and the shared build then fails on a constant only the newer copy
+      # declares — 24.22.1's node_zlib.cc names BROTLI_DECODER_ERROR_FORMAT_BLOCK_SWITCH,
+      # which brotli 1.2.0 leaves as a reserved -17. `v24.nix` takes no `brotli`
+      # argument to swap, so the shared flags are dropped instead.
+      configureFlags = lib.filter (flag: !lib.hasPrefix "--shared-brotli" flag) old.configureFlags;
+      # nixpkgs' v26.nix backports V8's GCC 16 fix (NixOS/nixpkgs#568974) onto
+      # 26.11.1, and 26.13.0 ships it upstream: patch refuses it as already
+      # applied and the build stops. A no-op on any major whose list lacks it.
+      patches = lib.filter (p: !lib.hasSuffix "memcpy-climits.patch" (toString p)) old.patches;
+    });
+  }

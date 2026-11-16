@@ -21,7 +21,7 @@ There is no app release yet: build it from source (see [Development](#developmen
 
 ### The engine
 
-The engine's image is `ghcr.io/datahearth/streamline-player/engine`: a push to `main` publishes `main` and `sha-<commit>`, a tag `vX.Y.Z` publishes `X.Y.Z`, `X.Y` and `latest`. The Helm chart is in [`deploy/helm/streamline-engine`](deploy/helm/streamline-engine); releases are tags `chart-vX.Y.Z`, pushed to `oci://ghcr.io/datahearth/charts`.
+The engine's image is `ghcr.io/streamline-hq/streamline-player/engine`: a push to `main` publishes `main` and `sha-<commit>`, a tag `vX.Y.Z` publishes `X.Y.Z`, `X.Y` and `latest`. The Helm chart is in [`deploy/helm/streamline-engine`](deploy/helm/streamline-engine); releases are tags `chart-vX.Y.Z`, pushed to `oci://ghcr.io/streamline-hq/charts`.
 
 The engine needs read access to the library at the paths Streamline sends (or a `path_map`), and the secret the player extension hands out once from Server settings. Then set its address in Server settings; the [player extension's README](https://github.com/Streamline-HQ/streamline-player-ext#bootstrap-order) has the full bootstrap order.
 

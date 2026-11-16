@@ -49,4 +49,4 @@ jobs:
         run: |
           set -euo pipefail
           helm package deploy/helm/streamline-engine --destination "$RUNNER_TEMP"
-          helm push "$RUNNER_TEMP/streamline-engine-${version}.tgz" oci://ghcr.io/datahearth/charts
+          helm push "$RUNNER_TEMP/streamline-engine-${version}.tgz" oci://ghcr.io/streamline-hq/charts
