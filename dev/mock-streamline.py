@@ -302,6 +302,7 @@ def profile(host):
         "picture": PICTURE["data"] is not None,
         "initials": initials(ME["name"]),
         "streamline_url": f"http://{host}",
+        "player_url": SETTINGS["player.url"] or None,
     }
 
 

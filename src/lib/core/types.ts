@@ -106,6 +106,8 @@ export type Me = {
 	initials: string;
 	/** The Streamline the extension runs in; its account page is `{streamline_url}/account`. */
 	streamline_url: string;
+	/** The web player, where a TV is approved at `{player_url}/pair`; null until an admin sets it. */
+	player_url: string | null;
 };
 export type Featured = {
 	kind: Kind;

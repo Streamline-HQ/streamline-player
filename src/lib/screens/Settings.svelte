@@ -208,6 +208,7 @@ const choice = (key: ChoiceKey, vals: string[]) =>
 
 const selfDevice = $derived(devices.find((d) => d.current));
 const others = $derived(devices.filter((d) => !d.current));
+const pairPage = $derived(me?.player_url ? `${me.player_url.replace(/\/+$/, "")}/pair` : null);
 const deviceIcon = (d: Device): IconName =>
 	/browser/i.test(d.platform)
 		? "globe"
@@ -681,6 +682,26 @@ onMount(() => {
 					{/snippet}
 				</SettingsRow>
 			{/each}
+			{#if IS_WEB}
+				<SettingsRow label={i18n.settings_pair_tv()} desc={i18n.settings_pair_tv_desc_web()}>
+					{#snippet control()}
+						<Button variant="secondary" size="sm" onclick={() => goto("/pair")}>
+							{i18n.settings_pair_tv_enter()}
+						</Button>
+					{/snippet}
+				</SettingsRow>
+			{:else if pairPage}
+				<SettingsRow
+					label={i18n.settings_pair_tv()}
+					desc={i18n.settings_pair_tv_desc_app({ address: pairPage.replace(/^[a-z]+:\/\//, "") })}
+				>
+					{#snippet control()}
+						<Button variant="secondary" size="sm" onclick={() => void openExternal(pairPage)}>
+							{i18n.settings_pair_tv_open()}
+						</Button>
+					{/snippet}
+				</SettingsRow>
+			{/if}
 		</SettingsList>
 
 		<SettingsList id="device" title={TITLES.device()}>

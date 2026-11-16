@@ -1258,13 +1258,14 @@ components:
         updated_at: { type: string }
     Me:
       type: object
-      required: [id, name, email, role, streamline_url]
+      required: [id, name, email, role, streamline_url, player_url]
       properties:
         id: { type: integer, description: The account's id in Streamline; the same as an `AdminUser.id`. }
         name: { type: string, description: "The display name; the email's local part for an account that has none." }
         email: { type: string }
         role: { type: string, description: "`Admin` or `Member`." }
         streamline_url: { type: string, description: "Where the Streamline the extension runs in is reached, as the call came to it; its account page is at {streamline_url}/account." }
+        player_url: { type: string, nullable: true, description: "The web player's address (the player.url setting), where an app sends a person to approve a TV at {player_url}/pair; null until an admin sets it." }
         library_language: { type: string, description: "BCP 47 tag of the language titles and synopses are shown in, kept per account by the extension (default en)." }
         picture: { type: boolean, description: Whether a profile picture is set. }
         initials: { type: string, description: One or two capital letters of the name, drawn when there is no picture. }
