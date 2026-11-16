@@ -578,3 +578,76 @@ async fn download_type_is_accepted() {
     assert_eq!(status, StatusCode::BAD_REQUEST);
     assert_eq!(v["code"], "invalid_request");
 }
+
+#[cfg(unix)]
+#[tokio::test]
+async fn cache_clear_frees_orphan_work_dirs_and_keeps_live_ones() {
+    let e = env();
+    std::fs::write(e.root.join("in.mkv"), b"x").unwrap();
+    let live = id(7);
+    let body = start_body(&live, &e.root.join("in.mkv"), "hevc", "mp4");
+    let (status, _) = e.api("POST", "/v1/sessions", Some(body)).await;
+    assert_eq!(status, StatusCode::OK);
+
+    let kept = e.root.join("live").join(&live);
+    std::fs::create_dir_all(&kept).unwrap();
+    std::fs::write(kept.join("seg.m4s"), vec![0u8; 100]).unwrap();
+    let orphan = e.root.join("live").join(id(8));
+    std::fs::create_dir_all(&orphan).unwrap();
+    std::fs::write(orphan.join("seg.m4s"), vec![0u8; 1000]).unwrap();
+    let foreign = e.root.join("live").join("somebody-elses");
+    std::fs::create_dir_all(&foreign).unwrap();
+
+    let expired = e.root.join("jobs").join(id(9));
+    std::fs::create_dir_all(&expired).unwrap();
+    std::fs::write(expired.join("done.json"), r#"{"state":"done"}"#).unwrap();
+    std::fs::write(expired.join("out.bin"), vec![0u8; 10_000]).unwrap();
+    let old = std::time::SystemTime::now() - std::time::Duration::from_secs(8 * 24 * 3600);
+    filetime::set_file_mtime(
+        expired.join("done.json"),
+        filetime::FileTime::from_system_time(old),
+    )
+    .unwrap();
+    let fresh = e.root.join("jobs").join(id(10));
+    std::fs::create_dir_all(&fresh).unwrap();
+    std::fs::write(fresh.join("done.json"), r#"{"state":"done"}"#).unwrap();
+
+    let (status, v) = e.api("POST", "/v1/cache/clear", None).await;
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(v["freed"], 1000 + 10_000 + 16);
+    assert!(kept.exists());
+    assert!(!orphan.exists());
+    assert!(foreign.exists());
+    assert!(!expired.exists());
+    assert!(fresh.exists());
+
+    let (_, v) = e.api("POST", "/v1/cache/clear", None).await;
+    assert_eq!(v["freed"], 0);
+}
+
+#[tokio::test]
+async fn cache_clear_needs_the_bearer() {
+    let e = env();
+    let res = e
+        .send(
+            Request::builder()
+                .method("POST")
+                .uri("/v1/cache/clear")
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await;
+    assert_eq!(res.status(), StatusCode::UNAUTHORIZED);
+}
+
+#[tokio::test]
+async fn cache_reports_what_the_work_dirs_hold() {
+    let e = env();
+    let dir = e.root.join("live").join(id(11));
+    std::fs::create_dir_all(&dir).unwrap();
+    std::fs::write(dir.join("seg.m4s"), vec![0u8; 500]).unwrap();
+    let (status, v) = e.api("GET", "/v1/cache", None).await;
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(v["size"], 500);
+    assert_eq!(v["streams"], 0);
+}

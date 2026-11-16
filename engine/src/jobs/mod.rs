@@ -303,12 +303,13 @@ impl Shared {
         })
     }
 
-    fn sweep_ttl(&self) {
+    fn sweep_ttl(&self) -> u64 {
+        let mut freed = 0;
         if self.cfg.job_output_ttl.is_zero() {
-            return;
+            return freed;
         }
         let Ok(entries) = std::fs::read_dir(&self.cfg.jobs_dir) else {
-            return;
+            return freed;
         };
         let now = SystemTime::now();
         for entry in entries.flatten() {
@@ -329,10 +330,11 @@ impl Shared {
                     .is_none_or(|e| matches!(e.state, JobState::Done | JobState::Failed))
                 {
                     q.jobs.remove(&id);
-                    let _ = std::fs::remove_dir_all(entry.path());
+                    freed += crate::disk::remove_counted(&entry.path());
                 }
             }
         }
+        freed
     }
 }
 
@@ -621,8 +623,9 @@ impl Jobs {
         }
     }
 
-    pub fn sweep_ttl_once(&self) {
-        self.0.sweep_ttl();
+    /// Returns the bytes freed.
+    pub fn sweep_ttl_once(&self) -> u64 {
+        self.0.sweep_ttl()
     }
 
     /// Stops running jobs, killing their ffmpeg children, and drops the queue.

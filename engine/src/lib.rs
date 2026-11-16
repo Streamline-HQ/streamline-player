@@ -3,6 +3,7 @@ pub mod args;
 pub mod caps;
 pub mod config;
 pub mod decision;
+pub mod disk;
 pub mod error;
 pub mod http;
 pub mod hw;

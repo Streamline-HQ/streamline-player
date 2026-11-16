@@ -197,3 +197,20 @@ pub async fn restart(State(s): State<AppState>) -> StatusCode {
     s.settings.request_restart();
     StatusCode::ACCEPTED
 }
+
+pub async fn clear_cache(State(s): State<AppState>) -> Json<serde_json::Value> {
+    let (sessions, jobs) = (s.sessions.clone(), s.jobs.clone());
+    let freed =
+        tokio::task::spawn_blocking(move || sessions.clear_orphans() + jobs.sweep_ttl_once())
+            .await
+            .unwrap_or(0);
+    Json(serde_json::json!({ "freed": freed }))
+}
+
+pub async fn cache_usage(State(s): State<AppState>) -> Json<serde_json::Value> {
+    let dirs = [s.cfg.tmp_dir.clone(), s.cfg.jobs_dir.clone()];
+    let size = tokio::task::spawn_blocking(move || dirs.iter().map(|d| crate::disk::size(d)).sum())
+        .await
+        .unwrap_or(0_u64);
+    Json(serde_json::json!({ "size": size, "streams": s.sessions.list().len() }))
+}

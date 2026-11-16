@@ -38,6 +38,8 @@ pub fn router(state: AppState) -> Router {
             get(control::get_settings).patch(control::patch_settings),
         )
         .route("/restart", post(control::restart))
+        .route("/cache", get(control::cache_usage))
+        .route("/cache/clear", post(control::clear_cache))
         .method_not_allowed_fallback(method_not_allowed)
         .layer(middleware::from_fn_with_state(state.clone(), bearer));
 

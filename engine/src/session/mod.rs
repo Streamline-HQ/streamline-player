@@ -711,6 +711,23 @@ impl Sessions {
         }
     }
 
+    /// Removes the work directories that belong to no live session and returns the bytes freed.
+    pub fn clear_orphans(&self) -> u64 {
+        let Ok(entries) = std::fs::read_dir(&self.inner.cfg.tmp_dir) else {
+            return 0;
+        };
+        let map = self.inner.map.lock().unwrap();
+        entries
+            .flatten()
+            .filter(|e| {
+                e.file_name()
+                    .to_str()
+                    .is_some_and(|n| valid_id(n) && !map.contains_key(n))
+            })
+            .map(|e| crate::disk::remove_counted(&e.path()))
+            .sum()
+    }
+
     pub fn sweep_tmp(&self) {
         let Ok(entries) = std::fs::read_dir(&self.inner.cfg.tmp_dir) else {
             return;
