@@ -1,5 +1,5 @@
 image:
-  repository: ghcr.io/datahearth/streamline-player/engine
+  repository: ghcr.io/streamline-hq/streamline-player/engine
   tag: "" # required
   pullPolicy: IfNotPresent
 

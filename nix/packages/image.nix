@@ -9,7 +9,7 @@
 # The render node is usually root:render 0660: give the container that gid at run time
 # (Kubernetes supplementalGroups), as Streamline's VAAPI image does.
 dockerTools.streamLayeredImage {
-  name = "ghcr.io/datahearth/streamline-player/engine";
+  name = "ghcr.io/streamline-hq/streamline-player/engine";
   tag = engine.version;
   # ffmpeg and dovi_tool land in /bin; with `ffmpeg_dir` left unset the engine
   # finds them on PATH.
@@ -27,7 +27,7 @@ dockerTools.streamLayeredImage {
       "/etc/engine/config.yaml"
     ];
     Labels = {
-      "org.opencontainers.image.source" = "https://github.com/DataHearth/streamline-player";
+      "org.opencontainers.image.source" = "https://github.com/Streamline-HQ/streamline-player";
       "org.opencontainers.image.description" = "Streamline's streaming engine";
       "org.opencontainers.image.version" = engine.version;
     };
