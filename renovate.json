@@ -1,0 +1,151 @@
+{
+	"$schema": "https://docs.renovatebot.com/renovate-schema.json",
+	"extends": [
+		"config:recommended",
+		"helpers:pinGitHubActionDigests"
+	],
+	"schedule": [
+		"* 0-6 * * 1"
+	],
+	"prConcurrentLimit": 8,
+	"labels": [
+		"dependencies"
+	],
+	"reviewers": [
+		"DataHearth"
+	],
+	"customManagers": [
+		{
+			"customType": "regex",
+			"description": "Node's version, from nodejs.org's release list: package.json's engines.node, one exact release. nix/tools/node.nix overrides nixpkgs' nodejs_NN onto it; renovate-pins.yaml derives the source hash.",
+			"managerFilePatterns": [
+				"/^package\\.json$/"
+			],
+			"matchStrings": [
+				"\"node\": \"(?<currentValue>\\d+\\.\\d+\\.\\d+)\""
+			],
+			"depNameTemplate": "node",
+			"datasourceTemplate": "node-version",
+			"versioningTemplate": "node"
+		}
+	],
+	"packageRules": [
+		{
+			"matchManagers": [
+				"cargo"
+			],
+			"matchUpdateTypes": [
+				"minor",
+				"patch",
+				"digest"
+			],
+			"groupName": "rust crates"
+		},
+		{
+			"matchManagers": [
+				"npm"
+			],
+			"matchUpdateTypes": [
+				"minor",
+				"patch",
+				"digest"
+			],
+			"groupName": "frontend deps"
+		},
+		{
+			"matchManagers": [
+				"github-actions"
+			],
+			"matchUpdateTypes": [
+				"minor",
+				"patch",
+				"digest"
+			],
+			"groupName": "github actions"
+		},
+		{
+			"matchManagers": [
+				"github-actions"
+			],
+			"addLabels": [
+				"github_actions"
+			]
+		},
+		{
+			"matchManagers": [
+				"helmv3",
+				"helm-values"
+			],
+			"matchUpdateTypes": [
+				"minor",
+				"patch",
+				"digest"
+			],
+			"groupName": "helm charts"
+		},
+		{
+			"matchUpdateTypes": [
+				"major"
+			],
+			"dependencyDashboardApproval": true
+		},
+		{
+			"description": "engines.node belongs to the node regex manager above.",
+			"matchManagers": [
+				"npm"
+			],
+			"matchDepNames": [
+				"node"
+			],
+			"enabled": false
+		},
+		{
+			"matchManagers": [
+				"custom.regex"
+			],
+			"matchDepNames": [
+				"node"
+			],
+			"groupName": "node"
+		},
+		{
+			"description": "The PR that moves the locked nixpkgs. It touches no toolchain version: nix/ overrides nixpkgs' package onto the declared patch while the two differ, and .github/workflows/renovate-pins.yaml drops the override's hashes from nix/toolchains.json once the lock catches up. After the major gate on purpose — the later rule wins.",
+			"matchManagers": [
+				"nix"
+			],
+			"groupName": "nix inputs",
+			"dependencyDashboardApproval": false
+		},
+		{
+			"description": "pnpm: package.json's packageManager and the setup action in CI. Split, they would be two PRs for one upgrade.",
+			"matchManagers": [
+				"npm",
+				"github-actions"
+			],
+			"matchDepNames": [
+				"pnpm",
+				"pnpm/action-setup"
+			],
+			"groupName": "pnpm",
+			"dependencyDashboardApproval": false
+		},
+		{
+			"description": "The pnpm rule above lifts the dashboard gate for the whole group; a pnpm major is a new nixpkgs line (pnpm_NN) and has to wait for it.",
+			"matchManagers": [
+				"npm"
+			],
+			"matchDepNames": [
+				"pnpm"
+			],
+			"matchUpdateTypes": [
+				"major"
+			],
+			"dependencyDashboardApproval": true
+		}
+	],
+	"vulnerabilityAlerts": {
+		"schedule": [
+			"at any time"
+		]
+	}
+}
