@@ -6,7 +6,6 @@ import {
 	canRestart,
 	commitNumber,
 	commitText,
-	logFilter,
 	type AdminData,
 	type Row,
 	type Section,
@@ -15,7 +14,7 @@ import {
 	type TextId,
 	type Words,
 } from "../src/lib/core/server-view.ts";
-import type { LogLine, Title } from "../src/lib/core/types.ts";
+import type { Title } from "../src/lib/core/types.ts";
 
 const now = new Date("2026-11-09T12:00:00Z");
 
@@ -25,22 +24,16 @@ const EN: Record<TextId, string> = {
 	sec_devices: "Devices",
 	sec_transcoding: "Transcoding",
 	sec_library: "Library",
-	sec_logs: "Logs",
 	sec_overview_intro: "What the engine runs.",
 	sec_streams_intro: "Everyone watching right now.",
 	sec_devices_intro: "Apps paired with this server.",
 	sec_transcoding_intro: "When a player can’t decode a file.",
 	sec_library_intro: "The folders the engine serves.",
-	sec_logs_intro: "What the engine writes about itself.",
 	group_streaming: "Streaming",
 	group_library: "Library",
-	group_system: "System",
 	cap_now: "Right now",
 	cap_engine: "Engine",
 	blk_build: "Build & runtime",
-	blk_config: "Set in the config file",
-	blk_config_desc: "Read-only here.",
-	blk_telemetry: "Telemetry & retention",
 	blk_restart: "Restart",
 	blk_waiting: "Waiting for approval",
 	blk_waiting_desc: "Check the code matches the one on the device. Codes expire after 10 minutes.",
@@ -52,11 +45,6 @@ const EN: Record<TextId, string> = {
 	blk_cache: "Cache",
 	blk_cache_desc: "Converted segments are kept while a stream runs.",
 	blk_folders: "Folders",
-	blk_scanning: "Scanning",
-	blk_recent: "Recent",
-	blk_applog: "Application log",
-	blk_accesslog: "Access log",
-	blk_rotation: "Rotation",
 	act_restart_title: "Restart the engine",
 	act_restart_desc: "Streams in progress stop for about 10 seconds.",
 	act_restart: "Restart",
@@ -66,43 +54,28 @@ const EN: Record<TextId, string> = {
 	btn_scan_all: "Scan all",
 	btn_scan: "Scan",
 	btn_scanning: "Scanning…",
-	btn_download: "Download",
 	btn_revoke: "Revoke",
 	tile_streams: "Streams",
 	tile_pairing: "Pairing",
-	tile_storage: "Media storage",
 	tile_health: "Health",
-	tile_url: "Public URL",
-	tile_data: "Data directory",
-	tile_db: "Database",
+	tile_url: "Streamline URL",
 	tile_cache: "Transcode cache",
 	tile_nobody: "Nobody is watching",
 	tile_no_requests: "No requests waiting",
 	tile_https: "Served over HTTPS",
 	tile_http: "Served over HTTP",
-	tile_same_disk: "same disk",
 	tile_empty: "Empty",
 	tile_ffmpeg_missing: "ffmpeg not found",
+	tile_engine_down: "Engine unreachable",
 	health_ok: "All good",
 	health_restart: "Restart needed",
 	status_restarting: "Restarting…",
 	hw_software: "Software encoding",
 	hw_status_desc: "Checked with a short test encode after every change.",
 	kv_version: "Version",
-	kv_go: "Go runtime",
-	kv_platform: "Platform",
-	kv_commit: "Commit",
-	kv_built: "Built",
-	kv_running: "Running",
-	kv_bind: "Bind address",
-	kv_proxies: "Trusted proxies",
-	kv_secret: "Session secret",
-	kv_sink: "Log sink",
 	kv_status: "Status",
 	kv_ffmpeg: "ffmpeg",
-	kv_location: "Location",
 	kv_last_scan: "Last scan",
-	kv_writes: "Writes to",
 	pill_off: "Off",
 	pill_ready: "Ready",
 	pill_not_ready: "Not ready",
@@ -139,36 +112,14 @@ const LABELS: Record<string, string> = {
 	"transcoding.hw_device": "Device",
 	"stream.tonemap": "Convert HDR for SDR screens",
 	"stream.max_live": "Conversions at once",
-	"library.watch": "Watch folders for changes",
-	"library.scan_every": "Full scan every",
-	"ffmpeg.enabled": "Read files with ffprobe",
-	"log.app.level": "Level",
-	"log.app.format": "Format",
-	"log.http.format": "Format",
-	"log.rotate.max_size": "Rotate at",
-	"log.rotate.max_backups": "Files kept",
-	"log.rotate.compress": "Compress rotated files",
-	"otel.endpoint": "OTLP endpoint",
-	"events.retention": "Keep activity events for",
 };
 const DESCS: Record<string, string> = {
-	"events.retention": "2160h is 90 days.",
 	"stream.max_live": "Players past this limit wait for a free slot.",
 };
 const CHOICES: Record<string, string> = {
 	auto: "Auto",
 	none: "Off",
 	vaapi: "VAAPI",
-	"1h": "1 h",
-	"6h": "6 h",
-	"24h": "Day",
-	debug: "Debug",
-	info: "Info",
-	warn: "Warn",
-	error: "Error",
-	text: "Text",
-	json: "JSON",
-	combined: "Combined",
 };
 
 const words: Words = {
@@ -190,9 +141,7 @@ const words: Words = {
 	realtime: (s) => `${s}× realtime`,
 	runtime: (m) => `${Math.floor(m / 60)}h ${String(m % 60).padStart(2, "0")}m`,
 	healthSub: (f, soft) => `ffmpeg ${f} · ${soft ? "software encoding" : "VAAPI ready"}`,
-	freeOf: (a, b) => `${a} free of ${b}`,
 	cacheUsed: (s, n) => `${s} used by ${plural(n, "stream")}.`,
-	uptime: (n, u) => `up ${n} ${u}`,
 	minutesAgo: (n) => `${n} min ago`,
 	hoursAgo: (n) => `${n} h ago`,
 	daysAgo: (n) => `${n} days ago`,
@@ -229,34 +178,20 @@ const find = (kind: string, id: number) => titles[`${kind}:${id}`];
 
 const demo = (): AdminData => ({
 	overview: {
-		server: {
-			version: "2.4.1",
-			go: "go1.25.3",
-			platform: "linux/amd64",
-			commit: "b74309c",
-			built_at: "2026-10-30T18:12:00Z",
-			started_at: "2026-11-08T05:00:00+00:00",
-			config_path: "/etc/streamline/config.yaml",
-			public_url: "https://streamline.home.arpa",
-			https: true,
-			bind_address: "0.0.0.0:8080",
-			trusted_proxies: ["10.0.0.0/8"],
-			session_secret: "/run/secrets/streamline-session",
+		extension: { version: "0.1.0" },
+		engine: {
+			reachable: true,
+			version: "0.4.2",
+			api_version: 1,
+			ffmpeg_version: "7.1",
+			analysis_version: 1,
+			hw: { mode: "vaapi", ready: true },
+			libplacebo: true,
+			dovi_tool: true,
 		},
-		storage: {
-			media: { free: 4500000000000, total: 8000000000000 },
-			data: { path: "/var/lib/streamline", free: 620000000000, total: 1000000000000 },
-			database: { path: "/var/lib/streamline/streamline.db", size: 184000000 },
-			cache: { path: "/var/cache/streamline", size: 3200000000, streams: 3 },
-		},
-		health: {
-			ffmpeg: { path: "/usr/bin/ffmpeg", version: "7.1" },
-			hw: { mode: "vaapi", device: "Intel UHD Graphics 770", ready: true },
-			folders: { reachable: 2, total: 2 },
-			errors_today: 1,
-			errors_source: "scanner",
-		},
-		logs: { app_path: "/var/log/streamline/app.log", http_path: "/var/log/streamline/http.log" },
+		storage: { cache: { size: 3200000000, streams: 3 } },
+		folders: { reachable: 2, total: 2 },
+		streamline_url: "https://streamline.home.arpa",
 	},
 	settings: {
 		values: {
@@ -264,29 +199,18 @@ const demo = (): AdminData => ({
 			"transcoding.hw_device": "/dev/dri/renderD128",
 			"stream.tonemap": true,
 			"stream.max_live": 2,
-			"library.watch": true,
-			"library.scan_every": "6h",
-			"ffmpeg.enabled": true,
-			"log.app.level": "info",
-			"log.app.format": "json",
-			"log.http.format": "combined",
-			"log.rotate.max_size": 50,
-			"log.rotate.max_backups": 5,
-			"log.rotate.compress": true,
-			"otel.endpoint": "",
-			"events.retention": "2160h",
+			"engine.url": "http://engine:8097",
 		},
-		owners: Object.fromEntries(
-			Object.keys(LABELS).map((k) => [
-				k,
-				["transcoding.hw_accel", "transcoding.hw_device", "stream.max_live"].includes(k)
-					? "engine"
-					: "streamline",
-			]),
-		),
-		read_only: { streamline: false, engine: false },
+		owners: {
+			"transcoding.hw_accel": "engine",
+			"transcoding.hw_device": "engine",
+			"stream.tonemap": "engine",
+			"stream.max_live": "engine",
+			"engine.url": "player",
+		},
+		read_only: { engine: false, player: false },
 		pending: [],
-		restart_keys: ["log.app.level", "transcoding.hw_accel"],
+		restart_keys: ["transcoding.hw_accel", "transcoding.hw_device"],
 	},
 	streams: [
 		{
@@ -445,11 +369,11 @@ const hasRestart = (s: Section[]) => JSON.stringify(s).includes('"do":"restart"'
 const all = build();
 same(
 	all.map((s) => s.title),
-	["Overview", "Now playing", "Devices", "Transcoding", "Library", "Logs"],
+	["Overview", "Now playing", "Devices", "Transcoding", "Library"],
 );
 same(
 	all.map((s) => s.group),
-	["", "Streaming", "Streaming", "Streaming", "Library", "System"],
+	["", "Streaming", "Streaming", "Streaming", "Library"],
 );
 eq(section(all, "streams").count, 3);
 eq(section(all, "devices").badge, 1);
@@ -461,17 +385,17 @@ eq(tile("Streams").value, "3");
 eq(tile("Streams").sub, "1 transcoding · 29.9 Mbps out");
 eq(tile("Pairing").value, "1");
 eq(tile("Pairing").sub, "iPad mini");
-eq(tile("Media storage").value, "44%");
-eq(tile("Media storage").sub, "4.5 TB free of 8 TB");
-eq(tile("Media storage").pct, 44);
 eq(tile("Health").value, "All good");
 eq(tile("Health").sub, "ffmpeg 7.1 · VAAPI ready");
-eq(tile("Data directory").sub, "620 GB free of 1 TB");
-eq(tile("Data directory").pct, 38);
-eq(tile("Database").sub, "184 MB · same disk");
-eq(tile("Transcode cache").sub, "3.2 GB · 3 streams");
-eq(tile("Public URL").mono, true);
-eq(tile("Public URL").sub, "Served over HTTPS");
+eq(tile("Transcode cache").value, "3.2 GB");
+eq(tile("Transcode cache").sub, "3 streams");
+eq(tile("Streamline URL").mono, true);
+eq(tile("Streamline URL").value, "https://streamline.home.arpa");
+eq(tile("Streamline URL").sub, "Served over HTTPS");
+eq(
+	tiles.some((t) => ["Media storage", "Data directory", "Database"].includes(t.label)),
+	false,
+);
 
 const build_ = titled(section(all, "overview"), "Build & runtime").rows as Extract<
 	Row,
@@ -480,27 +404,52 @@ const build_ = titled(section(all, "overview"), "Build & runtime").rows as Extra
 same(
 	build_.map((r) => [r.label, r.value]),
 	[
-		["Version", "Streamline Server 2.4.1"],
-		["Go runtime", "go1.25.3"],
-		["Platform", "linux/amd64"],
-		["Commit", "b74309c"],
-		["Built", "2026-10-30 18:12 UTC"],
-		["Running", "up 31 h"],
+		["Version", "Player extension 0.1.0"],
+		["Engine", "0.4.2 (API 1)"],
+		["ffmpeg", "7.1"],
 	],
 );
-const old = demo();
-old.overview.server.started_at = "2026-11-06T12:00:00Z";
-eq(
-	(titled(section(build(old), "overview"), "Build & runtime").rows[5] as { value: string }).value,
-	"up 3 d",
-);
-const config = titled(section(all, "overview"), "Set in the config file").rows as Extract<
-	Row,
-	{ t: "kv" }
->[];
+const noEngine = demo();
+noEngine.overview.engine = { reachable: false };
+noEngine.overview.storage = {};
+const downOverview = section(build(noEngine), "overview");
 same(
-	config.map((r) => r.value),
-	["0.0.0.0:8080", "10.0.0.0/8", "/run/secrets/streamline-session", "info / json"],
+	(titled(downOverview, "Build & runtime").rows as Extract<Row, { t: "kv" }>[]).map((r) => r.label),
+	["Version"],
+);
+const downTiles = kinds(rows(downOverview), "tiles").flatMap((t) => t.tiles);
+const downHealth = must(downTiles.find((t) => t.label === "Health"));
+same([downHealth.value, downHealth.tone], ["Engine unreachable", "err"]);
+eq(
+	downTiles.some((t) => t.label === "Transcode cache"),
+	false,
+);
+same(titled(section(build(noEngine), "transcoding"), "Cache").rows, [
+	{ t: "note", tone: "warn", text: "Engine unreachable" },
+]);
+const soft0 = build(noEngine);
+eq(setting(soft0, "transcoding.hw_accel").value, "auto");
+eq(setting(soft0, "stream.tonemap").value, true);
+const emptyCache = demo();
+must(emptyCache.overview.storage.cache).size = 0;
+eq(
+	must(
+		kinds(rows(section(build(emptyCache), "overview")), "tiles")
+			.flatMap((t) => t.tiles)
+			.find((t) => t.label === "Transcode cache"),
+	).value,
+	"Empty",
+);
+eq(must(tiles.find((t) => t.label === "Streamline URL")).tone, "ok");
+const plainHttp = demo();
+plainHttp.overview.streamline_url = "http://10.0.0.2:8080";
+eq(
+	must(
+		kinds(rows(section(build(plainHttp), "overview")), "tiles")
+			.flatMap((t) => t.tiles)
+			.find((t) => t.label === "Streamline URL"),
+	).sub,
+	"Served over HTTP",
 );
 
 const stream = (s: Section[], id: string) =>
@@ -635,7 +584,7 @@ eq((hwRows[1] as { disabled: boolean }).disabled, false);
 same(hwRows[2], {
 	t: "kv",
 	label: "Status",
-	value: "Intel UHD Graphics 770",
+	value: "VAAPI",
 	pill: ["Ready", "ok"],
 	desc: EN.hw_status_desc,
 });
@@ -661,7 +610,7 @@ eq(
 );
 for (const patch of [{ ready: false }, { mode: "software" as const }]) {
 	const d = demo();
-	Object.assign(d.overview.health.hw, patch);
+	Object.assign(must(d.overview.engine.hw), patch);
 	eq(
 		must(
 			kinds(rows(section(build(d), "overview")), "tiles")
@@ -671,27 +620,22 @@ for (const patch of [{ ready: false }, { mode: "software" as const }]) {
 		"ffmpeg 7.1 · software encoding",
 	);
 }
-const noName = demo();
-delete noName.overview.health.hw.device;
-eq(
-	(
-		titled(section(build(noName), "transcoding"), "Hardware acceleration").rows[2] as {
-			value: string;
-		}
-	).value,
-	"VAAPI",
-);
+const softMode = demo();
+must(softMode.overview.engine.hw).mode = "software";
+same(titled(section(build(softMode), "transcoding"), "Hardware acceleration").rows[2], {
+	t: "kv",
+	label: "Status",
+	value: "Software encoding",
+	pill: ["Ready", "ok"],
+	desc: EN.hw_status_desc,
+});
 eq(setting(all, "stream.max_live").min, 1);
 eq(setting(all, "stream.max_live").max, 8);
-eq(setting(all, "log.rotate.max_size").unit, "MB");
-eq(setting(all, "otel.endpoint").allowEmpty, true);
-eq(setting(all, "otel.endpoint").placeholder, "localhost:4318");
-eq(setting(all, "events.retention").desc, "2160h is 90 days.");
 const cache = titled(tr, "Cache").rows;
-eq((cache[1] as { desc: string }).desc, "3.2 GB used by 3 streams.");
+eq((cache[0] as { desc: string }).desc, "3.2 GB used by 3 streams.");
 const cleared = demo();
 cleared.cacheCleared = true;
-same(titled(section(build(cleared), "transcoding"), "Cache").rows[1], {
+same(titled(section(build(cleared), "transcoding"), "Cache").rows[0], {
 	t: "note",
 	tone: "ok",
 	text: EN.note_cache_cleared,
@@ -721,32 +665,20 @@ eq(scanned.aside, "50% · 0:08 left");
 eq(scanned.progress, 0.5);
 eq(item(titled(section(build(scanning), "library"), "Folders"), "Series").progress, undefined);
 
-const lg = section(all, "logs");
-same(titled(lg, "Recent").rows, [{ t: "logs" }]);
-eq(titled(lg, "Recent").button?.label, "Download");
-same(
-	(setting(all, "log.app.level").options ?? []).map((o) => o[0]),
-	["debug", "info", "warn", "error"],
-);
-eq(
-	must(kinds(titled(lg, "Application log").rows, "kv").at(-1)).value,
-	"/var/log/streamline/app.log",
-);
-
 for (const r of all.flatMap(rows)) if ("restart" in r) eq(r.restart, false);
 eq(hasRestart(all), true);
 const waiting = demo();
-waiting.settings.pending = ["log.app.level", "otel.endpoint"];
+waiting.settings.pending = ["transcoding.hw_accel", "stream.tonemap"];
 const waitAll = build(waiting);
-eq(setting(waitAll, "log.app.level").restart, true);
-eq(setting(waitAll, "otel.endpoint").restart, true);
-eq(setting(waitAll, "log.app.format").restart, false);
+eq(setting(waitAll, "transcoding.hw_accel").restart, true);
+eq(setting(waitAll, "stream.tonemap").restart, true);
+eq(setting(waitAll, "stream.max_live").restart, false);
 const ov = section(waitAll, "overview");
 same(must(ov.blocks[1]).rows, [
 	{
 		t: "note",
 		tone: "warn",
-		text: "2 changes only apply after a restart: log.app.level, otel.endpoint.",
+		text: "2 changes only apply after a restart: transcoding.hw_accel, stream.tonemap.",
 		button: ["Restart now", { do: "restart" }],
 	},
 ]);
@@ -762,27 +694,27 @@ same(status(waiting, false, words), { label: "Restart needed", tone: "warn" });
 same(status(waiting, true, words), { label: "Restarting…", tone: "warn" });
 same(status(demo(), false, words), { label: "All good", tone: "ok" });
 const one = demo();
-one.settings.pending = ["log.app.level"];
+one.settings.pending = ["stream.tonemap"];
 eq(
 	(must(section(build(one), "overview").blocks[1]).rows[0] as { text: string }).text,
-	"1 change only applies after a restart: log.app.level.",
+	"1 change only applies after a restart: stream.tonemap.",
 );
 
 const locked = demo();
 locked.settings.read_only.engine = true;
+locked.settings.pending = ["stream.tonemap"];
 const lockedAll = build(locked);
-for (const key of ["transcoding.hw_accel", "transcoding.hw_device", "stream.max_live"])
+for (const key of [
+	"transcoding.hw_accel",
+	"transcoding.hw_device",
+	"stream.tonemap",
+	"stream.max_live",
+])
 	eq(setting(lockedAll, key).locked, true, key);
-for (const key of ["stream.tonemap", "log.app.level", "otel.endpoint"])
-	eq(setting(lockedAll, key).locked, false, key);
-eq(canRestart(locked.settings), true);
-eq(hasRestart(lockedAll), true);
-locked.settings.read_only.streamline = true;
-locked.settings.pending = ["log.app.level"];
-const bothAll = build(locked);
-for (const r of bothAll.flatMap(rows)) if ("locked" in r) eq(r.locked, true);
 eq(canRestart(locked.settings), false);
-eq(hasRestart(bothAll), false);
+eq(hasRestart(lockedAll), false);
+eq(canRestart(demo().settings), true);
+for (const r of build().flatMap(rows)) if ("locked" in r) eq(r.locked, false);
 
 const during = sections(one, find, now, "en", words, true);
 const duringNote = must(section(during, "overview").blocks[1]).rows[0] as {
@@ -811,18 +743,5 @@ eq(commitNumber("", 1, 8), null);
 eq(commitText("  ", false), null);
 eq(commitText("", true), "");
 eq(commitText(" a ", false), "a");
-
-const line = (id: number, level: LogLine["level"]) =>
-	({ id, at: "2026-11-09T10:00:00Z", level, source: "x", message: "m" }) as LogLine;
-const lines = [line(4, "error"), line(3, "warn"), line(2, "info"), line(1, "debug")];
-same(logFilter(lines, "all").length, 4);
-same(
-	logFilter(lines, "warn").map((l) => l.id),
-	[4, 3],
-);
-same(
-	logFilter(lines, "error").map((l) => l.id),
-	[4],
-);
 
 console.log("server-view-check: ok");

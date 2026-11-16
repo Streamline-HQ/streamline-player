@@ -7,13 +7,11 @@ import type {
 	AdminSettings,
 	AdminStream,
 	Kind,
-	LogLevel,
-	LogLine,
 	SettingValue,
 	Title,
 } from "#lib/core/types.ts";
 
-export type SectionKey = "overview" | "streams" | "devices" | "transcoding" | "library" | "logs";
+export type SectionKey = "overview" | "streams" | "devices" | "transcoding" | "library";
 export type Tone = "ok" | "warn" | "err" | "accent" | "muted";
 
 export type Act =
@@ -24,8 +22,7 @@ export type Act =
 	| { do: "end"; id: string }
 	| { do: "restart" }
 	| { do: "clearcache" }
-	| { do: "scan"; folder?: string }
-	| { do: "download" };
+	| { do: "scan"; folder?: string };
 
 type Button = { label: string; act: Act; tone: "ghost" | "danger"; disabled: boolean };
 type Tile = {
@@ -98,8 +95,7 @@ export type Row =
 	  }
 	| { t: "pair"; code: string; device: string; icon: string; sub: string }
 	| { t: "note"; tone: Tone; text: string; button?: [string, Act]; disabled?: boolean }
-	| { t: "tiles"; tiles: Tile[] }
-	| { t: "logs" };
+	| { t: "tiles"; tiles: Tile[] };
 
 export type Block = {
 	cap?: string;
@@ -142,13 +138,9 @@ export type TextId =
 	| Section_
 	| "group_streaming"
 	| "group_library"
-	| "group_system"
 	| "cap_now"
 	| "cap_engine"
 	| "blk_build"
-	| "blk_config"
-	| "blk_config_desc"
-	| "blk_telemetry"
 	| "blk_restart"
 	| "blk_waiting"
 	| "blk_waiting_desc"
@@ -160,11 +152,6 @@ export type TextId =
 	| "blk_cache"
 	| "blk_cache_desc"
 	| "blk_folders"
-	| "blk_scanning"
-	| "blk_recent"
-	| "blk_applog"
-	| "blk_accesslog"
-	| "blk_rotation"
 	| "act_restart_title"
 	| "act_restart_desc"
 	| "act_restart"
@@ -174,43 +161,28 @@ export type TextId =
 	| "btn_scan_all"
 	| "btn_scan"
 	| "btn_scanning"
-	| "btn_download"
 	| "btn_revoke"
 	| "tile_streams"
 	| "tile_pairing"
-	| "tile_storage"
 	| "tile_health"
 	| "tile_url"
-	| "tile_data"
-	| "tile_db"
 	| "tile_cache"
 	| "tile_nobody"
 	| "tile_no_requests"
 	| "tile_https"
 	| "tile_http"
-	| "tile_same_disk"
 	| "tile_empty"
 	| "tile_ffmpeg_missing"
+	| "tile_engine_down"
 	| "health_ok"
 	| "health_restart"
 	| "status_restarting"
 	| "hw_software"
 	| "hw_status_desc"
 	| "kv_version"
-	| "kv_go"
-	| "kv_platform"
-	| "kv_commit"
-	| "kv_built"
-	| "kv_running"
-	| "kv_bind"
-	| "kv_proxies"
-	| "kv_secret"
-	| "kv_sink"
 	| "kv_status"
 	| "kv_ffmpeg"
-	| "kv_location"
 	| "kv_last_scan"
-	| "kv_writes"
 	| "pill_off"
 	| "pill_ready"
 	| "pill_not_ready"
@@ -261,9 +233,7 @@ export type Words = {
 	realtime(speed: string): string;
 	runtime(min: number): string;
 	healthSub(ffmpeg: string, software: boolean): string;
-	freeOf(free: string, total: string): string;
 	cacheUsed(size: string, streams: number): string;
-	uptime(n: number, unit: "h" | "d"): string;
 	minutesAgo(n: number): string;
 	hoursAgo(n: number): string;
 	daysAgo(n: number): string;
@@ -311,18 +281,6 @@ export function ago(iso: string, now: Date, w: Words) {
 	return w.daysAgo(days);
 }
 
-export function uptime(startedAt: string, now: Date, w: Words) {
-	const hours = Math.max(0, Math.floor((now.getTime() - Date.parse(startedAt)) / 3.6e6));
-	return hours < 48 ? w.uptime(hours, "h") : w.uptime(Math.floor(hours / 24), "d");
-}
-
-const builtText = (iso: string) => {
-	const d = new Date(iso);
-	return Number.isNaN(d.getTime())
-		? iso
-		: `${d.toISOString().slice(0, 10)} ${d.toISOString().slice(11, 16)} UTC`;
-};
-
 const deviceIcon = (platform: string, name: string, browser: boolean) => {
 	const p = platform.toLowerCase();
 	if (browser) return "globe";
@@ -332,7 +290,7 @@ const deviceIcon = (platform: string, name: string, browser: boolean) => {
 	return "monitor";
 };
 
-export const canRestart = (s: AdminSettings) => !(s.read_only.streamline && s.read_only.engine);
+export const canRestart = (s: AdminSettings) => !s.read_only.engine;
 
 export function commitNumber(raw: string, min: number, max: number): number | null {
 	const text = raw.trim();
@@ -345,14 +303,6 @@ export function commitNumber(raw: string, min: number, max: number): number | nu
 export function commitText(raw: string, allowEmpty: boolean): string | null {
 	const text = raw.trim();
 	return text === "" && !allowEmpty ? null : text;
-}
-
-const RANK: Record<LogLevel, number> = { debug: 0, info: 1, warn: 2, error: 3 };
-
-export function logFilter(lines: LogLine[], level: "all" | "warn" | "error") {
-	if (level === "all") return lines;
-	const floor = level === "warn" ? RANK.warn : RANK.error;
-	return lines.filter((l) => RANK[l.level] >= floor);
 }
 
 export function status(d: AdminData, restarting: boolean, w: Words): { label: string; tone: Tone } {
@@ -428,7 +378,7 @@ export function sections(
 			...(options ? { options: options.map((o): [string, string] => [o, w.choice(key, o)]) } : {}),
 			...rest,
 			disabled: disabled ?? false,
-			locked: !!s.read_only[s.owners[key] ?? "streamline"],
+			locked: !!s.read_only[s.owners[key] ?? "player"],
 			restart: pending.includes(key),
 		};
 	};
@@ -519,11 +469,10 @@ export function sections(
 	const apps = ordered.filter((x) => x.kind === "app");
 	const browsers = ordered.filter((x) => x.kind === "browser");
 	const first = d.pairings[0];
-	const hw = o.health.hw;
-	const ffmpeg = o.health.ffmpeg;
-	const used = (m: { free: number; total: number }) =>
-		m.total > 0 ? Math.round(((m.total - m.free) / m.total) * 100) : 0;
-	const sameDisk = o.storage.database.path.startsWith(o.storage.data.path);
+	const hw = o.engine.hw;
+	const engineUp = o.engine.reachable;
+	const cache = o.storage.cache;
+	const hwSoftware = hwOff || !hw || !hw.ready || hw.mode === "software";
 
 	const tile = (t: Omit<Tile, "mono"> & { mono?: boolean }): Tile => ({ mono: false, ...t });
 
@@ -550,15 +499,6 @@ export function sections(
 						go: "devices",
 						tone: first ? "accent" : "muted",
 					}),
-					tile({
-						icon: "hard-drive",
-						label: w.t("tile_storage"),
-						value: `${used(o.storage.media)}%`,
-						pct: used(o.storage.media),
-						sub: w.freeOf(size(o.storage.media.free), size(o.storage.media.total)),
-						go: "library",
-						tone: "ok",
-					}),
 					restartOn
 						? tile({
 								icon: "triangle-alert",
@@ -568,25 +508,29 @@ export function sections(
 								go: "overview",
 								tone: "warn",
 							})
-						: tile({
-								icon: "circle-check",
-								label: w.t("tile_health"),
-								value: w.t("health_ok"),
-								sub: ffmpeg
-									? w.healthSub(
-											ffmpeg.version,
-											hwOff || !o.health.hw.ready || o.health.hw.mode === "software",
-										)
-									: w.t("tile_ffmpeg_missing"),
-								go: "logs",
-								tone: ffmpeg ? "ok" : "warn",
-							}),
+						: !engineUp
+							? tile({
+									icon: "triangle-alert",
+									label: w.t("tile_health"),
+									value: w.t("tile_engine_down"),
+									sub: "",
+									tone: "err",
+								})
+							: tile({
+									icon: "circle-check",
+									label: w.t("tile_health"),
+									value: w.t("health_ok"),
+									sub: o.engine.ffmpeg_version
+										? w.healthSub(o.engine.ffmpeg_version, hwSoftware)
+										: w.t("tile_ffmpeg_missing"),
+									tone: o.engine.ffmpeg_version ? "ok" : "warn",
+								}),
 				],
 			},
 		],
 	});
 
-	const cacheEmpty = d.cacheCleared;
+	const httpsUrl = o.streamline_url.startsWith("https:");
 	const engineTiles: Block = block({
 		bare: true,
 		cap: w.t("cap_engine"),
@@ -597,40 +541,22 @@ export function sections(
 					tile({
 						icon: "globe",
 						label: w.t("tile_url"),
-						value: o.server.public_url,
+						value: o.streamline_url,
 						mono: true,
-						sub: w.t(o.server.https ? "tile_https" : "tile_http"),
-						tone: o.server.https ? "ok" : "warn",
+						sub: w.t(httpsUrl ? "tile_https" : "tile_http"),
+						tone: httpsUrl ? "ok" : "warn",
 					}),
-					tile({
-						icon: "folder",
-						label: w.t("tile_data"),
-						value: o.storage.data.path,
-						mono: true,
-						pct: used(o.storage.data),
-						sub: w.freeOf(size(o.storage.data.free), size(o.storage.data.total)),
-						tone: "ok",
-					}),
-					tile({
-						icon: "layers",
-						label: w.t("tile_db"),
-						value: o.storage.database.path,
-						mono: true,
-						sub: sameDisk
-							? `${size(o.storage.database.size)} · ${w.t("tile_same_disk")}`
-							: size(o.storage.database.size),
-						tone: "ok",
-					}),
-					tile({
-						icon: "cpu",
-						label: w.t("tile_cache"),
-						value: o.storage.cache.path,
-						mono: true,
-						sub: cacheEmpty
-							? w.t("tile_empty")
-							: `${size(o.storage.cache.size)} · ${w.streamCount(o.storage.cache.streams)}`,
-						tone: "ok",
-					}),
+					...(cache
+						? [
+								tile({
+									icon: "cpu",
+									label: w.t("tile_cache"),
+									value: d.cacheCleared || cache.size === 0 ? w.t("tile_empty") : size(cache.size),
+									sub: d.cacheCleared ? "" : w.streamCount(cache.streams),
+									tone: "ok",
+								}),
+							]
+						: []),
 				],
 			},
 		],
@@ -649,29 +575,16 @@ export function sections(
 			block({
 				title: w.t("blk_build"),
 				rows: [
-					kv(w.t("kv_version"), `Streamline Server ${o.server.version}`),
-					kv(w.t("kv_go"), o.server.go),
-					kv(w.t("kv_platform"), o.server.platform),
-					kv(w.t("kv_commit"), o.server.commit),
-					kv(w.t("kv_built"), builtText(o.server.built_at)),
-					kv(w.t("kv_running"), uptime(o.server.started_at, now, w)),
-				],
-			}),
-			block({
-				title: w.t("blk_config"),
-				desc: w.t("blk_config_desc"),
-				rows: [
-					kv(w.t("kv_bind"), o.server.bind_address),
-					kv(w.t("kv_proxies"), o.server.trusted_proxies.join(", ")),
-					kv(w.t("kv_secret"), o.server.session_secret),
-					kv(w.t("kv_sink"), `${v("log.app.level")} / ${v("log.app.format")}`),
-				],
-			}),
-			block({
-				title: w.t("blk_telemetry"),
-				rows: [
-					setting("text", "otel.endpoint", { placeholder: "localhost:4318", allowEmpty: true }),
-					setting("text", "events.retention", { placeholder: "2160h" }),
+					kv(w.t("kv_version"), `Player extension ${o.extension.version}`),
+					...(engineUp
+						? [
+								kv(
+									w.t("cap_engine"),
+									`${o.engine.version ?? "—"}${o.engine.api_version === undefined ? "" : ` (API ${o.engine.api_version})`}`,
+								),
+								kv(w.t("kv_ffmpeg"), o.engine.ffmpeg_version ?? "—"),
+							]
+						: []),
 				],
 			}),
 			...(restartable
@@ -792,7 +705,6 @@ export function sections(
 		],
 	};
 
-	const hwReady = hw.ready;
 	const transcoding: Section = {
 		key: "transcoding",
 		group: w.t("group_streaming"),
@@ -808,10 +720,10 @@ export function sections(
 						placeholder: "/dev/dri/renderD128",
 						disabled: hwOff,
 					}),
-					kv(w.t("kv_status"), hwOff ? w.t("hw_software") : (hw.device ?? w.t("vaapi")), {
+					kv(w.t("kv_status"), hwSoftware ? w.t("hw_software") : w.t("vaapi"), {
 						pill: hwOff
 							? [w.t("pill_off"), "muted"]
-							: hwReady
+							: hw?.ready
 								? [w.t("pill_ready"), "ok"]
 								: [w.t("pill_not_ready"), "warn"],
 						desc: w.t("hw_status_desc"),
@@ -823,8 +735,10 @@ export function sections(
 				rows: [
 					setting("toggle", "stream.tonemap"),
 					setting("num", "stream.max_live", { min: 1, max: 8 }),
-					kv(w.t("kv_ffmpeg"), ffmpeg ? `${ffmpeg.path} · ${ffmpeg.version}` : "—", {
-						pill: ffmpeg ? [w.t("pill_found"), "ok"] : [w.t("pill_not_found"), "err"],
+					kv(w.t("kv_ffmpeg"), o.engine.ffmpeg_version ?? "—", {
+						pill: o.engine.ffmpeg_version
+							? [w.t("pill_found"), "ok"]
+							: [w.t("pill_not_found"), "err"],
 					}),
 				],
 			}),
@@ -832,17 +746,18 @@ export function sections(
 				title: w.t("blk_cache"),
 				desc: w.t("blk_cache_desc"),
 				rows: [
-					kv(w.t("kv_location"), o.storage.cache.path),
 					d.cacheCleared
 						? note("ok", w.t("note_cache_cleared"))
-						: {
-								t: "action",
-								label: w.t("act_cache_title"),
-								desc: w.cacheUsed(size(o.storage.cache.size), o.storage.cache.streams),
-								button: w.t("act_clear"),
-								act: { do: "clearcache" },
-								tone: "ghost",
-							},
+						: cache
+							? {
+									t: "action",
+									label: w.t("act_cache_title"),
+									desc: w.cacheUsed(size(cache.size), cache.streams),
+									button: w.t("act_clear"),
+									act: { do: "clearcache" },
+									tone: "ghost",
+								}
+							: note("warn", w.t("tile_engine_down")),
 				],
 			}),
 		],
@@ -920,63 +835,8 @@ export function sections(
 						: []),
 				],
 			}),
-			block({
-				title: w.t("blk_scanning"),
-				rows: [
-					setting("toggle", "library.watch"),
-					setting("choice", "library.scan_every", { options: ["1h", "6h", "24h"] }),
-					setting("toggle", "ffmpeg.enabled"),
-				],
-			}),
 		],
 	};
 
-	const logs: Section = {
-		key: "logs",
-		group: w.t("group_system"),
-		title: w.t("sec_logs"),
-		icon: "text",
-		intro: w.t("sec_logs_intro"),
-		blocks: [
-			block({
-				title: w.t("blk_recent"),
-				button: { label: w.t("btn_download"), icon: "download", act: { do: "download" } },
-				rows: [{ t: "logs" }],
-			}),
-			block({
-				title: w.t("blk_applog"),
-				rows: [
-					setting("choice", "log.app.level", { options: ["debug", "info", "warn", "error"] }),
-					setting("choice", "log.app.format", { options: ["text", "json"] }),
-					kv(w.t("kv_writes"), o.logs.app_path),
-				],
-			}),
-			block({
-				title: w.t("blk_accesslog"),
-				rows: [
-					setting("choice", "log.http.format", { options: ["json", "combined"] }),
-					kv(w.t("kv_writes"), o.logs.http_path),
-				],
-			}),
-			block({
-				title: w.t("blk_rotation"),
-				rows: [
-					setting("num", "log.rotate.max_size", { min: 1, max: 1024, unit: "MB" }),
-					setting("num", "log.rotate.max_backups", { min: 0, max: 100 }),
-					setting("toggle", "log.rotate.compress"),
-				],
-			}),
-		],
-	};
-
-	return [overview, streams, devices, transcoding, library, logs];
-}
-
-export function logTime(iso: string, locale: string) {
-	return new Date(iso).toLocaleTimeString(dateLocale(locale), {
-		hour: "2-digit",
-		minute: "2-digit",
-		second: "2-digit",
-		hourCycle: "h23",
-	});
+	return [overview, streams, devices, transcoding, library];
 }

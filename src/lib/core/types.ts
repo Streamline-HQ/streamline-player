@@ -96,12 +96,16 @@ export type DecisionOption = {
 };
 
 export type Me = {
+	id: number;
 	name: string;
 	email: string;
+	/** `Admin` or `Member`. */
 	role: string;
 	library_language?: string;
 	picture: boolean;
 	initials: string;
+	/** The Streamline the extension runs in; its account page is `{streamline_url}/account`. */
+	streamline_url: string;
 };
 export type Featured = {
 	kind: Kind;
@@ -181,48 +185,35 @@ export type AuthState = {
 	store_error: string | null;
 };
 
-export type SettingValue = string | number | boolean;
-export type SettingOwner = "streamline" | "engine";
+export type SettingValue = string | number | boolean | string[];
+export type SettingOwner = "engine" | "player";
 export type AdminSettings = {
 	values: Record<string, SettingValue>;
 	owners: Record<string, SettingOwner>;
-	read_only: { streamline: boolean; engine: boolean };
+	read_only: { engine: boolean; player: boolean };
 	/** Saved, applied after a restart. */
 	pending: string[];
 	restart_keys: string[];
 };
-/** Sizes are bytes. */
+/** Sizes are bytes. The fields of an engine that does not answer are absent, bar `reachable: false`. */
 export type AdminOverview = {
-	server: {
-		version: string;
-		go: string;
-		platform: string;
-		commit: string;
-		built_at: string;
-		started_at: string;
-		config_path: string;
-		public_url: string;
-		player_url?: string;
-		https: boolean;
-		bind_address: string;
-		trusted_proxies: string[];
-		session_secret: string;
+	extension: { version: string };
+	engine: {
+		reachable: boolean;
+		version?: string;
+		api_version?: number;
+		ffmpeg_version?: string;
+		analysis_version?: number;
+		hw?: { mode: "vaapi" | "software"; ready: boolean };
+		libplacebo?: boolean;
+		dovi_tool?: boolean;
 	};
-	storage: {
-		media: { free: number; total: number };
-		data: { path: string; free: number; total: number };
-		database: { path: string; size: number };
-		cache: { path: string; size: number; streams: number };
-	};
-	health: {
-		ffmpeg: { path: string; version: string } | null;
-		hw: { mode: "vaapi" | "software"; device?: string; ready: boolean };
-		folders: { reachable: number; total: number };
-		errors_today: number;
-		errors_source?: string;
-	};
-	logs: { app_path: string; http_path: string };
+	storage: { cache?: { size: number; streams: number } };
+	folders: { reachable: number; total: number };
+	streamline_url: string;
 };
+export type AdminUser = { id: number; name: string; role: string };
+export type EngineSecretStatus = { set: boolean; created_at?: string };
 export type AdminStream = {
 	id: string;
 	user: { name: string; you: boolean };
@@ -272,14 +263,6 @@ export type AdminLibrary = {
 		scan?: { progress: number; eta_seconds: number };
 	}[];
 	last_scan?: { at: string; added: number; replaced: number; errors: number };
-};
-export type LogLevel = "debug" | "info" | "warn" | "error";
-export type LogLine = {
-	id: number;
-	at: string;
-	level: LogLevel;
-	source: string;
-	message: string;
 };
 
 export type DownloadQuality = "original" | "1080p" | "720p";

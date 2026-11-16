@@ -8,7 +8,6 @@ import {
 	loadAdmin,
 	refreshAdmin,
 	refreshLibrary,
-	refreshLogs,
 	resetAdmin,
 	resolvePairing,
 	restart,
@@ -16,7 +15,6 @@ import {
 	revoke,
 	save,
 	scan,
-	setLevel,
 	stop,
 	tickStreams,
 } from "#lib/core/admin.svelte.ts";
@@ -63,7 +61,6 @@ const TOP = 92;
 const SPY_OFFSET = 120;
 const REFRESH_MS = 10_000;
 const SCAN_POLL_MS = 1_000;
-const LOGS_MS = 3000;
 const TICK_MS = 1000;
 const libraryPort = { library, watchState, home, title: fetchTitle };
 
@@ -81,9 +78,7 @@ const words = $derived(serverWords());
 const data = $derived(admin.data);
 const secs = $derived(data ? sections(data, find, now, getLocale(), words, admin.restarting) : []);
 const health = $derived(data ? status(data, admin.restarting, words) : null);
-const readOnly = $derived(
-	!!data && (data.settings.read_only.streamline || data.settings.read_only.engine),
-);
+const readOnly = $derived(!!data && data.settings.read_only.engine);
 const groups = $derived(
 	secs.reduce<{ name: string; items: typeof secs }[]>((out, s) => {
 		const g = out.find((x) => x.name === s.group);
@@ -198,13 +193,20 @@ function askStop(id: string) {
 	});
 }
 
+/** Until the screen lets the admin pick the person, a device is approved for the signed-in admin. */
+async function ownUserId(name: string) {
+	const user = (await adminPort.adminUsers()).find((u) => u.name === name);
+	if (!user) throw new Error("no such user");
+	return user.id;
+}
+
 async function pair(code: string, approve: boolean) {
 	const found = data?.pairings.find((p) => p.user_code === code);
 	if (!found || !data) return;
 	const who = account.me?.name ?? "";
 	const result = await resolvePairing(
 		{
-			approvePairing: (c) => adminResolvePairing(c, true),
+			approvePairing: async (c) => adminResolvePairing(c, true, await ownUserId(who)),
 			denyPairing: (c) => adminResolvePairing(c, false),
 		},
 		code,
@@ -277,17 +279,9 @@ async function startScan(folder: string | undefined) {
 }
 
 async function cache() {
-	const size = data?.overview.storage.cache.size ?? 0;
+	const size = data?.overview.storage.cache?.size ?? 0;
 	if (!(await clearCache(adminPort))) return fail();
 	toast(i18n.server_toast_cache({ size: sizeText(size, getLocale(), words) }));
-}
-
-async function download() {
-	try {
-		toast(i18n.server_toast_downloaded({ name: await adminPort.adminLogsDownload() }));
-	} catch {
-		fail();
-	}
 }
 
 async function act(a: Act) {
@@ -301,7 +295,6 @@ async function act(a: Act) {
 	} else if (a.do === "restart") askRestart();
 	else if (a.do === "clearcache") await cache();
 	else if (a.do === "scan") await startScan(a.folder);
-	else if (a.do === "download") await download();
 }
 
 const handlers: Handlers = {
@@ -378,14 +371,12 @@ onMount(() => {
 		refreshAdmin(adminPort);
 	}, REFRESH_MS);
 	const scans = setInterval(() => visible() && pollScans(), SCAN_POLL_MS);
-	const logs = setInterval(() => visible() && refreshLogs(adminPort), LOGS_MS);
 	const tick = setInterval(tickStreams, TICK_MS);
 	const box = getScroll?.();
 	box?.addEventListener("scroll", spy, { passive: true });
 	return () => {
 		clearInterval(refresh);
 		clearInterval(scans);
-		clearInterval(logs);
 		clearInterval(tick);
 		box?.removeEventListener("scroll", spy);
 	};
@@ -452,23 +443,14 @@ onMount(() => {
 								<p>{sec.intro}</p>
 							</div>
 						{/if}
-						<ServerBlock
-							{block}
-							h={handlers}
-							drafts={admin.drafts}
-							logs={admin.logs}
-							level={admin.level}
-							live={admin.live}
-							onlevel={(l) => setLevel(adminPort, l)}
-							onlive={() => (admin.live = !admin.live)}
-						/>
+						<ServerBlock {block} h={handlers} drafts={admin.drafts} />
 					{/each}
 				{/each}
 			</div>
 			<div class="foot">
 				{i18n.server_footer({
-					version: data.overview.server.version,
-					config: data.overview.server.config_path,
+					version: data.overview.extension.version,
+					config: data.overview.streamline_url,
 				})}
 			</div>
 		</main>

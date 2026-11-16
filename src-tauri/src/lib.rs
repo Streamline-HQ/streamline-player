@@ -117,35 +117,6 @@ impl Api {
         c.clone()
     }
 
-    /// A call whose answer is a file: the bytes and the name its `Content-Disposition` gives.
-    async fn call_file(&self, path: &str) -> Result<(Vec<u8>, Option<String>), String> {
-        let conn = self.conn().await;
-        let Some(server) = conn.server else {
-            return Err(json!({ "error": { "code": "no_server" } }).to_string());
-        };
-        let mut req = self.http.get(format!("{server}/extensions/player{path}"));
-        if let Some(key) = &conn.key {
-            req = req.header("X-API-Key", key);
-        }
-        let resp = req.send().await.map_err(|e| e.to_string())?;
-        let status = resp.status();
-        let disposition = resp
-            .headers()
-            .get(reqwest::header::CONTENT_DISPOSITION)
-            .and_then(|v| v.to_str().ok())
-            .map(str::to_owned);
-        let bytes = resp.bytes().await.map_err(|e| e.to_string())?;
-        if status == reqwest::StatusCode::UNAUTHORIZED && conn.key.is_some() {
-            self.forget_key().await;
-            let _ = self.app.emit("signed-out", ());
-        }
-        if status.is_success() {
-            Ok((bytes.to_vec(), disposition))
-        } else {
-            Err(String::from_utf8_lossy(&bytes).into_owned())
-        }
-    }
-
     fn set_server(&self, url: String) {
         self.conn.write().unwrap().server = Some(url);
     }
@@ -274,23 +245,6 @@ async fn me(api: tauri::State<'_, Api>) -> Result<Value, String> {
 #[tauri::command]
 async fn home(api: tauri::State<'_, Api>) -> Result<Value, String> {
     api.call(reqwest::Method::GET, "/home", None).await
-}
-
-#[tauri::command]
-async fn update_me(
-    api: tauri::State<'_, Api>,
-    name: Option<String>,
-    email: Option<String>,
-) -> Result<Value, String> {
-    let mut body = serde_json::Map::new();
-    if let Some(name) = name {
-        body.insert("display_name".into(), name.into());
-    }
-    if let Some(email) = email {
-        body.insert("email".into(), email.into());
-    }
-    api.call(reqwest::Method::PATCH, "/me", Some(body.into()))
-        .await
 }
 
 /// The image travels as the raw body of the call, its type in `x-picture-type`.
@@ -436,17 +390,28 @@ async fn admin_devices(api: tauri::State<'_, Api>) -> Result<Value, String> {
 }
 
 #[tauri::command]
+async fn admin_users(api: tauri::State<'_, Api>) -> Result<Value, String> {
+    api.call(reqwest::Method::GET, "/admin/users", None).await
+}
+
+#[tauri::command]
 async fn admin_resolve_pairing(
     api: tauri::State<'_, Api>,
     code: String,
     approve: bool,
+    user_id: Option<u32>,
 ) -> Result<(), String> {
     safe_id(&code)?;
     let verb = if approve { "approve" } else { "deny" };
+    let body = match (approve, user_id) {
+        (true, Some(id)) => Some(json!({ "user_id": id })),
+        (true, None) => return Err(json!({ "error": { "code": "invalid_request" } }).to_string()),
+        (false, _) => None,
+    };
     api.call(
         reqwest::Method::POST,
         &format!("/admin/pairings/{code}/{verb}"),
-        None,
+        body,
     )
     .await
     .map(drop)
@@ -481,88 +446,6 @@ async fn admin_scan(api: tauri::State<'_, Api>, folder_id: Option<String>) -> Re
 async fn admin_clear_cache(api: tauri::State<'_, Api>) -> Result<Value, String> {
     api.call(reqwest::Method::POST, "/admin/cache/clear", None)
         .await
-}
-
-#[tauri::command]
-async fn admin_logs(
-    api: tauri::State<'_, Api>,
-    level: String,
-    after: Option<u64>,
-) -> Result<Value, String> {
-    if !matches!(level.as_str(), "all" | "warn" | "error") {
-        return Err(json!({ "error": { "code": "invalid_request" } }).to_string());
-    }
-    let after = after.map_or_else(String::new, |id| format!("&after={id}"));
-    api.call(
-        reqwest::Method::GET,
-        &format!("/admin/logs?level={level}{after}"),
-        None,
-    )
-    .await
-}
-
-/// The file name a `Content-Disposition` offers, cut down to a plain name so it can never leave the folder.
-fn download_name(disposition: Option<&str>) -> String {
-    const FALLBACK: &str = "streamline-logs.zip";
-    let offered = disposition
-        .and_then(|d| d.split("filename=").nth(1))
-        .map(|rest| {
-            rest.split(';')
-                .next()
-                .unwrap_or_default()
-                .trim()
-                .trim_matches('"')
-        })
-        .and_then(|name| name.rsplit(['/', '\\']).next())
-        .unwrap_or_default();
-    if offered.is_empty() || offered.starts_with('.') {
-        FALLBACK.to_owned()
-    } else {
-        offered.to_owned()
-    }
-}
-
-/// `name` in `dir`, or `name (2)`, `name (3)`... before the extension when that is taken.
-fn free_path(dir: &std::path::Path, name: &str) -> PathBuf {
-    let (stem, ext) = name.rsplit_once('.').map_or((name, ""), |(s, e)| (s, e));
-    let ext = if ext.is_empty() {
-        String::new()
-    } else {
-        format!(".{ext}")
-    };
-    let mut path = dir.join(name);
-    let mut n = 2;
-    while path.exists() {
-        path = dir.join(format!("{stem} ({n}){ext}"));
-        n += 1;
-    }
-    path
-}
-
-#[tauri::command]
-async fn admin_logs_download(app: AppHandle, api: tauri::State<'_, Api>) -> Result<String, String> {
-    let (bytes, disposition) = api.call_file("/admin/logs/download").await?;
-    let dir = app.path().download_dir().map_err(|e| e.to_string())?;
-    fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
-    let name = download_name(disposition.as_deref());
-    // `create_new` closes the gap between the exists check and the write.
-    loop {
-        let path = free_path(&dir, &name);
-        match fs::OpenOptions::new()
-            .write(true)
-            .create_new(true)
-            .open(&path)
-        {
-            Ok(mut file) => {
-                std::io::Write::write_all(&mut file, &bytes).map_err(|e| e.to_string())?;
-                return Ok(path
-                    .file_name()
-                    .map_or(name, |n| n.to_string_lossy().into_owned()));
-            }
-            Err(e) if e.kind() == std::io::ErrorKind::AlreadyExists => continue,
-            Err(e) => return Err(e.to_string()),
-        }
-    }
 }
 
 #[tauri::command]
@@ -934,7 +817,6 @@ pub fn run() {
             set_watched,
             me,
             home,
-            update_me,
             set_picture,
             remove_picture,
             revoke_device,
@@ -949,13 +831,12 @@ pub fn run() {
             stop_stream,
             admin_pairings,
             admin_devices,
+            admin_users,
             admin_resolve_pairing,
             admin_revoke_device,
             admin_library,
             admin_scan,
             admin_clear_cache,
-            admin_logs,
-            admin_logs_download,
             playback_status,
             decisions,
             media_tracks,
@@ -991,34 +872,6 @@ pub fn run() {
 mod tests {
     use super::*;
     use std::io::{Read, Write};
-
-    #[test]
-    fn download_name_is_a_plain_file_name() {
-        let name = |d| download_name(Some(d));
-        assert_eq!(
-            name("attachment; filename=\"streamline-logs.zip\""),
-            "streamline-logs.zip"
-        );
-        assert_eq!(name("attachment; filename=../../etc/passwd"), "passwd");
-        assert_eq!(name("attachment; filename=\"..\\evil.zip\""), "evil.zip");
-        assert_eq!(
-            name("attachment; filename=\".hidden\""),
-            "streamline-logs.zip"
-        );
-        assert_eq!(download_name(None), "streamline-logs.zip");
-    }
-
-    #[test]
-    fn free_path_never_overwrites() {
-        let dir = std::env::temp_dir().join(format!("free-path-{}", std::process::id()));
-        fs::create_dir_all(&dir).unwrap();
-        assert_eq!(free_path(&dir, "logs.zip"), dir.join("logs.zip"));
-        fs::write(dir.join("logs.zip"), b"x").unwrap();
-        assert_eq!(free_path(&dir, "logs.zip"), dir.join("logs (2).zip"));
-        fs::write(dir.join("logs (2).zip"), b"x").unwrap();
-        assert_eq!(free_path(&dir, "logs.zip"), dir.join("logs (3).zip"));
-        fs::remove_dir_all(&dir).unwrap();
-    }
 
     #[test]
     fn media_text_sends_no_credential() {

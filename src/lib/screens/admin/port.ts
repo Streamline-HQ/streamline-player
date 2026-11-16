@@ -3,8 +3,6 @@ import {
 	adminClearCache,
 	adminDevices,
 	adminLibrary,
-	adminLogs,
-	adminLogsDownload,
 	adminOverview,
 	adminPairings,
 	adminRestart,
@@ -12,6 +10,7 @@ import {
 	adminScan,
 	adminSettings,
 	adminStreams,
+	adminUsers,
 	saveAdminSettings,
 	stopStream,
 } from "#platform";
@@ -29,6 +28,5 @@ export const adminPort: AdminPort = {
 	adminLibrary,
 	adminScan,
 	adminClearCache,
-	adminLogs,
-	adminLogsDownload,
+	adminUsers,
 };

@@ -1,7 +1,7 @@
 // node --import ./dev/controller-check/register.mjs dev/server-store-check.ts
 import { strictEqual as eq, deepStrictEqual as same } from "node:assert";
 import { must } from "./must.ts";
-import type { AdminSettings, LogLine } from "../src/lib/core/types.ts";
+import type { AdminSettings } from "../src/lib/core/types.ts";
 
 const S = await import("../src/lib/core/admin.svelte.ts");
 const { admin, pendingPairs } = S;
@@ -37,33 +37,24 @@ function clock() {
 const failure = (code: string, extra: object = {}) =>
 	new Error(JSON.stringify({ error: { code, ...extra } }));
 
-const line = (id: number, level: LogLine["level"] = "info"): LogLine => ({
-	id,
-	at: "2026-11-09T10:00:00Z",
-	level,
-	source: "x",
-	message: `m${id}`,
-});
-
 function port() {
 	const settings = (): AdminSettings => ({
-		values: { "stream.max_live": 2, "log.app.level": "info", "otel.endpoint": "" },
+		values: { "stream.max_live": 2, "player.url": "https://player.example", "engine.url": "" },
 		owners: {
 			"stream.max_live": "engine",
-			"log.app.level": "streamline",
-			"otel.endpoint": "streamline",
+			"player.url": "player",
+			"engine.url": "player",
 		},
-		read_only: { streamline: false, engine: false },
+		read_only: { engine: false, player: false },
 		pending: [],
-		restart_keys: ["log.app.level"],
+		restart_keys: ["stream.max_live"],
 	});
 	const p = {
 		calls: [] as [string, ...unknown[]][],
 		count: (name: string) => p.calls.filter((c) => c[0] === name).length,
 		fail: {} as Record<string, Error | undefined>,
-		startedAt: "2026-11-08T05:00:00+00:00",
+		engineUp: true,
 		cache: 3200000000,
-		logs: [line(3), line(2), line(1)],
 		gate: null as Promise<void> | null,
 		async hit(name: string, ...args: unknown[]) {
 			p.calls.push([name, ...args]);
@@ -74,8 +65,9 @@ function port() {
 		async adminOverview() {
 			await p.hit("adminOverview");
 			return {
-				server: { started_at: p.startedAt, version: "2.4.1" },
-				storage: { cache: { path: "/c", size: p.cache, streams: 3 } },
+				extension: { version: "0.1.0" },
+				engine: { reachable: p.engineUp },
+				storage: { cache: { size: p.cache, streams: 3 } },
 			} as never;
 		},
 		async adminSettings() {
@@ -129,12 +121,9 @@ function port() {
 			await p.hit("adminClearCache");
 			p.cache = 0;
 		},
-		async adminLogs(level: string, after?: number) {
-			await p.hit("adminLogs", level, after);
-			return p.logs.filter((l) => after === undefined || l.id > after);
-		},
-		async adminLogsDownload() {
-			return "streamline-logs.zip";
+		async adminUsers() {
+			await p.hit("adminUsers");
+			return [{ id: 1, name: "Antoine", role: "Admin" }] as never;
 		},
 	};
 	return p;
@@ -146,7 +135,6 @@ const LISTS = [
 	"adminPairings",
 	"adminDevices",
 	"adminLibrary",
-	"adminLogs",
 ];
 
 let p = port();
@@ -156,7 +144,6 @@ eq(admin.loaded, true);
 eq(admin.data?.streams.length, 2);
 eq(admin.data?.web, false);
 eq(pendingPairs.n, 1);
-eq(admin.logs.length, 3);
 
 p.fail.adminStreams = new Error("down");
 await S.loadAdmin(p);
@@ -218,13 +205,13 @@ p.fail.saveAdminSettings = failure("read_only", { owner: "engine" });
 eq(await S.save(p, "stream.max_live", 5), "read_only");
 eq(admin.data?.settings.values["stream.max_live"], 2);
 eq(admin.data?.settings.read_only.engine, true);
-eq(admin.data?.settings.read_only.streamline, false);
+eq(admin.data?.settings.read_only.player, false);
 const before = p.count("saveAdminSettings");
 eq(await S.save(p, "stream.max_live", 6), "read_only");
 eq(p.count("saveAdminSettings"), before);
-p.fail.saveAdminSettings = failure("invalid_setting", { key: "log.app.level" });
-eq(await S.save(p, "log.app.level", "loud"), "invalid");
-eq(admin.data?.settings.values["log.app.level"], "info");
+p.fail.saveAdminSettings = failure("invalid_setting", { key: "player.url" });
+eq(await S.save(p, "player.url", "ftp://nope"), "invalid");
+eq(admin.data?.settings.values["player.url"], "https://player.example");
 
 S.resetAdmin();
 p = port();
@@ -240,11 +227,11 @@ eq(admin.drafts["stream.max_live"], undefined);
 S.draft("stream.max_live", "999");
 eq(await S.commit(p, num), "ok");
 same(p.calls.at(-1), ["saveAdminSettings", { "stream.max_live": 8 }]);
-S.draft("otel.endpoint", "  ");
-eq(await S.commit(p, { t: "text", key: "otel.endpoint", allowEmpty: true }), "ok");
+S.draft("engine.url", "  ");
+eq(await S.commit(p, { t: "text", key: "engine.url", allowEmpty: true }), "ok");
 eq(p.count("saveAdminSettings"), 1);
-S.draft("log.app.level", "  ");
-eq(await S.commit(p, { t: "text", key: "log.app.level" }), "invalid");
+S.draft("player.url", "  ");
+eq(await S.commit(p, { t: "text", key: "player.url" }), "invalid");
 eq(p.count("saveAdminSettings"), 1);
 
 S.resetAdmin();
@@ -295,16 +282,16 @@ p.gate = new Promise<void>((done) => {
 });
 const clearing = S.clearCache(p);
 eq(admin.data?.cacheCleared, true);
-eq(admin.data?.overview.storage.cache.size, 0);
+eq(admin.data?.overview.storage.cache?.size, 0);
 gate();
 p.gate = null;
 eq(await clearing, true);
 p.fail.adminClearCache = new Error("down");
 must(admin.data).cacheCleared = false;
-must(admin.data).overview.storage.cache.size = 3200000000;
+must(must(admin.data).overview.storage.cache).size = 3200000000;
 eq(await S.clearCache(p), false);
 eq(admin.data?.cacheCleared, false);
-eq(admin.data?.overview.storage.cache.size, 3200000000);
+eq(admin.data?.overview.storage.cache?.size, 3200000000);
 
 S.resetAdmin();
 p = port();
@@ -322,16 +309,30 @@ eq(p.count("adminOverview"), polls);
 await c.advance(200);
 eq(p.count("adminOverview"), polls + 1);
 eq(admin.restarting, true);
-p.startedAt = "2026-11-09T12:00:10+00:00";
+p.engineUp = false;
+await c.advance(2000);
+eq(admin.restarting, true);
+p.engineUp = true;
 await c.advance(2000);
 eq(admin.restarting, false);
 eq(admin.lateRestart, false);
-eq(admin.data?.overview.server.started_at, p.startedAt);
+eq(admin.data?.overview.engine.reachable, true);
 
 S.resetAdmin();
 p = port();
 await S.loadAdmin(p);
 c = clock();
+await S.restart(p, undefined, c.timers);
+await c.advance(8000);
+eq(admin.restarting, true);
+await c.advance(2000);
+eq(admin.restarting, false);
+
+S.resetAdmin();
+p = port();
+await S.loadAdmin(p);
+c = clock();
+p.engineUp = false;
 await S.restart(p, undefined, c.timers);
 await c.advance(58_000);
 eq(admin.lateRestart, false);
@@ -341,7 +342,7 @@ eq(admin.restarting, true);
 const lateCalls = p.count("adminOverview");
 await c.advance(10_000);
 ok(p.count("adminOverview") > lateCalls);
-p.startedAt = "2026-11-09T12:05:00+00:00";
+p.engineUp = true;
 await c.advance(2000);
 eq(admin.restarting, false);
 eq(admin.lateRestart, false);
@@ -357,31 +358,7 @@ await S.restart(p, undefined, clock().timers).then(
 eq(admin.restarting, false);
 
 S.resetAdmin();
-p = port();
-await S.loadAdmin(p);
-p.logs = [line(5, "warn"), line(4), ...p.logs];
-await S.refreshLogs(p);
-same(p.calls.at(-1), ["adminLogs", "all", 3]);
-same(
-	admin.logs.map((l) => l.id),
-	[5, 4, 3, 2, 1],
-);
-p.logs = Array.from({ length: 100 }, (_, i) => line(200 - i));
-await S.refreshLogs(p);
-eq(admin.logs.length, 80);
-eq(must(admin.logs[0]).id, 200);
-admin.live = false;
-const asked = p.count("adminLogs");
-await S.refreshLogs(p);
-eq(p.count("adminLogs"), asked);
-admin.live = true;
-await S.setLevel(p, "error");
-eq(admin.level, "error");
-same(p.calls.at(-1), ["adminLogs", "error", undefined]);
-
-S.resetAdmin();
 eq(admin.data, null);
-eq(admin.logs.length, 0);
 eq(admin.loaded, false);
 eq(pendingPairs.n, 0);
 await S.loadPendingPairs(p);

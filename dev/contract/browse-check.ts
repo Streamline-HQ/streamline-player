@@ -1,4 +1,4 @@
-// What the browse screens read and write, through the contract proxy: the home feed, profile edits, the picture,
+// What the browse screens read and write, through the contract proxy: the home feed, the profile, the picture,
 // an empty library and failing artwork.
 import { spawn } from "node:child_process";
 import { strictEqual as eq, ok } from "node:assert";
@@ -88,12 +88,6 @@ try {
 		fetch(`${api}${path}`, { ...init, headers: { ...auth, ...(init.headers as object) } });
 	const json = <T>(path: string, init?: RequestInit) =>
 		call(path, init).then((r) => r.json() as Promise<T>);
-	const patch = (body: object) =>
-		call("/me", {
-			method: "PATCH",
-			headers: { "Content-Type": "application/json" },
-			body: JSON.stringify(body),
-		});
 	const put = (body: Buffer, type: string) =>
 		call("/me/picture", { method: "PUT", headers: { "Content-Type": type }, body });
 
@@ -105,19 +99,9 @@ try {
 	eq(days.join(), [...days].sort().reverse().join());
 	for (const day of home.arrivals) ok(day.items.length > 0);
 
-	eq(
-		((await patch({ display_name: "A. Langlois" }).then((r) => r.json())) as Me).name,
-		"A. Langlois",
-	);
-	eq((await json<Me>("/me")).name, "A. Langlois");
-	const before = (await json<Me>("/me")).email;
-	const taken = await patch({ email: "taken@example.net" });
-	eq(taken.status, 409);
-	eq(((await taken.json()) as ApiError).error.code, "email_taken");
-	const invalid = await patch({ email: "nope" });
-	eq(invalid.status, 422);
-	eq(((await invalid.json()) as ApiError).error.code, "invalid_email");
-	eq((await json<Me>("/me")).email, before);
+	const profile = await json<Me>("/me");
+	eq(profile.role, "Admin");
+	ok(/^http:\/\/127\.0\.0\.1:\d+$/.test(profile.streamline_url), profile.streamline_url);
 
 	eq((await json<Me>("/me")).picture, false);
 	eq((await put(PNG, "image/png")).status, 204);
@@ -125,6 +109,7 @@ try {
 	eq(me.picture, true);
 	ok(/^[A-Z]{1,2}$/.test(me.initials), me.initials);
 	eq((await call("/posters/users/me/photo.jpg")).status, 200);
+	eq((await fetch(`${api}/posters/users/me/photo.jpg`)).status, 401);
 	const big = await put(Buffer.alloc(3 * 1024 * 1024), "image/png");
 	eq(big.status, 413);
 	eq(((await big.json()) as ApiError).error.code, "too_large");

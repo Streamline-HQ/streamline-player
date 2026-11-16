@@ -16,16 +16,18 @@ own file. --art points at p/<slug>.jpg and b/<slug>.jpg artwork, and c/<person>.
         --clip /path/to/clip.mkv [--clip ...] [--media film=/path/to/film.mkv ...]
 
 Server settings (/extensions/player/admin) answers 403 to a member (--role member, or POST /dev/role/member|admin).
---demo-admin serves the design's sample; --read-only[=streamline|engine] locks settings; --restart-hangs
-keeps an admin restart from ever returning (until then every admin call answers 503 server_restarting, and the
-settings that wait for a restart apply and started_at moves only when it ends); --engine-settings forwards the engine's four keys and the
-restart to the engine. POST /dev/admin/fail/save|action makes every admin write of that kind answer 500
+--demo-admin serves the design's sample; --read-only locks the engine's settings. Settings are the engine's four keys,
+held here unless --engine-settings forwards them (and the restart) to the engine, and the player's own six
+(engine.url, engine.public_url, player.url, player.origins, player.app_links, network.home), which apply at once; --player-url
+is the first value of player.url. An admin restart takes the engine down for ten seconds (--restart-hangs: for ever, until
+POST /dev/admin/restart/finish): the overview then says `engine.reachable: false`, the engine's settings are absent, and the players
+learn of it as server_restarting. POST /dev/admin/fail/save|action makes every admin write of that kind answer 500
 until /dev/admin/fail/off, POST /dev/admin/scan/finish ends running scans at once, and POST
-/dev/admin/read-only/both|engine|streamline|off switches the lock while it runs, and POST /dev/admin/log
-{level, source, message} adds a log line. POST /dev/admin/logs/drop-errors, /dev/admin/streams/clear,
+/dev/admin/read-only/engine|off switches the lock while it runs. POST /dev/admin/streams/clear,
 /dev/admin/pairing (the demo request again), /dev/admin/pairing/expire, /dev/admin/player-url/off and
 /dev/admin/restart-hangs/on|off and /dev/admin/restart/finish
-reshape the demo while it runs.
+reshape the demo while it runs. Me.streamline_url is the address the call came to, and the account's name and email are
+edited in Streamline, not here.
 
 Downloads (/extensions/player/downloads) are for a device key and prepared by the engine's download job; POST /dev/downloads/fail makes
 the next one end failed. A download event reaches only the device that made it.
@@ -38,7 +40,7 @@ import base64
 import datetime
 import hashlib
 import hmac
-import io
+import ipaddress
 import itertools
 import json
 import math
@@ -51,7 +53,6 @@ import unicodedata
 import urllib.error
 import urllib.parse
 import urllib.request
-import zipfile
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 TOKEN_TTL = 6 * 3600
@@ -110,13 +111,14 @@ p.add_argument(
     "--sso-deny", action="store_true", help="have Streamline's sign-in page refuse every sign-in"
 )
 p.add_argument(
-    "--player-url", help="the player web app's URL; pairing links then point at its /pair page"
+    "--player-url",
+    help="the first value of the player.url setting: the player web app's URL, which pairing links point at (/pair)",
 )
 p.add_argument("--pair-ttl", type=int, default=600, help="seconds a pairing lasts")
 p.add_argument(
     "--demo-admin",
     action="store_true",
-    help="serve the design's sample for Server settings (streams, pairings, devices, library, overview, logs) instead of what the mock itself holds",
+    help="serve the design's sample for Server settings (streams, pairings, devices, library, overview) instead of what the mock itself holds",
 )
 p.add_argument(
     "--role",
@@ -126,10 +128,9 @@ p.add_argument(
 )
 p.add_argument(
     "--read-only",
-    nargs="?",
-    const="both",
-    choices=["both", "streamline", "engine"],
-    help="lock the settings Streamline owns, the engine's, or both",
+    action="store_const",
+    const="engine",
+    help="lock the engine's settings, as a config file mounted read-only does",
 )
 p.add_argument("--restart-hangs", action="store_true", help="an admin restart never comes back")
 p.add_argument(
@@ -146,10 +147,15 @@ p.add_argument(
 args = p.parse_args()
 CORS_ORIGINS = args.cors_origin or ["http://localhost:1430", "http://127.0.0.1:1430"]
 USER_EMAIL = "antoine@example.net"
-TAKEN_EMAIL = "taken@example.net"
-PICTURE_MAX = 2 * 1024 * 1024
+PICTURE_MAX = 512 * 1024
 PICTURE_TYPES = ("image/jpeg", "image/png", "image/webp")
+USERS = [
+    {"id": 1, "name": "Antoine Langlois", "role": "Admin"},
+    {"id": 2, "name": "Camille Roux", "role": "Member"},
+    {"id": 3, "name": "Hugo Bernard", "role": "Member"},
+]
 ME = {
+    "id": 1,
     "name": "Antoine Langlois",
     "email": USER_EMAIL,
     "role": "Member" if args.role == "member" else "Admin",
@@ -290,8 +296,13 @@ def initials(name):
     return "".join(w[0] for w in (words[:1] + words[-1:] if len(words) > 1 else words)).upper()
 
 
-def profile():
-    return {**ME, "picture": PICTURE["data"] is not None, "initials": initials(ME["name"])}
+def profile(host):
+    return {
+        **ME,
+        "picture": PICTURE["data"] is not None,
+        "initials": initials(ME["name"]),
+        "streamline_url": f"http://{host}",
+    }
 
 
 def home():
@@ -844,23 +855,18 @@ def pkce_matches(verifier, challenge):
     return base64.urlsafe_b64encode(digest).rstrip(b"=").decode() == challenge
 
 
-# Server settings. Streamline owns most keys; the engine owns four, held here unless --engine-settings forwards them.
+# Server settings: the engine owns four keys, held here unless --engine-settings forwards them; the player owns six.
 SETTING_DEFAULTS = {
     "transcoding.hw_accel": "auto",
     "transcoding.hw_device": "/dev/dri/renderD128",
     "stream.tonemap": True,
     "stream.max_live": 2,
-    "library.watch": True,
-    "library.scan_every": "6h",
-    "ffmpeg.enabled": True,
-    "log.app.level": "info",
-    "log.app.format": "json",
-    "log.http.format": "combined",
-    "log.rotate.max_size": 50,
-    "log.rotate.max_backups": 5,
-    "log.rotate.compress": True,
-    "otel.endpoint": "",
-    "events.retention": "2160h",
+    "engine.url": args.engine,
+    "engine.public_url": args.public,
+    "player.url": (args.player_url or "").rstrip("/"),
+    "player.origins": [],
+    "player.app_links": [],
+    "network.home": [],
 }
 ENGINE_KEYS = {
     "transcoding.hw_accel": "hw_accel",
@@ -869,23 +875,13 @@ ENGINE_KEYS = {
     "stream.max_live": "max_transcodes",
 }
 # Read once at boot, so a change waits for a restart; the engine reads its whole config that way.
-RESTART_KEYS = ["log.app.level", "log.app.format", "log.http.format", "otel.endpoint", *ENGINE_KEYS]
-CHOICES = {
-    "transcoding.hw_accel": {"auto", "none", "vaapi"},
-    "library.scan_every": {"1h", "6h", "24h"},
-    "log.app.level": {"debug", "info", "warn", "error"},
-    "log.app.format": {"text", "json"},
-    "log.http.format": {"json", "combined"},
-}
-BOOLS = {"stream.tonemap", "library.watch", "ffmpeg.enabled", "log.rotate.compress"}
-RANGES = {
-    "stream.max_live": (1, 8),
-    "log.rotate.max_size": (1, 1024),
-    "log.rotate.max_backups": (0, 100),
-}
+RESTART_KEYS = list(ENGINE_KEYS)
+URL_KEYS = {"engine.url", "engine.public_url", "player.url"}
+LIST_KEYS = {"player.origins", "player.app_links", "network.home"}
+MAX_ENTRIES = 64
 SETTINGS = dict(SETTING_DEFAULTS)
 BOOTED = dict(SETTING_DEFAULTS)
-STARTED = {"at": shown_now() - 31 * 3600}
+ENGINE_SECRET = {"created_at": None}
 FAIL = {"mode": "off"}
 CACHE = {"size": 3_200_000_000}
 SCANS = {}
@@ -894,56 +890,99 @@ SCAN_SECONDS = {"movies": 16, "series": 24}
 BASE_TIME = shown_now()
 
 
-class EngineDown(Exception):
-    pass
+def valid_url(value):
+    if not isinstance(value, str):
+        return False
+    if value == "":
+        return True
+    u = urllib.parse.urlsplit(value)
+    return (
+        len(value) <= 300
+        and u.scheme in ("http", "https")
+        and bool(u.netloc)
+        and "@" not in u.netloc
+        and not u.query
+        and not u.fragment
+    )
+
+
+def valid_entry(key, entry):
+    if not isinstance(entry, str) or len(entry) > 300:
+        return False
+    if key == "player.origins":
+        u = urllib.parse.urlsplit(entry)
+        return (
+            u.scheme in ("http", "https") and bool(u.netloc) and entry == f"{u.scheme}://{u.netloc}"
+        )
+    if key == "player.app_links":
+        u = urllib.parse.urlsplit(entry)
+        return bool(u.scheme) and bool(u.netloc or u.path) and not u.fragment
+    try:
+        ipaddress.ip_network(entry, strict=False)
+    except ValueError:
+        return False
+    return True
 
 
 def valid_setting(key, value):
-    if key in CHOICES:
-        return isinstance(value, str) and value in CHOICES[key]
-    if key in BOOLS:
+    if key == "transcoding.hw_accel":
+        return isinstance(value, str) and value in {"auto", "none", "vaapi"}
+    if key == "stream.tonemap":
         return isinstance(value, bool)
-    if key in RANGES:
-        low, high = RANGES[key]
-        return isinstance(value, int) and not isinstance(value, bool) and low <= value <= high
+    if key == "stream.max_live":
+        return isinstance(value, int) and not isinstance(value, bool) and 1 <= value <= 8
     if key == "transcoding.hw_device":
         return isinstance(value, str) and 0 < len(value) <= 200
-    if key == "otel.endpoint":
-        return isinstance(value, str) and len(value) <= 200
-    return isinstance(value, str) and re.fullmatch(r"[0-9]+[smh]", value) is not None
+    if key in URL_KEYS:
+        return valid_url(value)
+    if key in LIST_KEYS:
+        return (
+            isinstance(value, list)
+            and len(value) <= MAX_ENTRIES
+            and all(valid_entry(key, e) for e in value)
+        )
+    return False
+
+
+def engine_up():
+    return not (RESTART["admin"] and time.monotonic() < RESTART["until"])
+
+
+def settle_restart():
+    """The engine comes back once the restart window ends; it then reads the config it was saved with."""
+    if RESTART["admin"] and time.monotonic() >= RESTART["until"]:
+        RESTART["admin"] = False
+        BOOTED.update(SETTINGS)
 
 
 def settings_view():
-    values = dict(SETTINGS)
+    settle_restart()
+    values = {k: v for k, v in SETTINGS.items() if k not in ENGINE_KEYS or engine_up()}
     forwarded = set()
-    engine_read_only = args.read_only in ("both", "engine")
-    if args.engine_settings:
+    engine_read_only = args.read_only == "engine"
+    reachable = engine_up()
+    if args.engine_settings and reachable:
         st, e = engine("GET", "/v1/settings")
-        if st != 200:
-            raise EngineDown()
-        engine_read_only = engine_read_only or e["read_only"]
-        for key, name in ENGINE_KEYS.items():
-            values[key] = e["values"][name]
-            if name in e["pending"]:
-                forwarded.add(key)
+        reachable = st == 200
+        if reachable:
+            engine_read_only = engine_read_only or e["read_only"]
+            for key, name in ENGINE_KEYS.items():
+                values[key] = e["values"][name]
+                if name in e["pending"]:
+                    forwarded.add(key)
+        else:
+            values = {k: v for k, v in values.items() if k not in ENGINE_KEYS}
     pending = [
         k
         for k in RESTART_KEYS
-        if (
-            k in forwarded
-            if args.engine_settings and k in ENGINE_KEYS
-            else SETTINGS[k] != BOOTED[k]
-        )
+        if reachable and (k in forwarded if args.engine_settings else SETTINGS[k] != BOOTED[k])
     ]
     return {
         "values": values,
-        "owners": {k: "engine" if k in ENGINE_KEYS else "streamline" for k in SETTING_DEFAULTS},
-        "read_only": {
-            "streamline": args.read_only in ("both", "streamline"),
-            "engine": engine_read_only,
-        },
+        "owners": {k: "engine" if k in ENGINE_KEYS else "player" for k in SETTING_DEFAULTS},
+        "read_only": {"engine": engine_read_only, "player": False},
         "pending": pending,
-        "restart_keys": RESTART_KEYS,
+        "restart_keys": RESTART_KEYS if reachable else [],
     }
 
 
@@ -954,14 +993,14 @@ def patch_settings(patch):
     for key, value in patch.items():
         if key not in SETTING_DEFAULTS or not valid_setting(key, value):
             return 400, {"error": {"code": "invalid_setting", "key": key}}
-    view = settings_view()
-    for key in patch:
-        owner = "engine" if key in ENGINE_KEYS else "streamline"
-        if view["read_only"][owner]:
-            return 409, {"error": {"code": "read_only", "owner": owner}}
+    engine_part = {ENGINE_KEYS[k]: v for k, v in patch.items() if k in ENGINE_KEYS}
+    if engine_part:
+        if not engine_up():
+            return 503, {"error": {"code": "engine_unavailable"}}
+        if args.read_only == "engine":
+            return 409, {"error": {"code": "read_only", "owner": "engine"}}
     if FAIL["mode"] == "save":
         return 500, {"error": {"code": "internal"}}
-    engine_part = {ENGINE_KEYS[k]: v for k, v in patch.items() if k in ENGINE_KEYS}
     if args.engine_settings and engine_part:
         st, _ = engine("PATCH", "/v1/settings", engine_part)
         if st == 409:
@@ -974,79 +1013,16 @@ def patch_settings(patch):
                 }
             }
         if st != 200:
-            raise EngineDown()
+            return 503, {"error": {"code": "engine_unavailable"}}
     for key, value in patch.items():
         if not (args.engine_settings and key in ENGINE_KEYS):
             SETTINGS[key] = value
-    note("info", "config", "config saved to disk · " + ", ".join(patch) + f" · {USER_EMAIL}")
     return 200, settings_view()
-
-
-LOGS = []
-
-
-def note(level, source, message, ago=0):
-    LOGS.append(
-        {
-            "id": len(LOGS) + 1,
-            "at": iso(shown_now() - ago),
-            "level": level,
-            "source": source,
-            "message": message,
-        }
-    )
 
 
 def iso(t):
     return datetime.datetime.fromtimestamp(t, datetime.UTC).isoformat()
 
-
-def clock_ago(hms):
-    """Seconds before 12:00:00 that the design's log time HH:MM:SS sits."""
-    h, m, sec = (int(x) for x in hms.split(":"))
-    return 12 * 3600 - (h * 3600 + m * 60 + sec)
-
-
-DEMO_LOGS = [
-    (
-        "10:44:58",
-        "info",
-        "http",
-        "GET /extensions/player/stream/severance/s02e04/seg-187.m4s 206 · 1.9 MB · SHIELD",
-    ),
-    (
-        "10:44:51",
-        "info",
-        "transcode",
-        "dune2 · HEVC Main10 HDR10 → H.264 1080p SDR · vaapi · 2.1× · Chrome on Linux",
-    ),
-    ("10:44:40", "debug", "http", "GET /extensions/player/capabilities 200 · Galaxy Tab S9"),
-    (
-        "10:43:30",
-        "info",
-        "pairing",
-        "request R4WX9P · iPad mini · approval email sent to camille@example.net",
-    ),
-    ("10:42:05", "info", "config", f"config saved to disk · stream.max_live: 1 → 2 · {USER_EMAIL}"),
-    ("10:31:17", "error", "scanner", "Arcane S02E09 · ffprobe: moov atom not found · skipped"),
-    ("10:12:44", "info", "session", "Chrome on Linux signed in · camille@example.net"),
-    ("09:58:20", "warn", "transcode", "vaapi test encode took 2.4 s"),
-    ("08:15:03", "info", "scanner", "Movies · Alien: Romulus replaced · 2160p Dolby Vision"),
-]
-PLAIN_LOGS = [
-    ("11:58:40", "info", "http", "GET /extensions/player/home 200"),
-    ("11:58:12", "debug", "http", "GET /extensions/player/capabilities 200"),
-    ("11:52:31", "info", "session", f"signed in · {USER_EMAIL}"),
-    ("11:40:09", "info", "http", "GET /extensions/player/movies 200 · 17 titles"),
-    ("11:31:55", "warn", "transcode", "vaapi test encode took 2.4 s"),
-    ("10:31:17", "error", "scanner", "Severance S02E09 · ffprobe: moov atom not found · skipped"),
-    ("10:12:44", "info", "pairing", "request K7FQ2M · Living room · approved"),
-    ("09:30:00", "info", "config", "config loaded · /etc/streamline/config.yaml"),
-    ("08:15:03", "info", "scanner", "Movies · scan finished · 0 new files"),
-    ("08:14:41", "info", "scanner", "Movies · scan started"),
-]
-for hms, level, source, message in reversed(DEMO_LOGS if args.demo_admin else PLAIN_LOGS):
-    note(level, source, message, clock_ago(hms))
 
 DEMO_STREAMS = [
     {
@@ -1364,83 +1340,43 @@ def tick_scans():
     if SCAN["finished"] and not SCANS:
         SCAN["last"] = {"at": stamp(), "added": SCAN["finished"], "replaced": 0, "errors": 0}
         SCAN["finished"] = 0
-        note("info", "scanner", "scan finished · 0 errors")
 
 
-def overview():
+def overview(host):
     streams = admin_streams()
-    errors = [line for line in LOGS if line["level"] == "error"]
-    hw_off = settings_view()["values"]["transcoding.hw_accel"] == "none"
+    settle_restart()
+    out = {
+        "extension": {"version": "0.1.0"},
+        "folders": {"reachable": 2, "total": 2},
+        "streamline_url": f"http://{host}",
+    }
+    if not engine_up():
+        return {**out, "engine": {"reachable": False}, "storage": {}}
+    hw_off = settings_view()["values"].get("transcoding.hw_accel") == "none"
     return {
-        "server": {
-            "version": "2.4.1",
-            "go": "go1.25.3",
-            "platform": "linux/amd64",
-            "commit": "b74309c",
-            "built_at": "2026-10-30T18:12:00Z",
-            "started_at": iso(STARTED["at"]),
-            "config_path": "/etc/streamline/config.yaml",
-            "public_url": "https://streamline.home.arpa",
-            "https": True,
-            **({"player_url": args.player_url.rstrip("/")} if args.player_url else {}),
-            "bind_address": "0.0.0.0:8080",
-            "trusted_proxies": ["10.0.0.0/8"],
-            "session_secret": "/run/secrets/streamline-session",
+        **out,
+        "engine": {
+            "reachable": True,
+            "version": "0.4.2",
+            "api_version": 1,
+            "ffmpeg_version": "7.1",
+            "analysis_version": 1,
+            "hw": {"mode": "software" if hw_off else "vaapi", "ready": True},
+            "libplacebo": True,
+            "dovi_tool": True,
         },
         "storage": {
-            "media": {"free": 4_500_000_000_000, "total": 8_000_000_000_000},
-            "data": {
-                "path": "/var/lib/streamline",
-                "free": 620_000_000_000,
-                "total": 1_000_000_000_000,
-            },
-            "database": {"path": "/var/lib/streamline/streamline.db", "size": 184_000_000},
-            "cache": {
-                "path": "/var/cache/streamline",
-                "size": CACHE["size"],
-                "streams": len(streams) if CACHE["size"] else 0,
-            },
-        },
-        "health": {
-            "ffmpeg": {"path": "/usr/bin/ffmpeg", "version": "7.1"},
-            "hw": {
-                "mode": "software" if hw_off else "vaapi",
-                **({} if hw_off else {"device": "Intel UHD Graphics 770"}),
-                "ready": True,
-            },
-            "folders": {"reachable": 2, "total": 2},
-            "errors_today": len(errors),
-            **({"errors_source": errors[-1]["source"]} if errors else {}),
-        },
-        "logs": {
-            "app_path": "/var/log/streamline/app.log",
-            "http_path": "/var/log/streamline/http.log",
+            "cache": {"size": CACHE["size"], "streams": len(streams) if CACHE["size"] else 0}
         },
     }
 
 
-def admin_logs(level, after):
-    allowed = {"all": None, "warn": {"warn", "error"}, "error": {"error"}}[level]
-    lines = [
-        line
-        for line in reversed(LOGS)
-        if (allowed is None or line["level"] in allowed) and line["id"] > after
-    ]
-    return lines[:80]
-
-
-def logs_zip():
-    out = io.BytesIO()
-    with zipfile.ZipFile(out, "w", zipfile.ZIP_DEFLATED) as z:
-        z.writestr(
-            "app.log",
-            "".join(f"{l['at']} {l['level']} {l['source']} {l['message']}\n" for l in LOGS),
-        )
-        z.writestr(
-            "http.log",
-            "".join(f"{l['at']} {l['message']}\n" for l in LOGS if l["source"] == "http"),
-        )
-    return out.getvalue()
+def device_order(items):
+    """The caller's own device, then those streaming, then the most recently used."""
+    return sorted(
+        items,
+        key=lambda d: (not d["current"], not d["streaming"], [-ord(c) for c in d["last_seen"]]),
+    )
 
 
 def admin_device_items(headers):
@@ -1504,7 +1440,7 @@ def admin_device_items(headers):
         }
         for d in DEMO_BROWSERS
     ]
-    return [caller, *apps, *browsers]
+    return device_order([caller, *apps, *browsers])
 
 
 def device_items(headers):
@@ -1525,45 +1461,47 @@ def device_items(headers):
         }
         for i, b in BROWSERS.items()
     ]
-    return [
-        {
-            "id": "dev-self",
-            "kind": "app",
-            "name": me["name"],
-            "platform": me["platform"],
-            "last_seen": ago(0),
-            "streaming": False,
-            "current": caller is None,
-        },
-        {
-            "id": "dev-phone",
-            "kind": "app",
-            "name": "Pixel 9",
-            "platform": "Android",
-            "last_seen": ago(120),
-            "streaming": True,
-            "current": False,
-        },
-        {
-            "id": "dev-laptop",
-            "kind": "app",
-            "name": "framework-13",
-            "platform": "Linux",
-            "last_seen": ago(3 * 86400),
-            "streaming": False,
-            "current": False,
-        },
-        {
-            "id": "dev-parents",
-            "kind": "app",
-            "name": "Parents' TV",
-            "platform": "Android TV",
-            "last_seen": ago(9 * 86400),
-            "streaming": False,
-            "current": False,
-        },
-        *browsers,
-    ]
+    return device_order(
+        [
+            {
+                "id": "dev-self",
+                "kind": "app",
+                "name": me["name"],
+                "platform": me["platform"],
+                "last_seen": ago(0),
+                "streaming": False,
+                "current": caller is None,
+            },
+            {
+                "id": "dev-phone",
+                "kind": "app",
+                "name": "Pixel 9",
+                "platform": "Android",
+                "last_seen": ago(120),
+                "streaming": True,
+                "current": False,
+            },
+            {
+                "id": "dev-laptop",
+                "kind": "app",
+                "name": "framework-13",
+                "platform": "Linux",
+                "last_seen": ago(3 * 86400),
+                "streaming": False,
+                "current": False,
+            },
+            {
+                "id": "dev-parents",
+                "kind": "app",
+                "name": "Parents' TV",
+                "platform": "Android TV",
+                "last_seen": ago(9 * 86400),
+                "streaming": False,
+                "current": False,
+            },
+            *browsers,
+        ]
+    )
 
 
 class Handler(BaseHTTPRequestHandler):
@@ -1701,13 +1639,6 @@ class Handler(BaseHTTPRequestHandler):
         """Server settings: /extensions/player/admin/*, for an admin only."""
         if ME["role"] != "Admin":
             return self.reply(403, {"error": {"code": "forbidden"}})
-        if RESTART["admin"]:
-            if time.monotonic() < RESTART["until"]:
-                return self.reply(503, {"error": {"code": "server_restarting"}})
-            RESTART["admin"] = False
-            BOOTED.update(SETTINGS)
-            STARTED["at"] = shown_now()
-            note("info", "server", "started")
         url = urllib.parse.urlsplit(self.path)
         try:
             return self.admin_route(
@@ -1715,15 +1646,15 @@ class Handler(BaseHTTPRequestHandler):
                 url.path[len("/extensions/player/admin") :],
                 urllib.parse.parse_qs(url.query),
             )
-        except (OSError, EngineDown):
-            return self.reply(502, {"error": {"code": "engine_unavailable"}})
+        except OSError:
+            return self.reply(503, {"error": {"code": "engine_unavailable"}})
 
     def admin_route(self, method, path, query):
         not_found = lambda: self.reply(404, {"error": {"code": "not_found"}})
         failing = lambda: FAIL["mode"] == "action" and method != "GET"
         if method == "GET":
             if path == "/overview":
-                return self.reply(200, overview())
+                return self.reply(200, overview(self.headers["Host"]))
             if path == "/settings":
                 return self.reply(200, settings_view())
             if path == "/streams":
@@ -1734,29 +1665,25 @@ class Handler(BaseHTTPRequestHandler):
                 return self.reply(200, {"items": admin_device_items(self.headers)})
             if path == "/library":
                 return self.reply(200, library_view())
-            if path == "/logs":
-                level = query.get("level", ["all"])[0]
-                after = query.get("after", ["0"])[0]
-                if level not in ("all", "warn", "error") or not after.isdigit():
-                    return self.reply(400, {"error": {"code": "invalid_request"}})
-                return self.reply(200, {"items": admin_logs(level, int(after))})
-            if path == "/logs/download":
-                data = logs_zip()
-                self.send_response(200)
-                self.send_header("Content-Type", "application/zip")
-                self.send_header(
-                    "Content-Disposition", 'attachment; filename="streamline-logs.zip"'
+            if path == "/users":
+                return self.reply(200, {"items": sorted(USERS, key=lambda u: u["name"])})
+            if path == "/engine/secret":
+                made = ENGINE_SECRET["created_at"]
+                return self.reply(
+                    200, {"set": True, "created_at": iso(made)} if made else {"set": False}
                 )
-                self.send_header("Content-Length", str(len(data)))
-                self.end_headers()
-                return self.wfile.write(data)
             return not_found()
         if method == "PATCH" and path == "/settings":
             status, body = patch_settings(self.body())
             return self.reply(status, body)
         if failing():
             return self.reply(500, {"error": {"code": "internal"}})
+        if method == "POST" and path == "/engine/secret":
+            ENGINE_SECRET["created_at"] = shown_now()
+            return self.reply(200, {"secret": secrets.token_urlsafe(32)})
         if method == "POST" and path == "/restart":
+            if not engine_up():
+                return self.reply(503, {"error": {"code": "engine_unavailable"}})
             message = self.body().get("message", "")
             if not isinstance(message, str) or len(message) > 200:
                 return self.reply(400, {"error": {"code": "invalid_request"}})
@@ -1769,12 +1696,22 @@ class Handler(BaseHTTPRequestHandler):
                 until=math.inf if args.restart_hangs else time.monotonic() + 10, message=message
             )
             RESTART["admin"] = True
-            note("info", "config", f"restart requested · {ME['name']}")
             return self.reply(202)
         m = re.fullmatch(r"/pairings/([A-Za-z0-9-]+)/(approve|deny)", path)
         if method == "POST" and m:
             if failing():
                 return self.reply(500, {"error": {"code": "internal"}})
+            if m[2] == "approve":
+                user_id = self.body().get("user_id")
+                if not isinstance(user_id, int) or isinstance(user_id, bool):
+                    return self.reply(
+                        400,
+                        {"error": {"code": "invalid_request", "message": "user_id is required"}},
+                    )
+                if not any(u["id"] == user_id for u in USERS):
+                    return self.reply(
+                        404, {"error": {"code": "not_found", "message": "No such user"}}
+                    )
             wanted = m[1].replace("-", "").upper()
             now = time.monotonic()
             for p in PAIRINGS.values():
@@ -1801,7 +1738,6 @@ class Handler(BaseHTTPRequestHandler):
                     return not_found()
                 STOPPED[m[1]] = message
                 LAST_BEAT.pop(m[1], None)
-            note("info", "session", f"stream {m[1]} stopped · {ME['name']}")
             return self.reply(204)
         m = re.fullmatch(r"/devices/([\w-]+)", path)
         if method == "DELETE" and m:
@@ -1824,11 +1760,11 @@ class Handler(BaseHTTPRequestHandler):
             tick_scans()
             for name in [folder] if folder else known:
                 SCANS.setdefault(name, {"t0": time.monotonic(), "dur": SCAN_SECONDS[name]})
-            note("info", "scanner", f"{folder or 'all folders'} · scan started · {ME['name']}")
             return self.reply(202)
         if method == "POST" and path == "/cache/clear":
+            if not engine_up():
+                return self.reply(503, {"error": {"code": "engine_unavailable"}})
             freed, CACHE["size"] = CACHE["size"], 0
-            note("info", "transcode", f"cache cleared · {freed} bytes · {ME['name']}")
             return self.reply(200, {"freed": freed})
         return not_found()
 
@@ -1886,6 +1822,8 @@ class Handler(BaseHTTPRequestHandler):
             return self.reply(200, home())
         url = urllib.parse.urlsplit(self.path)
         if url.path == "/extensions/player/posters/users/me/photo.jpg":
+            if self.headers.get("Authorization") is None and self.headers.get("X-API-Key") is None:
+                return self.reply(401, {"error": {"code": "unauthorized"}})
             if PICTURE["data"] is None:
                 return self.reply(404, {"error": {"code": "not_found"}})
             return self.image(PICTURE["data"], PICTURE["type"])
@@ -1915,7 +1853,7 @@ class Handler(BaseHTTPRequestHandler):
         if url.path == "/extensions/player/authorize":
             return self.authorize(urllib.parse.parse_qs(url.query))
         if self.path == "/extensions/player/me":
-            return self.reply(200, profile())
+            return self.reply(200, profile(self.headers["Host"]))
         if self.path == "/extensions/player/activity":
             me = self.headers.get("X-API-Key") or ""
             return self.reply(
@@ -1984,20 +1922,9 @@ class Handler(BaseHTTPRequestHandler):
         if m:
             FAIL["mode"] = m[1]
             return self.reply(204)
-        m = re.fullmatch(r"/dev/admin/read-only/(both|engine|streamline|off)", self.path)
+        m = re.fullmatch(r"/dev/admin/read-only/(engine|off)", self.path)
         if m:
             args.read_only = None if m[1] == "off" else m[1]
-            return self.reply(204)
-        if self.path == "/dev/admin/log":
-            b = self.body()
-            note(
-                b.get("level", "info"),
-                b.get("source", "dev"),
-                b.get("message", "a line from the harness"),
-            )
-            return self.reply(204)
-        if self.path == "/dev/admin/logs/drop-errors":
-            LOGS[:] = [line for line in LOGS if line["level"] != "error"]
             return self.reply(204)
         if self.path == "/dev/admin/streams/clear":
             DEMO_STREAMS.clear()
@@ -2017,7 +1944,7 @@ class Handler(BaseHTTPRequestHandler):
             RESTART["until"] = 0.0
             return self.reply(204)
         if self.path == "/dev/admin/player-url/off":
-            args.player_url = None
+            SETTINGS["player.url"] = ""
             return self.reply(204)
         m = re.fullmatch(r"/dev/admin/restart-hangs/(on|off)", self.path)
         if m:
@@ -2071,9 +1998,7 @@ class Handler(BaseHTTPRequestHandler):
                 "requested_at": datetime.datetime.now(datetime.UTC).strftime("%Y-%m-%dT%H:%M:%SZ"),
                 "ip": self.client_address[0],
             }
-            base = (
-                args.player_url.rstrip("/") if args.player_url else f"http://{self.headers['Host']}"
-            )
+            base = SETTINGS["player.url"] or f"http://{self.headers['Host']}"
             return self.reply(
                 200,
                 {
@@ -2179,7 +2104,7 @@ class Handler(BaseHTTPRequestHandler):
                 return self.reply(415, {"error": {"code": "unsupported_type"}})
             if len(data) > PICTURE_MAX:
                 return self.reply(
-                    413, {"error": {"code": "too_large", "message": "The picture is over 2 MB."}}
+                    413, {"error": {"code": "too_large", "message": "The picture is over 512 KB."}}
                 )
             PICTURE.update(data=data, type=kind)
             return self.reply(204)
@@ -2322,35 +2247,6 @@ class Handler(BaseHTTPRequestHandler):
             return
         if self.path.startswith("/extensions/player/admin/"):
             return self.admin("PATCH")
-        if self.path == "/extensions/player/me":
-            b = self.body()
-            email = b.get("email")
-            if email is not None:
-                if not re.fullmatch(r"[^@\s]+@[^@\s]+\.[^@\s]+", email):
-                    return self.reply(
-                        422,
-                        {
-                            "error": {
-                                "code": "invalid_email",
-                                "message": "That is not an email address.",
-                            }
-                        },
-                    )
-                if email == TAKEN_EMAIL:
-                    return self.reply(
-                        409,
-                        {
-                            "error": {
-                                "code": "email_taken",
-                                "message": "That email is already in use.",
-                            }
-                        },
-                    )
-            if b.get("display_name") is not None:
-                ME["name"] = b["display_name"]
-            if email is not None:
-                ME["email"] = email
-            return self.reply(200, profile())
         m = re.fullmatch(r"/extensions/player/playback/sessions/([0-9a-f]{32})", self.path)
         if not m:
             return self.reply(404, {"error": {"code": "not_found"}})

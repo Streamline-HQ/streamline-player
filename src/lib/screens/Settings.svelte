@@ -1,14 +1,6 @@
 <script lang="ts">
 import Tip from "#lib/ui/Tip.svelte";
-import {
-	changed,
-	type Draft,
-	type FieldError,
-	PICTURE_TYPES,
-	pictureProblem,
-	refusal,
-	validate,
-} from "#lib/core/account.ts";
+import { type FieldError, PICTURE_TYPES, pictureProblem, refusal } from "#lib/core/account.ts";
 import { type Caps, chips } from "#lib/core/capabilities.ts";
 import { seen } from "#lib/core/devices.ts";
 import { lib, loadLibrary } from "#lib/core/library.svelte.ts";
@@ -37,7 +29,6 @@ import SettingsRow from "#lib/ui/SettingsRow.svelte";
 import StorageMeter from "#lib/ui/StorageMeter.svelte";
 import Switch from "#lib/ui/Switch.svelte";
 import { downloadWords } from "#lib/ui/download-words.ts";
-import TextField from "#lib/ui/TextField.svelte";
 import {
 	artwork,
 	authState,
@@ -54,7 +45,6 @@ import {
 	setPicture,
 	signOut as signOutNow,
 	title as fetchTitle,
-	updateMe,
 	watchState,
 	myPicture,
 } from "#platform";
@@ -78,62 +68,19 @@ let caps = $state.raw<Caps | null>(null);
 let active = $state("profile");
 let ping = $state(0);
 let beat = $state(0);
-let draft = $state<Draft>({ name: "", email: "" });
 let error = $state<FieldError | null>(null);
-let saving = $state(false);
 let leaving = $state<Device | null>(null);
 let picker = $state<HTMLInputElement>();
 
 const confirm = presence(() => leaving !== null, 240);
-const pending = $derived(me ? changed(me, draft) : {});
-const dirty = $derived(Object.keys(pending).length > 0);
-
-let seeded = false;
-$effect(() => {
-	if (me && !seeded) {
-		seeded = true;
-		draft = { name: me.name, email: me.email };
-	}
-});
-
 const wording = (e: FieldError) =>
 	({
-		empty_name: i18n.settings_err_name(),
-		invalid_email: i18n.settings_err_email_invalid(),
-		email_taken: i18n.settings_err_email_taken(),
 		too_large: i18n.settings_err_picture_large(),
 		unsupported_type: i18n.settings_err_picture_type(),
 		unknown: i18n.settings_err_unknown(),
 	})[e.message] ?? e.message;
 const errorOf = (field: FieldError["field"]) =>
 	error?.field === field ? wording(error) : undefined;
-
-async function save() {
-	if (!me || saving) return;
-	const invalid = validate(draft);
-	if (invalid) {
-		error = invalid;
-		return;
-	}
-	saving = true;
-	try {
-		const next = await updateMe(pending);
-		setMe(next);
-		draft = { name: next.name, email: next.email };
-		error = null;
-		toast(i18n.settings_saved());
-	} catch (e) {
-		error = refusal(String(e));
-	} finally {
-		saving = false;
-	}
-}
-
-function cancel() {
-	if (!me) return;
-	draft = { name: me.name, email: me.email };
-	error = null;
-}
 
 async function choosePicture(file: File | undefined) {
 	if (!file) return;
@@ -453,33 +400,14 @@ onMount(() => {
 			</SettingsRow>
 			<SettingsRow label={i18n.settings_name()} desc={i18n.settings_name_desc()}>
 				{#snippet control()}
-					<TextField
-						label={i18n.settings_name()}
-						value={draft.name}
-						error={errorOf("name")}
-						oninput={(v) => (draft.name = v)}
-						onenter={save}
-					/>
+					<span class="info">{me?.name}</span>
 				{/snippet}
 			</SettingsRow>
 			<SettingsRow label={i18n.settings_email()} desc={i18n.settings_email_desc()}>
 				{#snippet control()}
-					<TextField
-						label={i18n.settings_email()}
-						type="email"
-						value={draft.email}
-						error={errorOf("email")}
-						oninput={(v) => (draft.email = v)}
-						onenter={save}
-					/>
+					<span class="info">{me?.email}</span>
 				{/snippet}
 			</SettingsRow>
-			{#if dirty}
-				<div class="actions">
-					<Button variant="ghost" onclick={cancel}>{i18n.settings_cancel()}</Button>
-					<Button onclick={save} disabled={saving}>{i18n.settings_save()}</Button>
-				</div>
-			{/if}
 			<SettingsRow
 				label={i18n.settings_role()}
 				desc={me?.role === "Admin" ? i18n.settings_role_desc_admin() : undefined}
@@ -1040,14 +968,6 @@ h1 {
 	display: flex;
 	align-items: center;
 	gap: 10px;
-}
-
-.actions {
-	display: flex;
-	justify-content: flex-end;
-	gap: 8px;
-	padding: 12px 20px;
-	border-bottom: 1px solid var(--border);
 }
 
 .error {

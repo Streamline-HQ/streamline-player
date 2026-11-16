@@ -91,12 +91,27 @@ paths:
             application/json:
               schema: { $ref: "#/components/schemas/Person" }
         default: { $ref: "#/components/responses/Error" }
+  /posters/users/me/photo.jpg:
+    get:
+      operationId: getMyPicture
+      description: The user's own picture in Settings, Account and the account menu. Needs a credential, a device key or a bearer token; the picture is the caller's. 404 not_found when none is set.
+      responses:
+        "200":
+          description: The image.
+          content:
+            image/jpeg:
+              schema: { type: string, format: binary }
+            image/png:
+              schema: { type: string, format: binary }
+            image/webp:
+              schema: { type: string, format: binary }
+        default: { $ref: "#/components/responses/Error" }
   /posters/{kind}/{id}/{file}:
     parameters:
       - name: kind
         in: path
         required: true
-        schema: { type: string, enum: [movies, series, people, users] }
+        schema: { type: string, enum: [movies, series, people] }
       - name: id
         in: path
         required: true
@@ -104,11 +119,12 @@ paths:
       - name: file
         in: path
         required: true
-        description: poster.jpg, backdrop.jpg, or photo.jpg for a person or for the user (`users/me/photo.jpg`).
+        description: poster.jpg or backdrop.jpg for a title, photo.jpg for a person.
         schema: { type: string }
     get:
       operationId: getArtwork
-      description: Posters, backdrops and headshots on every screen that draws a title or a person, and the user's own picture in Settings, Account and the account menu. Needs no credential, as an image element cannot send one.
+      security: []
+      description: Posters, backdrops and headshots on every screen that draws a title or a person. Needs no credential, as an image element cannot send one.
       responses:
         "200":
           description: The image.
@@ -177,38 +193,13 @@ paths:
   /me:
     get:
       operationId: getMe
-      description: Settings, Account, and the library language the screens read.
+      description: Settings, Account (read-only; the name and the email are edited in Streamline), and the library language the screens read.
       responses:
         "200":
           description: The signed-in user.
           content:
             application/json:
               schema: { $ref: "#/components/schemas/Me" }
-        default: { $ref: "#/components/responses/Error" }
-    patch:
-      operationId: updateMe
-      description: Settings, Account. Saves the name and the email. The field names are those of `updateMe` in Streamline's API.
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema: { $ref: "#/components/schemas/UpdateMe" }
-      responses:
-        "200":
-          description: The user after the change.
-          content:
-            application/json:
-              schema: { $ref: "#/components/schemas/Me" }
-        "409":
-          description: The email is in use. `error.code` is `email_taken`.
-          content:
-            application/json:
-              schema: { $ref: "#/components/schemas/Error" }
-        "422":
-          description: The email is not valid. `error.code` is `invalid_email`.
-          content:
-            application/json:
-              schema: { $ref: "#/components/schemas/Error" }
         default: { $ref: "#/components/responses/Error" }
   /me/picture:
     put:
@@ -226,7 +217,7 @@ paths:
       responses:
         "204": { description: The picture is saved. }
         "413":
-          description: The picture is over 2 MB. `error.code` is `too_large`.
+          description: "The picture is over 512 KB. `error.code` is `too_large`. Streamline core caps every request body at 1 MiB and answers a bigger one itself, as `413` with a flat body of `message` and `code` (`body_too_large`)."
           content:
             application/json:
               schema: { $ref: "#/components/schemas/Error" }
@@ -450,7 +441,7 @@ paths:
   /admin/settings:
     get:
       operationId: adminSettings
-      description: Server settings. The fifteen keys, who owns each, and which ones wait for a restart. Admin only.
+      description: Server settings. The ten keys, who owns each, and which ones wait for a restart. Admin only.
       responses:
         "200":
           description: The settings as the server holds them.
@@ -460,7 +451,7 @@ paths:
         default: { $ref: "#/components/responses/Error" }
     patch:
       operationId: adminSaveSettings
-      description: Server settings. Saves the given keys, all or nothing. Streamline forwards the engine-owned ones to the engine. Admin only.
+      description: Server settings. Saves the given keys, all or nothing. The extension forwards the engine-owned ones to the engine. Admin only.
       requestBody:
         required: true
         content:
@@ -480,7 +471,7 @@ paths:
             application/json:
               schema: { $ref: "#/components/schemas/Error" }
         "409":
-          description: The owner's config is read-only. `error.code` is `read_only`, `error.owner` is `streamline` or `engine`.
+          description: The owner's config is read-only. `error.code` is `read_only`, `error.owner` is `engine`.
           content:
             application/json:
               schema: { $ref: "#/components/schemas/Error" }
@@ -488,7 +479,7 @@ paths:
   /admin/restart:
     post:
       operationId: adminRestart
-      description: Server settings, Restart. Restarts Streamline and the engine; streams stop for about ten seconds. The message is shown to the players. Admin only.
+      description: "Server settings, Restart. Restarts the engine; streams stop for about ten seconds. The message reaches the players as `server_restarting`, with `by` and `retry_after: 10`. Admin only."
       requestBody:
         required: true
         content:
@@ -542,6 +533,48 @@ paths:
             application/json:
               schema: { $ref: "#/components/schemas/Error" }
         default: { $ref: "#/components/responses/Error" }
+  /admin/users:
+    get:
+      operationId: adminUsers
+      description: Server settings, Devices. The people a pairing can be approved for, the unlocked users ordered by name. Admin only.
+      responses:
+        "200":
+          description: The users.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items]
+                properties:
+                  items:
+                    type: array
+                    items: { $ref: "#/components/schemas/AdminUser" }
+        default: { $ref: "#/components/responses/Error" }
+  /admin/engine/secret:
+    get:
+      operationId: adminEngineSecret
+      description: Server settings, Engine. Whether the secret shared with the engine is set. The secret itself is never read back. Admin only.
+      responses:
+        "200":
+          description: The secret's status.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/EngineSecretStatus" }
+        default: { $ref: "#/components/responses/Error" }
+    post:
+      operationId: adminRotateEngineSecret
+      description: Server settings, Engine. Generates the engine secret and answers it, this once. It replaces any older one, so playback stops until the engine's config is updated. Admin only.
+      responses:
+        "200":
+          description: The new secret.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [secret]
+                properties:
+                  secret: { type: string }
+        default: { $ref: "#/components/responses/Error" }
   /admin/pairings:
     get:
       operationId: adminPairings
@@ -562,11 +595,30 @@ paths:
   /admin/pairings/{userCode}/approve:
     post:
       operationId: adminApprovePairing
-      description: Server settings, Devices. An admin approves a pairing from Server settings, with a device key or a bearer token; the device's next poll gets its key. 404 no_pending_pairing for an unknown, used or expired code. Admin only.
+      description: Server settings, Devices. An admin approves a pairing from Server settings for the user they pick, with a device key or a bearer token; the device's next poll gets a key of that user's. 404 no_pending_pairing for an unknown, used or expired code, 404 not_found for an unknown or locked user. Admin only.
       parameters:
         - { $ref: "#/components/parameters/UserCode" }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [user_id]
+              properties:
+                user_id: { type: integer, description: An `id` of `/admin/users`. }
       responses:
         "204": { description: Approved. }
+        "400":
+          description: No `user_id`. `error.code` is `invalid_request`.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "404":
+          description: No pending pairing (`no_pending_pairing`) or no such user (`not_found`).
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
         default: { $ref: "#/components/responses/Error" }
   /admin/pairings/{userCode}/deny:
     post:
@@ -658,45 +710,6 @@ paths:
                 required: [freed]
                 properties:
                   freed: { type: integer, description: Bytes. }
-        default: { $ref: "#/components/responses/Error" }
-  /admin/logs:
-    get:
-      operationId: adminLogs
-      description: Server settings, Logs. The newest lines first, at most 80. `warn` includes errors; `after` leaves out every line up to that ID. Admin only.
-      parameters:
-        - name: level
-          in: query
-          schema: { type: string, enum: [all, warn, error], default: all }
-        - name: after
-          in: query
-          schema: { type: integer, minimum: 0 }
-      responses:
-        "200":
-          description: The lines.
-          content:
-            application/json:
-              schema:
-                type: object
-                required: [items]
-                properties:
-                  items:
-                    type: array
-                    maxItems: 80
-                    items: { $ref: "#/components/schemas/LogLine" }
-        default: { $ref: "#/components/responses/Error" }
-  /admin/logs/download:
-    get:
-      operationId: adminLogsDownload
-      description: Server settings, Logs. The log files as one zip. Admin only.
-      responses:
-        "200":
-          description: The archive, named by `Content-Disposition`.
-          headers:
-            Content-Disposition:
-              schema: { type: string, example: attachment; filename="streamline-logs.zip" }
-          content:
-            application/zip:
-              schema: { type: string, format: binary }
         default: { $ref: "#/components/responses/Error" }
   /auth/methods:
     get:
@@ -1088,7 +1101,9 @@ components:
         code: { type: string }
         message: { type: string }
         key: { type: string, description: "`invalid_setting`: the key refused." }
-        owner: { type: string, enum: [streamline, engine], description: "`read_only`: whose config is locked." }
+        owner: { type: string, enum: [engine, player], description: "`read_only`: whose config is locked." }
+        by: { type: string, description: "`session_stopped`, `server_restarting`: the admin who did it." }
+        retry_after: { type: integer, description: "`server_restarting`: seconds before the player retries." }
     Error:
       type: object
       required: [error]
@@ -1243,19 +1258,16 @@ components:
         updated_at: { type: string }
     Me:
       type: object
-      required: [name, email, role]
+      required: [id, name, email, role, streamline_url]
       properties:
-        name: { type: string }
+        id: { type: integer, description: The account's id in Streamline; the same as an `AdminUser.id`. }
+        name: { type: string, description: "The display name; the email's local part for an account that has none." }
         email: { type: string }
-        role: { type: string }
+        role: { type: string, description: "`Admin` or `Member`." }
+        streamline_url: { type: string, description: "Where the Streamline the extension runs in is reached, as the call came to it; its account page is at {streamline_url}/account." }
         library_language: { type: string, description: "BCP 47 tag of the language titles and synopses are shown in, kept per account by the extension (default en)." }
         picture: { type: boolean, description: Whether a profile picture is set. }
         initials: { type: string, description: One or two capital letters of the name, drawn when there is no picture. }
-    UpdateMe:
-      type: object
-      properties:
-        display_name: { type: string }
-        email: { type: string, description: The account email. }
     Kind:
       type: string
       enum: [movies, series]
@@ -1370,111 +1382,72 @@ components:
         - { type: string }
         - { type: number }
         - { type: boolean }
+        - { type: array, items: { type: string } }
     AdminSettings:
       type: object
       required: [values, owners, read_only, pending, restart_keys]
       properties:
         values:
           type: object
-          description: "transcoding.hw_accel, transcoding.hw_device, stream.tonemap, stream.max_live, library.watch, library.scan_every, ffmpeg.enabled, log.app.level, log.app.format, log.http.format, log.rotate.max_size, log.rotate.max_backups, log.rotate.compress, otel.endpoint, events.retention."
+          description: "The engine's keys transcoding.hw_accel, transcoding.hw_device, stream.tonemap and stream.max_live (absent while the engine cannot be reached), and the player's engine.url, engine.public_url, player.url (strings), player.origins, player.app_links and network.home (string arrays)."
           additionalProperties: { $ref: "#/components/schemas/SettingValue" }
         owners:
           type: object
-          description: The engine owns transcoding.hw_accel, transcoding.hw_device, stream.tonemap and stream.max_live; Streamline owns the rest.
-          additionalProperties: { type: string, enum: [streamline, engine] }
+          description: The engine owns transcoding.hw_accel, transcoding.hw_device, stream.tonemap and stream.max_live; the player extension owns the rest.
+          additionalProperties: { type: string, enum: [engine, player] }
         read_only:
           type: object
-          description: An owner whose config is read-only refuses every change to its keys.
-          required: [streamline, engine]
+          description: An owner whose config is read-only refuses every change to its keys. The player's is never.
+          required: [engine, player]
           properties:
-            streamline: { type: boolean }
             engine: { type: boolean }
+            player: { type: boolean }
         pending: { type: array, items: { type: string }, description: Keys saved but only applied after a restart. }
         restart_keys: { type: array, items: { type: string }, description: Every key that waits for a restart. }
     AdminOverview:
       type: object
-      required: [server, storage, health, logs]
+      description: "The fields of an engine that does not answer are absent, bar `engine.reachable: false`."
+      required: [extension, engine, storage, folders, streamline_url]
       properties:
-        server:
+        extension:
           type: object
-          required: [version, go, platform, commit, built_at, started_at, config_path, public_url, https, bind_address, trusted_proxies, session_secret]
+          required: [version]
           properties:
             version: { type: string }
-            go: { type: string }
-            platform: { type: string }
-            commit: { type: string }
-            built_at: { type: string }
-            started_at: { type: string }
-            config_path: { type: string }
-            public_url: { type: string }
-            player_url: { type: string, description: "Where the player's web app runs, when it is hosted. The desktop app sends an admin there to approve a pairing; absent when there is none." }
-            https: { type: boolean }
-            bind_address: { type: string }
-            trusted_proxies: { type: array, items: { type: string } }
-            session_secret: { type: string, description: Where the secret is read from, never the secret. }
-        storage:
+        engine:
           type: object
-          required: [media, data, database, cache]
+          required: [reachable]
           properties:
-            media:
-              type: object
-              required: [free, total]
-              properties:
-                free: { type: integer }
-                total: { type: integer }
-            data:
-              type: object
-              required: [path, free, total]
-              properties:
-                path: { type: string }
-                free: { type: integer }
-                total: { type: integer }
-            database:
-              type: object
-              required: [path, size]
-              properties:
-                path: { type: string }
-                size: { type: integer }
-            cache:
-              type: object
-              required: [path, size, streams]
-              properties:
-                path: { type: string }
-                size: { type: integer }
-                streams: { type: integer, description: Streams the cache holds segments for. }
-        health:
-          type: object
-          required: [ffmpeg, hw, folders, errors_today]
-          properties:
-            ffmpeg:
-              type: object
-              nullable: true
-              description: Null when ffmpeg is not found.
-              required: [path, version]
-              properties:
-                path: { type: string }
-                version: { type: string }
+            reachable: { type: boolean }
+            version: { type: string }
+            api_version: { type: integer }
+            ffmpeg_version: { type: string }
+            analysis_version: { type: integer }
             hw:
               type: object
               required: [mode, ready]
               properties:
                 mode: { type: string, enum: [vaapi, software] }
-                device: { type: string, description: The device's name. }
                 ready: { type: boolean }
-            folders:
-              type: object
-              required: [reachable, total]
-              properties:
-                reachable: { type: integer }
-                total: { type: integer }
-            errors_today: { type: integer }
-            errors_source: { type: string }
-        logs:
+            libplacebo: { type: boolean }
+            dovi_tool: { type: boolean }
+        storage:
           type: object
-          required: [app_path, http_path]
           properties:
-            app_path: { type: string }
-            http_path: { type: string }
+            cache:
+              type: object
+              description: Absent while the engine does not answer.
+              required: [size, streams]
+              properties:
+                size: { type: integer }
+                streams: { type: integer, description: Streams the cache holds segments for. }
+        folders:
+          type: object
+          required: [reachable, total]
+          properties:
+            reachable: { type: integer }
+            total: { type: integer }
+        streamline_url: { type: string }
     AdminStream:
       type: object
       description: A fact, not a sentence. `video` and `audio` describe a stream sent as it is; `from` and `to` one that is converted.
@@ -1514,6 +1487,19 @@ components:
         speed: { type: number, description: Times realtime. }
         cannot_decode: { type: string, description: The codec the device cannot decode, which is why the stream is converted. }
         bitrate: { type: integer, description: Bits per second. }
+    AdminUser:
+      type: object
+      required: [id, name, role]
+      properties:
+        id: { type: integer }
+        name: { type: string, description: "The display name; the email's local part for an account that has none." }
+        role: { type: string, description: "`Admin` or `Member`." }
+    EngineSecretStatus:
+      type: object
+      required: [set]
+      properties:
+        set: { type: boolean }
+        created_at: { type: string, description: When it was generated; absent while unset. }
     AdminPairing:
       type: object
       required: [user_code, name, platform, created_at, expires_at]
@@ -1574,18 +1560,6 @@ components:
             added: { type: integer }
             replaced: { type: integer }
             errors: { type: integer }
-    LogLine:
-      type: object
-      required: [id, at, level, source, message]
-      properties:
-        id: { type: integer, description: Grows with time. }
-        at: { type: string }
-        level: { $ref: "#/components/schemas/LogLevel" }
-        source: { type: string }
-        message: { type: string }
-    LogLevel:
-      type: string
-      enum: [debug, info, warn, error]
 
     DownloadQuality:
       type: string

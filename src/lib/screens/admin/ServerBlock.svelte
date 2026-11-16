@@ -1,9 +1,7 @@
 <script lang="ts">
 import type { Block } from "#lib/core/server-view.ts";
-import type { LogLine } from "#lib/core/types.ts";
 import type { Handlers } from "#lib/screens/admin/handlers.ts";
 import ItemRow from "#lib/screens/admin/ItemRow.svelte";
-import LogPanel from "#lib/screens/admin/LogPanel.svelte";
 import NoteRow from "#lib/screens/admin/NoteRow.svelte";
 import PairRow from "#lib/screens/admin/PairRow.svelte";
 import SettingRow from "#lib/screens/admin/SettingRow.svelte";
@@ -11,26 +9,14 @@ import StreamRow from "#lib/screens/admin/StreamRow.svelte";
 import Tiles from "#lib/screens/admin/Tiles.svelte";
 import Icon, { type IconName } from "#lib/ui/Icon.svelte";
 
-type Level = "all" | "warn" | "error";
-
 let {
 	block,
 	h,
 	drafts,
-	logs,
-	level,
-	live,
-	onlevel,
-	onlive,
 }: {
 	block: Block;
 	h: Handlers;
 	drafts: Record<string, string>;
-	logs: LogLine[];
-	level: Level;
-	live: boolean;
-	onlevel?: (level: Level) => void;
-	onlive?: () => void;
 } = $props();
 </script>
 
@@ -67,8 +53,6 @@ let {
 					<NoteRow {row} onact={h.act} />
 				{:else if row.t === "item"}
 					<ItemRow {row} onact={h.act} />
-				{:else if row.t === "logs"}
-					<LogPanel lines={logs} {level} {live} {onlevel} {onlive} />
 				{:else}
 					<SettingRow {row} draft={"key" in row ? drafts[row.key] : undefined} {h} />
 				{/if}

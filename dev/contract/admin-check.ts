@@ -1,6 +1,6 @@
 // The admin API of Server settings, through the contract proxy.
 import { spawn } from "node:child_process";
-import { strictEqual as eq, ok } from "node:assert";
+import { strictEqual as eq, deepStrictEqual as same, ok } from "node:assert";
 import { existsSync, mkdtempSync, readFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -11,7 +11,8 @@ import type {
 	AdminPairing,
 	AdminSettings,
 	AdminStream,
-	LogLine,
+	AdminUser,
+	EngineSecretStatus,
 	Me,
 } from "../../src/lib/core/types.ts";
 
@@ -92,7 +93,8 @@ const get = async <T>(url: string) => {
 };
 const items = async <T>(url: string) => (await get<{ items: T[] }>(url)).items;
 const errorOf = async (r: Response) =>
-	((await r.json()) as { error: { code: string; owner?: string } }).error;
+	((await r.json()) as { error: { code: string; owner?: string; key?: string } }).error;
+const ORDER = (d: AdminDevice) => [d.current ? 0 : 1, d.streaming ? 0 : 1];
 
 try {
 	const demo = await start("demo", "--demo-admin");
@@ -106,6 +108,12 @@ try {
 	const devices = await items<AdminDevice>(`${a}/devices`);
 	eq(devices.length, 8);
 	eq(devices[0].current, true);
+	for (let i = 1; i < devices.length; i++) {
+		const [a, b] = [ORDER(devices[i - 1]), ORDER(devices[i])];
+		ok(a[0] < b[0] || (a[0] === b[0] && a[1] <= b[1]), "own first, then streaming");
+		if (a.join() === b.join())
+			ok(devices[i - 1].last_seen >= devices[i].last_seen, "newest first within a group");
+	}
 	eq(devices.filter((d) => d.current).length, 1);
 	eq(devices.filter((d) => d.kind === "app").length, 6);
 	eq(devices.filter((d) => d.kind === "browser").length, 2);
@@ -114,31 +122,49 @@ try {
 	eq(library.folders.length, 2);
 	ok(library.last_scan);
 
-	const logs = await items<LogLine>(`${a}/logs`);
-	eq(logs.length, 9);
-	for (let i = 1; i < logs.length; i++) ok(logs[i - 1].id > logs[i].id, "newest first");
-	eq((await items<LogLine>(`${a}/logs?level=warn`)).length, 2);
-	eq((await items<LogLine>(`${a}/logs?level=error`)).length, 1);
-	eq((await items<LogLine>(`${a}/logs?after=${logs[2].id}`)).length, 2);
-
 	const settings = await get<AdminSettings>(`${a}/settings`);
-	eq(Object.keys(settings.values).length, 15);
+	eq(Object.keys(settings.values).length, 10);
 	eq(Object.values(settings.owners).filter((o) => o === "engine").length, 4);
+	eq(Object.values(settings.owners).filter((o) => o === "player").length, 6);
+	same(settings.read_only, { engine: false, player: false });
 	eq(settings.pending.length, 0);
+	for (const key of ["player.origins", "player.app_links", "network.home"])
+		same(settings.values[key], []);
 
-	const saved = await send(`${a}/settings`, "PATCH", { "log.app.level": "debug" });
+	const playerSaved = await send(`${a}/settings`, "PATCH", {
+		"player.url": "http://localhost:1430",
+		"player.origins": ["http://localhost:1430"],
+		"network.home": ["192.168.1.0/24"],
+	});
+	eq(playerSaved.status, 200);
+	const playerAfter = (await playerSaved.json()) as AdminSettings;
+	eq(playerAfter.pending.length, 0);
+	eq(playerAfter.values["player.url"], "http://localhost:1430");
+	same(playerAfter.values["player.origins"], ["http://localhost:1430"]);
+	const saved = await send(`${a}/settings`, "PATCH", { "stream.max_live": 4 });
 	eq(saved.status, 200);
 	const after = (await saved.json()) as AdminSettings;
-	eq(after.pending.join(), "log.app.level");
-	eq(after.values["log.app.level"], "debug");
-	for (const body of [{ "stream.max_live": 0 }, { nope: 1 }, { "stream.tonemap": "yes" }]) {
-		const r = await send(`${a}/settings`, "PATCH", body);
-		eq(r.status, 400);
-		eq((await errorOf(r)).code, "invalid_setting");
+	eq(after.pending.join(), "stream.max_live");
+	eq(after.values["stream.max_live"], 4);
+	for (const [key, value] of [
+		["stream.max_live", 0],
+		["nope", 1],
+		["stream.tonemap", "yes"],
+		["player.origins", ["http://localhost:1430/path"]],
+		["player.origins", "http://localhost:1430"],
+		["network.home", ["not a network"]],
+		["engine.url", "ftp://engine"],
+		["player.url", "http://player?x=1"],
+	] as const) {
+		const r = await send(`${a}/settings`, "PATCH", { [key]: value });
+		eq(r.status, 400, `${key}=${JSON.stringify(value)}`);
+		const e = await errorOf(r);
+		eq(e.code, "invalid_setting");
+		eq(e.key, key);
 	}
-	const mixed = await send(`${a}/settings`, "PATCH", { "stream.max_live": 4, nope: 1 });
+	const mixed = await send(`${a}/settings`, "PATCH", { "stream.tonemap": false, nope: 1 });
 	eq(mixed.status, 400);
-	eq((await get<AdminSettings>(`${a}/settings`)).values["stream.max_live"], 2);
+	eq((await get<AdminSettings>(`${a}/settings`)).values["stream.tonemap"], true);
 
 	const stop = await send(`${a}/streams/s2/stop`, "POST", { message: "Need the bandwidth" });
 	eq(stop.status, 204);
@@ -165,60 +191,95 @@ try {
 	ok(finished.folders.every((f) => !f.scan));
 	ok(finished.last_scan.at !== library.last_scan.at, "last_scan moved");
 
-	const started = (await get<AdminOverview>(`${a}/overview`)).server.started_at;
-	eq((await get<AdminOverview>(`${a}/overview`)).storage.cache.size > 0, true);
+	const overview = await get<AdminOverview>(`${a}/overview`);
+	eq(overview.extension.version.length > 0, true);
+	eq(overview.engine.reachable, true);
+	eq(overview.engine.hw?.mode, "vaapi");
+	same(overview.folders, { reachable: 2, total: 2 });
+	ok(overview.streamline_url.startsWith("http://"), overview.streamline_url);
+	eq((overview.storage.cache?.size ?? 0) > 0, true);
 	eq((await send(`${a}/cache/clear`, "POST")).status, 200);
-	eq((await get<AdminOverview>(`${a}/overview`)).storage.cache.size, 0);
+	eq((await get<AdminOverview>(`${a}/overview`)).storage.cache?.size, 0);
+
+	const unset = await get<EngineSecretStatus>(`${a}/engine/secret`);
+	same(unset, { set: false });
+	const rotated = await send(`${a}/engine/secret`, "POST");
+	eq(rotated.status, 200);
+	const { secret } = (await rotated.json()) as { secret: string };
+	ok(/^[A-Za-z0-9_-]{43}$/.test(secret), secret);
+	const status = await get<EngineSecretStatus>(`${a}/engine/secret`);
+	eq(status.set, true);
+	ok(status.created_at && !Number.isNaN(Date.parse(status.created_at)), "created_at");
+	ok(!JSON.stringify(status).includes(secret), "the secret is never read back");
+	const again = (await (await send(`${a}/engine/secret`, "POST")).json()) as { secret: string };
+	ok(again.secret !== secret, "rotating makes a new secret");
+
+	const users = await items<AdminUser>(`${a}/users`);
+	eq(users.map((u) => u.name).join(), "Antoine Langlois,Camille Roux,Hugo Bernard");
+	eq(users.map((u) => u.role).join(), "Admin,Member,Member");
+	const lax = await start("lax", "--demo-admin");
+	const noUser = await send(`${lax.admin}/pairings/R4W-X9P/approve`, "POST", {});
+	eq(noUser.status, 400);
+	eq((await errorOf(noUser)).code, "invalid_request");
+	const badUser = await send(`${a}/pairings/R4W-X9P/approve`, "POST", { user_id: 999 });
+	eq(badUser.status, 404);
+	eq((await errorOf(badUser)).code, "not_found");
+	eq((await items<AdminPairing>(`${a}/pairings`)).length, 1);
+	eq((await send(`${a}/pairings/R4W-X9P/approve`, "POST", { user_id: users[1].id })).status, 204);
+	eq((await items<AdminPairing>(`${a}/pairings`)).length, 0);
+	const gone = await send(`${a}/pairings/R4W-X9P/approve`, "POST", { user_id: users[1].id });
+	eq(gone.status, 404);
+	eq((await errorOf(gone)).code, "no_pending_pairing");
 
 	eq((await send(`${a}/restart`, "POST", {})).status, 202);
-	const down = await send(`${a}/overview`, "GET");
-	eq(down.status, 503);
-	eq((await errorOf(down)).code, "server_restarting");
+	const down = await get<AdminOverview>(`${a}/overview`);
+	same(down.engine, { reachable: false });
+	same(down.storage, {});
+	const downSettings = await get<AdminSettings>(`${a}/settings`);
+	eq("stream.max_live" in downSettings.values, false);
+	eq("player.url" in downSettings.values, true);
+	eq((await errorOf(await send(`${a}/cache/clear`, "POST"))).code, "engine_unavailable");
 	eq((await send(`${demo.dev}/admin/restart/finish`, "POST")).status, 204);
-	eq((await get<AdminSettings>(`${a}/settings`)).pending.length, 0);
-	ok((await get<AdminOverview>(`${a}/overview`)).server.started_at > started, "started_at moved");
-
-	const zip = await send(`${a}/logs/download`, "GET");
-	eq(zip.status, 200);
-	eq(zip.headers.get("content-type"), "application/zip");
-	ok(/filename="streamline-logs\.zip"/.test(zip.headers.get("content-disposition") ?? ""));
-	eq(new Uint8Array(await zip.arrayBuffer()).slice(0, 2).join(), "80,75");
+	const back = await get<AdminSettings>(`${a}/settings`);
+	eq(back.pending.length, 0);
+	eq(back.values["stream.max_live"], 4);
+	eq((await get<AdminOverview>(`${a}/overview`)).engine.reachable, true);
 	clean(demo.report);
 
 	const locked = await start("locked", "--read-only");
-	const refused = await send(`${locked.admin}/settings`, "PATCH", { "log.app.level": "debug" });
+	const refused = await send(`${locked.admin}/settings`, "PATCH", { "stream.max_live": 3 });
 	eq(refused.status, 409);
-	eq((await errorOf(refused)).code, "read_only");
-	eq((await get<AdminSettings>(`${locked.admin}/settings`)).read_only.streamline, true);
-	clean(locked.report);
-
-	const engineLocked = await start("engine-locked", "--read-only=engine");
+	const lockedError = await errorOf(refused);
+	eq(lockedError.code, "read_only");
+	eq(lockedError.owner, "engine");
+	same((await get<AdminSettings>(`${locked.admin}/settings`)).read_only, {
+		engine: true,
+		player: false,
+	});
 	eq(
-		(await send(`${engineLocked.admin}/settings`, "PATCH", { "log.app.level": "debug" })).status,
+		(await send(`${locked.admin}/settings`, "PATCH", { "player.url": "http://localhost:1430" }))
+			.status,
 		200,
 	);
-	const engineRefused = await send(`${engineLocked.admin}/settings`, "PATCH", {
-		"stream.max_live": 3,
-	});
-	eq(engineRefused.status, 409);
-	eq((await errorOf(engineRefused)).owner, "engine");
-	clean(engineLocked.report);
+	clean(locked.report);
 
 	const roleCalls: [string, string, unknown?][] = [
 		["GET", "/overview"],
 		["GET", "/settings"],
-		["PATCH", "/settings", { "log.app.level": "debug" }],
+		["PATCH", "/settings", { "player.url": "" }],
 		["POST", "/restart", {}],
 		["GET", "/streams"],
 		["POST", "/streams/s1/stop", {}],
 		["GET", "/pairings"],
+		["POST", "/pairings/R4W-X9P/approve", { user_id: 1 }],
+		["GET", "/users"],
+		["GET", "/engine/secret"],
+		["POST", "/engine/secret"],
 		["GET", "/devices"],
 		["DELETE", "/devices/d5"],
 		["GET", "/library"],
 		["POST", "/library/scan", {}],
 		["POST", "/cache/clear"],
-		["GET", "/logs"],
-		["GET", "/logs/download"],
 	];
 	const forbidden = async (admin: string) => {
 		for (const [method, path, body] of roleCalls) {
@@ -244,7 +305,6 @@ try {
 	eq((await items<AdminPairing>(`${plain.admin}/pairings`)).length, 0);
 	eq((await items<AdminDevice>(`${plain.admin}/devices`)).length >= 4, true);
 	eq((await get<AdminLibrary>(`${plain.admin}/library`)).folders.length, 2);
-	eq((await items<LogLine>(`${plain.admin}/logs`)).length, 10);
 	eq((await get<AdminSettings>(`${plain.admin}/settings`)).pending.length, 0);
 	clean(plain.report);
 

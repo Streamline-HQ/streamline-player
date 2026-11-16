@@ -6,7 +6,7 @@ import type {
 	AdminPairing,
 	AdminSettings,
 	AdminStream,
-	LogLine,
+	AdminUser,
 	SettingOwner,
 	SettingValue,
 } from "#lib/core/types.ts";
@@ -24,8 +24,7 @@ export type AdminPort = {
 	adminLibrary(): Promise<AdminLibrary>;
 	adminScan(folderId?: string): Promise<unknown>;
 	adminClearCache(): Promise<unknown>;
-	adminLogs(level: LogLevelFilter, after?: number): Promise<LogLine[]>;
-	adminLogsDownload(): Promise<string>;
+	adminUsers(): Promise<AdminUser[]>;
 };
 
 export type PairPort = {
@@ -33,7 +32,6 @@ export type PairPort = {
 	denyPairing(code: string): Promise<unknown>;
 };
 
-export type LogLevelFilter = "all" | "warn" | "error";
 export type SaveResult = "ok" | "failed" | "invalid" | "read_only";
 
 export type Timers = { sleep(ms: number): Promise<void>; now(): number };
@@ -42,15 +40,13 @@ const realTimers: Timers = {
 	now: () => Date.now(),
 };
 
-const LOG_LINES = 80;
 const RESTART_POLL_MS = 2000;
 const RESTART_LATE_MS = 60_000;
+/** What the players are told to wait: the engine may be back sooner without ever being seen down. */
+const RESTART_SETTLE_MS = 10_000;
 
 export const admin: {
 	data: AdminData | null;
-	logs: LogLine[];
-	level: LogLevelFilter;
-	live: boolean;
 	loaded: boolean;
 	error: string | null;
 	forbidden: boolean;
@@ -59,9 +55,6 @@ export const admin: {
 	drafts: Record<string, string>;
 } = $state({
 	data: null,
-	logs: [],
-	level: "all",
-	live: true,
 	loaded: false,
 	error: null,
 	forbidden: false,
@@ -121,10 +114,9 @@ function load(port: AdminPort, reset: boolean) {
 		port.adminPairings(),
 		port.adminDevices(),
 		port.adminLibrary(),
-		reset ? port.adminLogs(admin.level) : Promise.resolve(null),
 	])
 		.then(
-			([overview, settings, streams, pairings, devices, library, logs]) => {
+			([overview, settings, streams, pairings, devices, library]) => {
 				if (run !== generation) return;
 				const ended = scansEnded(admin.data?.library, library);
 				admin.data = {
@@ -134,13 +126,12 @@ function load(port: AdminPort, reset: boolean) {
 					pairings,
 					devices: withFresh(devices),
 					library,
-					cacheCleared: !!admin.data?.cacheCleared && overview.storage.cache.size === 0,
+					cacheCleared: !!admin.data?.cacheCleared && overview.storage.cache?.size === 0,
 					web: devices.find((d) => d.current)?.kind === "browser",
 					tick: 0,
 					fresh: freshNames,
 				};
 				if (ended) scanDone.report = ended;
-				if (logs) admin.logs = logs.slice(0, LOG_LINES);
 				admin.loaded = true;
 				admin.error = null;
 				admin.forbidden = false;
@@ -177,30 +168,10 @@ export async function loadPendingPairs(port: Pick<AdminPort, "adminPairings">) {
 	}
 }
 
-export async function refreshLogs(port: AdminPort) {
-	if (!admin.live) return;
-	const level = admin.level;
-	const newest = admin.logs[0]?.id;
-	try {
-		const fresh = await port.adminLogs(level, newest);
-		if (level !== admin.level || newest !== admin.logs[0]?.id) return;
-		admin.logs = [...fresh, ...admin.logs].slice(0, LOG_LINES);
-	} catch {}
-}
-
-export async function setLevel(port: AdminPort, level: LogLevelFilter) {
-	admin.level = level;
-	admin.logs = [];
-	try {
-		const lines = await port.adminLogs(level);
-		if (level === admin.level) admin.logs = lines.slice(0, LOG_LINES);
-	} catch {}
-}
-
 export async function save(port: AdminPort, key: string, value: SettingValue): Promise<SaveResult> {
 	const settings = admin.data?.settings;
 	if (!settings) return "failed";
-	const owner: SettingOwner = settings.owners[key] ?? "streamline";
+	const owner: SettingOwner = settings.owners[key] ?? "player";
 	if (settings.read_only[owner]) return "read_only";
 	const before = settings.values[key];
 	if (before === value) return "ok";
@@ -389,16 +360,16 @@ export async function refreshLibrary(port: AdminPort) {
 export async function clearCache(port: AdminPort) {
 	const d = admin.data;
 	if (!d) return false;
-	const size = d.overview.storage.cache.size;
+	const size = d.overview.storage.cache?.size ?? 0;
 	d.cacheCleared = true;
-	d.overview.storage.cache.size = 0;
+	if (d.overview.storage.cache) d.overview.storage.cache.size = 0;
 	try {
 		await port.adminClearCache();
 		return true;
 	} catch {
 		if (admin.data) {
 			admin.data.cacheCleared = false;
-			admin.data.overview.storage.cache.size = size;
+			if (admin.data.overview.storage.cache) admin.data.overview.storage.cache.size = size;
 		}
 		return false;
 	}
@@ -406,7 +377,6 @@ export async function clearCache(port: AdminPort) {
 
 export async function restart(port: AdminPort, message?: string, timers: Timers = realTimers) {
 	if (admin.restarting || !admin.data) return;
-	const before = Date.parse(admin.data.overview.server.started_at);
 	admin.restarting = true;
 	admin.lateRestart = false;
 	const run = generation;
@@ -418,12 +388,14 @@ export async function restart(port: AdminPort, message?: string, timers: Timers 
 	}
 	void (async () => {
 		const began = timers.now();
+		let sawDown = false;
 		while (run === generation && admin.restarting) {
 			await timers.sleep(RESTART_POLL_MS);
 			if (run !== generation || !admin.restarting) return;
 			try {
 				const overview = await port.adminOverview();
-				if (Date.parse(overview.server.started_at) > before) {
+				if (!overview.engine.reachable) sawDown = true;
+				else if (sawDown || timers.now() - began >= RESTART_SETTLE_MS) {
 					admin.restarting = false;
 					admin.lateRestart = false;
 					await refreshAdmin(port);
@@ -446,9 +418,6 @@ export function resetAdmin() {
 	scanDone.report = null;
 	saveEpoch++;
 	admin.data = null;
-	admin.logs = [];
-	admin.level = "all";
-	admin.live = true;
 	admin.loaded = false;
 	admin.error = null;
 	admin.forbidden = false;

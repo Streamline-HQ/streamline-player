@@ -14,6 +14,7 @@ import type {
 	AdminOverview,
 	AdminPairing,
 	AdminSettings,
+	AdminUser,
 	AdminStream,
 	Device,
 	DeviceInfo,
@@ -23,7 +24,6 @@ import type {
 	DownloadsEvent,
 	HomeFeed,
 	Kind,
-	LogLine,
 	Me,
 	Pairing,
 	PairRequest,
@@ -288,11 +288,6 @@ export const openExternal = (url: string): Promise<unknown> => {
 };
 export const me = () => call<Me>("GET", "/me");
 export const home = () => call<HomeFeed>("GET", "/home");
-export const updateMe = (patch: { name?: string; email?: string }) =>
-	call<Me>("PATCH", "/me", {
-		...(patch.name === undefined ? {} : { display_name: patch.name }),
-		...(patch.email === undefined ? {} : { email: patch.email }),
-	});
 export const setPicture = (file: Blob) => call<void>("PUT", "/me/picture", file);
 export const removePicture = () => call<void>("DELETE", "/me/picture");
 export const revokeDevice = (id: string) =>
@@ -318,39 +313,19 @@ export const adminPairings = () =>
 	call<{ items: AdminPairing[] }>("GET", "/admin/pairings").then(listOf);
 export const adminDevices = () =>
 	call<{ items: AdminDevice[] }>("GET", "/admin/devices").then(listOf);
-export const adminResolvePairing = (code: string, approve: boolean) =>
-	call("POST", `/admin/pairings/${encodeURIComponent(code)}/${approve ? "approve" : "deny"}`);
+export const adminUsers = () => call<{ items: AdminUser[] }>("GET", "/admin/users").then(listOf);
+export const adminResolvePairing = (code: string, approve: boolean, userId?: number) =>
+	call(
+		"POST",
+		`/admin/pairings/${encodeURIComponent(code)}/${approve ? "approve" : "deny"}`,
+		approve ? { user_id: userId } : undefined,
+	);
 export const adminRevokeDevice = (id: string) =>
 	call<void>("DELETE", `/admin/devices/${encodeURIComponent(id)}`);
 export const adminLibrary = () => call<AdminLibrary>("GET", "/admin/library");
 export const adminScan = (folderId?: string) =>
 	call<void>("POST", "/admin/library/scan", folderId === undefined ? {} : { folder_id: folderId });
 export const adminClearCache = () => call<{ freed: number }>("POST", "/admin/cache/clear");
-export const adminLogs = (level: "all" | "warn" | "error", after?: number) =>
-	call<{ items: LogLine[] }>(
-		"GET",
-		`/admin/logs?level=${level}${after === undefined ? "" : `&after=${after}`}`,
-	).then(listOf);
-/** Saves through a temporary link; resolves to the file's name. */
-export async function adminLogsDownload(): Promise<string> {
-	await init();
-	const send = () =>
-		fetch(url("/admin/logs/download"), {
-			headers: access ? { Authorization: `Bearer ${access}` } : {},
-		});
-	let res = await send().catch((e) => fail(String(e)));
-	if (res.status === 401 && store.get(REFRESH) && (await refresh(access))) res = await send();
-	if (!res.ok) return fail(await res.text());
-	const name =
-		/filename="([^"]+)"/.exec(res.headers.get("content-disposition") ?? "")?.[1] ??
-		"streamline-logs.zip";
-	const link = document.createElement("a");
-	link.href = URL.createObjectURL(await res.blob());
-	link.download = name;
-	link.click();
-	setTimeout(() => URL.revokeObjectURL(link.href), 10_000);
-	return name;
-}
 export const playbackStatus = () => call<{ network?: string }>("GET", "/playback/status");
 export const serverHost = () => Promise.resolve(streamline.replace(/^[a-z]+:\/\//, ""));
 
