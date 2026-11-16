@@ -1,0 +1,44 @@
+name: Bug report
+description: Something is broken
+labels: [bug]
+body:
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened?
+      description: What you did, what you expected, what you got instead.
+    validations:
+      required: true
+
+  - type: input
+    id: version
+    attributes:
+      label: Version
+      description: "The commit you built, or the engine image tag."
+      placeholder: 7477b96, engine sha-7477b96
+    validations:
+      required: true
+
+  - type: input
+    id: environment
+    attributes:
+      label: App and device
+      description: Which app (Android TV, desktop, web), the device and OS, and for the web the browser.
+      placeholder: Android TV app on a Ugoos AM9 Pro, Android 14
+    validations:
+      required: true
+
+  - type: textarea
+    id: logs
+    attributes:
+      label: Logs
+      description: >
+        The app's log (logcat on Android, the terminal on desktop, the browser console on the web) and the engine's. Redact device keys and tokens.
+      render: text
+
+  - type: textarea
+    id: extra
+    attributes:
+      label: Anything else?
+      description: >
+        The file being played (container, codecs, HDR) when it is about playback, the quality and subtitle settings, screenshots or a video.
