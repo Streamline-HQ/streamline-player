@@ -588,7 +588,7 @@ export async function settings(ctx, side) {
   await wait(2500);
   out.signedOut = await pathOf(app);
   if (side.target === "web") {
-    await app.getByRole("button", { name: "Continue with Authentik" }).click();
+    await app.getByRole("button", { name: "Continue with Streamline" }).click();
     await app.waitForURL(`${side.url}/`);
     await wait(1500);
     await key("g");

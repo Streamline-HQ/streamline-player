@@ -10,7 +10,7 @@ export default async ({ app, wait }) => {
   await app.setViewportSize({ width: 1440, height: 900 });
   const out = {};
   await app.goto(`${BASE}/signin?next=${encodeURIComponent("/detail/movies/3")}`);
-  await app.getByRole("button", { name: "Continue with Authentik" }).click();
+  await app.getByRole("button", { name: "Continue with Streamline" }).click();
   await app.waitForURL(`${BASE}/detail/movies/3`, { timeout: 15000 });
   await wait(1500);
   out.afterSignIn = app.url();

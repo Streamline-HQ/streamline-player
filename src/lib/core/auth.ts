@@ -1,4 +1,4 @@
-export type SignInErrorCode = "state" | "denied" | "invalid_grant" | "credentials" | "network";
+export type SignInErrorCode = "state" | "denied" | "invalid_grant" | "network";
 
 export class SignInError extends Error {
 	readonly code: SignInErrorCode;

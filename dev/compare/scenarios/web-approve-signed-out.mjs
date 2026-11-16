@@ -14,7 +14,7 @@ export default async ({ app, wait }) => {
   await app.waitForURL(/\/signin/, { timeout: 15000 });
   await wait(500);
   out.gate = (await here(app)).replace(device.code, "CODE");
-  await app.getByRole("button", { name: "Continue with Authentik" }).click();
+  await app.getByRole("button", { name: "Continue with Streamline" }).click();
   await app.waitForURL(`${ORIGIN}${link}`, { timeout: 15000 });
   await wait(1000);
   out.back = (await here(app)).replace(device.code, "CODE");

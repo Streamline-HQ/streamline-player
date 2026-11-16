@@ -55,10 +55,10 @@ const invoke = <T = unknown>(...args: Parameters<typeof rawInvoke>): Promise<T> 
 const webOnly = () => Promise.reject(new Error("not on this target"));
 
 export const init = () => Promise.resolve();
-export const authMethods = (): Promise<AuthMethods> => webOnly();
-export const startSso = (_provider: string, _next: string): Promise<void> => webOnly();
+export const authMethods = () => invoke<AuthMethods>("auth_methods");
+/** Streamline's sign-in page in the system browser; resolves once the device key is kept. */
+export const startSignIn = (_next: string) => invoke<{ name: string }>("sign_in");
 export const finishSso = (_query: URLSearchParams): Promise<string> => webOnly();
-export const signInEmail = (_email: string, _password: string): Promise<void> => webOnly();
 
 export const windowControls = {
 	minimize: () => getCurrentWindow().minimize(),

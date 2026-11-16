@@ -1,11 +1,10 @@
-// The desktop app's onboarding with no saved server: the address, the pair step, the browser button, the paired step,
-// and its three exits (the countdown, "Start watching", "Sign out").
-import { approveOnScreen, body, codeOf, openDesk, squash, until, waitCode } from "./onboarding-lib.mjs";
+// The desktop app's onboarding with no saved server: the address, the sign-in card and its browser round trip, the
+// signed-in step and its three exits (the countdown, "Start watching", "Sign out"), and a sign-in that fails.
+import { body, openDesk, signInOnScreen, squash, until, waitSignIn } from "./onboarding-lib.mjs";
 
 export const target = "desktop";
 export const mockArgs = [];
 
-const spaced = (code) => [...code].join(" ").replace("-", "–");
 const path = (app) => app.evaluate(() => location.pathname);
 
 export default async ({ app, shot, wait }) => {
@@ -33,44 +32,44 @@ export default async ({ app, shot, wait }) => {
   out.found = squash(await app.locator(".found").innerText());
   out.connected = squash(await app.locator("button[type=submit]").innerText());
   await shot("desk-welcome-found");
-  await waitCode(app, wait);
-  const first = await codeOf(app);
-  out.codeShape = /^[A-Z0-9]{3}-[A-Z0-9]{3}$/.test(first);
-  out.pairStep = (await body(app)).replace(spaced(first), "CODE").replace(/expires in \d+:\d\d/, "expires in M:SS");
-  out.qrAlt = await app.locator(".qr img").getAttribute("alt");
-  await shot("desk-welcome-pair");
-  await app.getByRole("button", { name: "Approve in this computer's browser" }).click();
-  await wait(200);
-  const opened = await app.evaluate(() => window.__opened);
-  out.opened = opened?.map((u) => u.replace(first, "CODE"));
-  out.openedComplete = opened?.length === 1 && opened[0].endsWith(`/pair?code=${first}`);
-  out.afterBrowser = squash(await app.locator(".status").innerText()).replace(/expires in \d+:\d\d/, "expires in M:SS");
+  await waitSignIn(app, wait);
+  out.signInStep = await body(app);
+  await shot("desk-welcome-signin");
+  await app.getByRole("button", { name: "Continue with Streamline" }).click();
+  await wait(300);
+  out.busy = squash(await app.locator(".sso").innerText());
+  out.opened = await app.evaluate(() => window.__opened);
   await shot("desk-welcome-browser");
-  await approveOnScreen(app, wait);
-  out.paired = await body(app);
+  await until(app, wait, async () => (await body(app)).includes("You're signed in"), "the signed-in step");
+  out.signedIn = await body(app);
   out.goLabel = /^\d s$/.test(await app.locator(".secs").innerText());
-  await shot("desk-welcome-paired");
+  await shot("desk-welcome-signed-in");
   await until(app, wait, async () => (await path(app)) === "/", "the countdown to end", 40);
   out.afterCountdown = await path(app);
 
   await openDesk(app);
-  await waitCode(app, wait);
-  out.savedServerStart = (await body(app)).includes("streamline.home.arpa");
-  await approveOnScreen(app, wait);
+  await waitSignIn(app, wait);
+  out.savedServerStart = (await body(app)).includes("Continue with Streamline");
+  await signInOnScreen(app, wait);
   await app.getByRole("button", { name: "Start watching" }).click();
   await wait(500);
   out.afterStartWatching = await path(app);
 
   await openDesk(app);
-  await waitCode(app, wait);
-  const before = await codeOf(app);
-  await approveOnScreen(app, wait);
+  await waitSignIn(app, wait);
+  await signInOnScreen(app, wait);
   await app.getByRole("button", { name: "Sign out" }).click();
-  await waitCode(app, wait);
-  out.afterSignOut = {
-    step: /step 2 of 2/i.test(await body(app)),
-    newCode: (await codeOf(app)) !== before,
-    toast: squash(await app.locator(".toasts").innerText()),
-  };
+  await waitSignIn(app, wait);
+  out.afterSignOut = squash(await app.locator(".toasts").innerText());
+
+  await openDesk(app, { fail: "denied" });
+  await waitSignIn(app, wait);
+  await app.getByRole("button", { name: "Continue with Streamline" }).click();
+  await until(app, wait, () => app.getByRole("alert").count(), "the error line");
+  out.denied = (await app.getByRole("alert").innerText()).trim();
+  await shot("desk-welcome-denied");
+  await app.getByRole("button", { name: "Change" }).click();
+  await wait(300);
+  out.afterChange = (await body(app)).includes("Connect to your server");
   return out;
 };

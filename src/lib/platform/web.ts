@@ -449,12 +449,12 @@ export const authMethods = (): Promise<AuthMethods> =>
 
 const callbackUrl = () => `${location.origin}${resolve("/")}signin/callback`;
 
-export async function startSso(provider: string, next: string) {
+/** Leaves for Streamline's sign-in page; the callback route finishes it. */
+export async function startSignIn(next: string): Promise<void> {
 	const { verifier, challenge } = await pkcePair();
 	const state = crypto.randomUUID();
 	sessionStorage.setItem(PENDING_SSO, JSON.stringify({ state, verifier, next }));
 	const query = new URLSearchParams({
-		provider,
 		redirect_uri: callbackUrl(),
 		state,
 		code_challenge: challenge,
@@ -483,17 +483,6 @@ export async function finishSso(query: URLSearchParams): Promise<string> {
 	if (!res.ok) throw new SignInError("invalid_grant");
 	await keep(await res.json());
 	return pending.next;
-}
-
-export async function signInEmail(email: string, password: string) {
-	const res = await tokenRequest({
-		grant_type: "password",
-		email,
-		password,
-		device_name: browserDeviceName(navigator.userAgent),
-	});
-	if (!res.ok) throw new SignInError("credentials");
-	await keep(await res.json());
 }
 
 export const windowControls = {

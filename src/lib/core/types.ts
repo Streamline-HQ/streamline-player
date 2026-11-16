@@ -172,8 +172,6 @@ export type PairRequest = {
 	ip: string;
 };
 export type AuthMethods = {
-	sso: { id: string; label: string }[];
-	email: boolean;
 	register_url: string | null;
 };
 export type AuthState = {

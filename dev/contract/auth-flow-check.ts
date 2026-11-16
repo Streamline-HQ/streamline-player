@@ -87,20 +87,21 @@ try {
 	const grant = <T = Tokens>(body: object) => token(body).then((r) => r.json() as Promise<T>);
 
 	const methods: AuthMethods = await call("/auth/methods").then((r) => r.json());
-	ok(methods.sso.some((s) => s.id === "authentik"));
+	eq(methods.register_url, null);
 
-	const query = new URLSearchParams({
-		provider: "authentik",
-		redirect_uri: REDIRECT,
-		state: "st-1",
-		code_challenge: CHALLENGE,
-		code_challenge_method: "S256",
-	});
-	const authorize = async () => {
-		const r = await call(`/authorize?${query}`);
+	const query = (redirect: string) =>
+		new URLSearchParams({
+			redirect_uri: redirect,
+			state: "st-1",
+			code_challenge: CHALLENGE,
+			code_challenge_method: "S256",
+		});
+	const authorize = async (redirect = REDIRECT) => {
+		const r = await call(`/authorize?${query(redirect)}`);
 		eq(r.status, 302);
 		return new URL(r.headers.get("location") as string);
 	};
+	eq((await call(`/authorize?${query("https://evil.example/cb")}`)).status, 400);
 	const back = await authorize();
 	eq(back.searchParams.get("state"), "st-1");
 	const code = back.searchParams.get("code") as string;
@@ -122,18 +123,28 @@ try {
 	const other = (await authorize()).searchParams.get("code") as string;
 	eq((await exchange<ApiError>(other, "not-the-verifier")).error.code, "invalid_grant");
 
-	const login = (password: string) =>
-		token({
-			grant_type: "password",
-			email: "antoine@example.net",
-			password,
-			device_name: "Chrome",
-		});
-	const signed = await login("streamline").then((r) => r.json() as Promise<Tokens>);
+	const signIn = async () =>
+		exchange((await authorize()).searchParams.get("code") as string, VERIFIER);
+	const signed = await signIn();
 	ok(signed.access_token);
-	const bad = await login("wrong");
-	eq(bad.status, 401);
-	eq(((await bad.json()) as ApiError).error.code, "invalid_credentials");
+
+	const LOOPBACK = "http://127.0.0.1:49152/callback";
+	const appSignIn = async () =>
+		grant<{ api_key: string; key_id: number }>({
+			grant_type: "authorization_code",
+			code: (await authorize(LOOPBACK)).searchParams.get("code"),
+			code_verifier: VERIFIER,
+			redirect_uri: LOOPBACK,
+			client_id: "check-desktop",
+			name: "Check desktop",
+			platform: "linux",
+		});
+	const app = await appSignIn();
+	ok(app.api_key);
+	eq((await call("/me", { headers: { "X-API-Key": app.api_key } })).status, 200);
+	const again = await appSignIn();
+	eq((await call("/me", { headers: { "X-API-Key": again.api_key } })).status, 200);
+	eq((await call("/me", { headers: { "X-API-Key": app.api_key } })).status, 401);
 
 	eq((await call("/me", { token: signed.access_token })).status, 200);
 	await new Promise((r) => setTimeout(r, 2500));
@@ -168,12 +179,7 @@ try {
 	});
 	eq(evil.headers.get("access-control-allow-origin"), null);
 
-	const kept = await grant({
-		grant_type: "password",
-		email: "antoine@example.net",
-		password: "streamline",
-		device_name: "Safari",
-	});
+	const kept = await signIn();
 	const devices: { items: AdminDevice[] } = await call("/devices", {
 		token: kept.access_token,
 	}).then((r) => r.json());

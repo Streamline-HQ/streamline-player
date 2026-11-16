@@ -922,6 +922,8 @@ pub fn run() {
             auth::connect,
             auth::pair_start,
             auth::pair_poll,
+            auth::sign_in,
+            auth::auth_methods,
             auth::open_external,
             auth::sign_out,
             server_host,

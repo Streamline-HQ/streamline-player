@@ -6,6 +6,7 @@ import { existsSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { HomeFeed, Me, Title } from "../../src/lib/core/types.ts";
+import { browserToken } from "./sign-in.ts";
 
 type ApiError = { error: { code: string } };
 
@@ -81,16 +82,7 @@ const violations = (report: string) =>
 try {
 	const full = await start("full");
 	const api = `${full.root}/extensions/player`;
-	const login = (await fetch(`${api}/auth/token`, {
-		method: "POST",
-		headers: { "Content-Type": "application/json" },
-		body: JSON.stringify({
-			grant_type: "password",
-			email: "antoine@example.net",
-			password: "streamline",
-			device_name: "Chrome",
-		}),
-	}).then((r) => r.json())) as { access_token: string };
+	const login = { access_token: await browserToken(api, "Chrome") };
 	const auth = { Authorization: `Bearer ${login.access_token}` };
 	const call = (path: string, init: RequestInit = {}) =>
 		fetch(`${api}${path}`, { ...init, headers: { ...auth, ...(init.headers as object) } });

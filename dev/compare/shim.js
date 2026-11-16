@@ -100,38 +100,23 @@
     const q = window.qrcode(0, "M"); q.addData(`${uri}?code=${code}`); q.make();
     return { code, name: "Living room · SHIELD", uri, uri_complete: `${uri}?code=${code}`, expires_in: 600, interval: 1, qr: q.createSvgTag({ cellSize: 8, margin: 0 }) };
   };
-  // window.__realPair: pairing goes to the mock as the Rust side does it; __pairDown makes it fail as a dead network does.
-  let deviceCode = null;
-  const realPairStart = async () => {
-    if (window.__pairDown) throw "error sending request for url (http://127.0.0.1:8081/extensions/player/auth/device/code)";
-    const name = "framework-13";
-    const r = await call("POST", "/auth/device/code", { client_id: "shim-desktop", name, platform: "Linux" });
-    deviceCode = r.device_code;
-    const q = window.qrcode(0, "M"); q.addData(r.verification_uri_complete); q.make();
-    return { code: r.user_code, name, uri: r.verification_uri, uri_complete: r.verification_uri_complete, expires_in: r.expires_in, interval: r.interval, qr: q.createSvgTag({ cellSize: 8, margin: 0 }) };
-  };
-  const realPairPoll = async () => {
-    if (!deviceCode) return "expired";
-    try {
-      await call("POST", "/auth/device/token", { device_code: deviceCode });
-    } catch (e) {
-      const code = JSON.parse(e)?.error?.code;
-      const answer = { authorization_pending: "pending", slow_down: "slow_down", access_denied: "denied", expired_token: "expired" }[code];
-      if (answer) return answer;
-      throw e;
-    }
-    deviceCode = null;
+  // sign_in stands in for the browser round trip: __signInFail names the error it ends with, else it keeps a key.
+  const signIn = () => new Promise((resolve, reject) => setTimeout(() => {
+    (window.__opened ||= []).push("https://streamline.home.arpa/extensions/player/authorize");
+    if (window.__signInFail) return reject(window.__signInFail);
     window.__auth = { ...(window.__auth || {}), paired: true };
-    return "paired";
-  };
+    resolve({ name: "framework-13" });
+  }, window.__signInMs ?? 1200));
   const cmds = {
     server_host: () => "127.0.0.1:8081",
     auth_state: () => ({ server: null, paired: true, keystore: "Android Keystore", ...(window.__auth || {}) }),
     connect: ({ url }) => (/bad/.test(url) ? Promise.reject(`Can’t reach ${url}`) : new Promise((r) => setTimeout(() => r(38), 600))),
-    pair_start: () => window.__realPair ? realPairStart() : fakePairStart(),
+    pair_start: () => fakePairStart(),
+    sign_in: signIn,
+    auth_methods: () => ({ register_url: null }),
     open_external: ({ url }) => { (window.__opened ||= []).push(url); return null; },
-    pair_poll: () => window.__realPair ? realPairPoll() : (window.__pairAnswer || "pending"),
-    sign_out: () => { if (window.__realPair) window.__auth = { ...(window.__auth || {}), paired: false }; return null; },
+    pair_poll: () => window.__pairAnswer || "pending",
+    sign_out: () => { window.__auth = { ...(window.__auth || {}), paired: false }; return null; },
     "plugin:event|listen": ({ event, handler }) => { (evListeners[event] ||= []).push(handler); return handler; },
     "plugin:event|unlisten": ({ event, eventId }) => { evListeners[event] = (evListeners[event] || []).filter((h) => h !== eventId); return null; },
     library: ({ kind }) => call("GET", kp(kind)),

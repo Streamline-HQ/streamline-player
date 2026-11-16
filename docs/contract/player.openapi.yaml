@@ -701,35 +701,25 @@ paths:
   /auth/methods:
     get:
       operationId: authMethods
-      description: Web sign-in. The ways this server lets a browser sign in.
+      description: Sign-in. What the sign-in card shows besides its one button; Streamline's own page offers single sign-on or email.
       security: []
       responses:
         "200":
-          description: The sign-in methods.
+          description: The card's extras.
           content:
             application/json:
               schema:
                 type: object
-                required: [sso, email, register_url]
+                required: [register_url]
                 properties:
-                  sso:
-                    type: array
-                    items:
-                      type: object
-                      required: [id, label]
-                      properties:
-                        id: { type: string }
-                        label: { type: string }
-                  email: { type: boolean }
                   register_url: { type: string, nullable: true }
         default: { $ref: "#/components/responses/Error" }
   /authorize:
     get:
       operationId: authorize
-      description: Web sign-in, on the extension's session mount, so Streamline's own login runs first. The browser is sent here to sign in with a provider (PKCE); it comes back to redirect_uri with a code, or with error=access_denied.
+      description: Sign-in, on the extension's session mount, so Streamline's own login runs first. The web player, or an app through the system browser, is sent here (PKCE); it comes back to redirect_uri with a code, or with error=access_denied. redirect_uri is a web player origin on the allow-list or, for an app, a loopback http://127.0.0.1 address on any port (RFC 8252) or the app's own link.
       security: []
       parameters:
-        - { name: provider, in: query, required: true, schema: { type: string } }
         - { name: redirect_uri, in: query, required: true, schema: { type: string } }
         - { name: state, in: query, required: true, schema: { type: string } }
         - { name: code_challenge, in: query, required: true, schema: { type: string } }
@@ -743,7 +733,7 @@ paths:
   /auth/token:
     post:
       operationId: token
-      description: Web sign-in. Exchanges a code, a password or a refresh token for a browser's tokens; every refresh rotates the refresh token, and replaying a rotated one revokes the browser.
+      description: Sign-in. A browser exchanges a code or a refresh token for its tokens; every refresh rotates the refresh token, and replaying a rotated one revokes the browser. An app exchanges a code with its client_id for a device key, shown once; a known client_id loses its old key.
       security: []
       requestBody:
         required: true
@@ -760,12 +750,15 @@ paths:
                     redirect_uri: { type: string }
                     device_name: { type: string }
                 - type: object
-                  required: [grant_type, email, password, device_name]
+                  required: [grant_type, code, code_verifier, redirect_uri, client_id, name, platform]
                   properties:
-                    grant_type: { type: string, enum: [password] }
-                    email: { type: string }
-                    password: { type: string }
-                    device_name: { type: string }
+                    grant_type: { type: string, enum: [authorization_code] }
+                    code: { type: string }
+                    code_verifier: { type: string }
+                    redirect_uri: { type: string }
+                    client_id: { type: string }
+                    name: { type: string }
+                    platform: { type: string }
                 - type: object
                   required: [grant_type, refresh_token]
                   properties:
@@ -773,10 +766,17 @@ paths:
                     refresh_token: { type: string }
       responses:
         "200":
-          description: The browser's tokens.
+          description: A browser's tokens, or an app's device key.
           content:
             application/json:
-              schema: { $ref: "#/components/schemas/Tokens" }
+              schema:
+                oneOf:
+                  - $ref: "#/components/schemas/Tokens"
+                  - type: object
+                    required: [api_key, key_id]
+                    properties:
+                      api_key: { type: string }
+                      key_id: { type: integer }
         default: { $ref: "#/components/responses/Error" }
   /auth/device/code:
     post:

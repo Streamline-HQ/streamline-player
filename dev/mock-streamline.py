@@ -88,7 +88,6 @@ p.add_argument("--access-ttl", type=int, default=900, help="seconds a browser's 
 p.add_argument(
     "--refresh-ttl", type=int, default=2592000, help="seconds a browser's refresh token lasts"
 )
-p.add_argument("--password", default="streamline", help="password of the email sign-in")
 p.add_argument(
     "--library",
     default=os.path.join(os.path.dirname(os.path.abspath(__file__)), "mock-library.json"),
@@ -107,7 +106,9 @@ p.add_argument(
     action="store_true",
     help="start with Dune: Part Two and Severance S2 E4 partly watched",
 )
-p.add_argument("--sso-deny", action="store_true", help="have the SSO provider refuse every sign-in")
+p.add_argument(
+    "--sso-deny", action="store_true", help="have Streamline's sign-in page refuse every sign-in"
+)
 p.add_argument(
     "--player-url", help="the player web app's URL; pairing links then point at its /pair page"
 )
@@ -191,7 +192,6 @@ CODES = {}
 ACCESS = {}
 BROWSERS = {}
 REFRESH = {}
-SSO = [{"id": "authentik", "label": "Authentik"}]
 WATCH = {}
 WATCHED_AT = 0.9
 DOWNLOADS = {}
@@ -790,6 +790,20 @@ def issue_tokens(device_id):
         "refresh_expires_in": args.refresh_ttl,
         "device_id": device_id,
     }
+
+
+def new_key(device):
+    """An app's device key, from a pairing or a sign-in: a known client_id gets a new key and loses its old one."""
+    for k, v in list(KEYS.items()):
+        if v["client_id"] == device["client_id"]:
+            del KEYS[k]
+    key = secrets.token_hex(24)
+    KEYS[key] = {
+        "client_id": device["client_id"],
+        "name": device.get("name", "")[:64],
+        "platform": device.get("platform", ""),
+    }
+    return {"api_key": key, "key_id": len(KEYS)}
 
 
 def new_browser(name):
@@ -1601,13 +1615,14 @@ class Handler(BaseHTTPRequestHandler):
         return True
 
     def authorize(self, q):
-        """The SSO provider's side: send the browser back to its redirect_uri with a one-time code, or the denial."""
+        """Streamline's sign-in page: send the browser back to its redirect_uri with a one-time code, or the denial.
+        A web player's origin must be on the allow-list; an app comes back to a loopback port (RFC 8252)."""
         one = lambda name: q.get(name, [""])[0]
         target = urllib.parse.urlsplit(one("redirect_uri"))
         origin = f"{target.scheme}://{target.netloc}"
+        loopback = target.scheme == "http" and target.hostname == "127.0.0.1" and target.port
         if (
-            one("provider") not in [s["id"] for s in SSO]
-            or origin not in CORS_ORIGINS
+            not (origin in CORS_ORIGINS or loopback)
             or one("code_challenge_method") != "S256"
             or not one("code_challenge")
         ):
@@ -1636,10 +1651,8 @@ class Handler(BaseHTTPRequestHandler):
                 or not pkce_matches(b.get("code_verifier", ""), found["challenge"])
             ):
                 return invalid()
-            return self.reply(200, new_browser(b.get("device_name", "")))
-        if grant == "password":
-            if b.get("email") != USER_EMAIL or b.get("password") != args.password:
-                return self.reply(401, {"error": {"code": "invalid_credentials"}})
+            if b.get("client_id"):
+                return self.reply(200, new_key(b))
             return self.reply(200, new_browser(b.get("device_name", "")))
         if grant == "refresh_token":
             token = b.get("refresh_token", "")
@@ -1898,7 +1911,7 @@ class Handler(BaseHTTPRequestHandler):
                 200, {"available": st == 200, "media": sorted(MEDIA), "network": args.network}
             )
         if url.path == "/extensions/player/auth/methods":
-            return self.reply(200, {"sso": SSO, "email": True, "register_url": None})
+            return self.reply(200, {"register_url": None})
         if url.path == "/extensions/player/authorize":
             return self.authorize(urllib.parse.parse_qs(url.query))
         if self.path == "/extensions/player/me":
@@ -2080,13 +2093,8 @@ class Handler(BaseHTTPRequestHandler):
                 return self.reply(400, {"error": {"code": "authorization_pending"}})
             if found["status"] == "denied":
                 return self.reply(400, {"error": {"code": "access_denied"}})
-            for k, v in list(KEYS.items()):
-                if v["client_id"] == found["client_id"]:
-                    del KEYS[k]
-            key = secrets.token_hex(24)
-            KEYS[key] = found
             PAIRINGS.pop(next(d for d, p in PAIRINGS.items() if p is found))
-            return self.reply(200, {"api_key": key, "key_id": len(KEYS)})
+            return self.reply(200, new_key(found))
         if self.path == "/dev/restart":
             b = self.body()
             RESTART.update(

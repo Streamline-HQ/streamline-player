@@ -6,6 +6,7 @@ import { existsSync, mkdirSync, readFileSync, statSync, writeFileSync } from "no
 import { createServer } from "node:net";
 import { join } from "node:path";
 import type { ActivityEvent, DownloadJob, Title, Watch } from "../../src/lib/core/types.ts";
+import { browserToken } from "./sign-in.ts";
 
 type ApiError = { error: { code: string } };
 
@@ -212,16 +213,7 @@ try {
 	eq((await get(first.id, other)).status, 404);
 	const bearer = { Authorization: "Bearer nobody" };
 	eq((await get(first.id, bearer)).status, 401);
-	const browser: { access_token: string } = await fetch(`${api}/auth/token`, {
-		method: "POST",
-		headers: J,
-		body: JSON.stringify({
-			grant_type: "password",
-			email: "antoine@example.net",
-			password: "streamline",
-			device_name: "Firefox",
-		}),
-	}).then((r) => r.json());
+	const browser = { access_token: await browserToken(api, "Firefox") };
 	const asBrowser = { Authorization: `Bearer ${browser.access_token}` };
 	for (const r of [await get(first.id, asBrowser), await post(body(), asBrowser)]) {
 		eq(r.status, 403);

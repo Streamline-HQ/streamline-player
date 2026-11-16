@@ -1,4 +1,4 @@
-// A refused or forged SSO return shows the error and stores nothing.
+// A refused or forged sign-in return shows the error and stores nothing.
 import { ORIGIN, here, refreshKey } from "./web-lib.mjs";
 
 export const target = "web";
@@ -8,7 +8,7 @@ export default async ({ app, wait }) => {
   await app.setViewportSize({ width: 1440, height: 900 });
   const out = {};
   await app.goto(`${ORIGIN}/signin`);
-  await app.getByRole("button", { name: "Continue with Authentik" }).click();
+  await app.getByRole("button", { name: "Continue with Streamline" }).click();
   await app.waitForURL(/\/signin\?error=/, { timeout: 15000 });
   await wait(800);
   out.denied = (await app.getByRole("alert").innerText()).trim();

@@ -7,7 +7,7 @@ export const refreshKey = (app) => app.evaluate(() => localStorage.getItem("auth
 
 export async function signInWithSso(app, wait, next = "/") {
   await app.goto(`${ORIGIN}/signin?next=${encodeURIComponent(next)}`);
-  await app.getByRole("button", { name: "Continue with Authentik" }).click();
+  await app.getByRole("button", { name: "Continue with Streamline" }).click();
   await app.waitForURL(`${ORIGIN}${next}`, { timeout: 15000 });
   await wait(1500);
 }

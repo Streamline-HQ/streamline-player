@@ -5,6 +5,7 @@ import { existsSync, mkdtempSync, readFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { PairRequest } from "../../src/lib/core/types.ts";
+import { browserToken } from "./sign-in.ts";
 
 type ApiError = { error: { code: string } };
 type DeviceCode = {
@@ -76,16 +77,7 @@ const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 try {
 	const main = await start("main", "--player-url", "http://localhost:1430");
 	const { api } = main;
-	const login = (await fetch(`${api}/auth/token`, {
-		method: "POST",
-		headers: JSON_HEADERS,
-		body: JSON.stringify({
-			grant_type: "password",
-			email: "antoine@example.net",
-			password: "streamline",
-			device_name: "Chrome",
-		}),
-	}).then((r) => r.json())) as { access_token: string };
+	const login = { access_token: await browserToken(api, "Chrome") };
 	const bearer = { Authorization: `Bearer ${login.access_token}` };
 	const start1 = async () =>
 		(await fetch(`${api}/auth/device/code`, {

@@ -2,72 +2,65 @@
 import { SignInError, type SignInErrorCode } from "#lib/core/auth.ts";
 import type { AuthMethods } from "#lib/core/types.ts";
 import { m as i18n } from "#lib/paraglide/messages.js";
+import { IS_WEB } from "#lib/platform/target.ts";
 import Icon from "#lib/ui/Icon.svelte";
 import Mark from "#lib/ui/Mark.svelte";
-import { authMethods, serverHost, signInEmail, startSso } from "#platform";
+import { authMethods, serverHost, startSignIn } from "#platform";
 import { onMount } from "svelte";
 
 let {
 	next,
 	failed = null,
 	done,
-}: { next: string; failed?: string | null; done: () => void } = $props();
+	change,
+}: {
+	next: string;
+	failed?: string | null;
+	done: (signedIn?: { name: string }) => void;
+	/** An app's way back to the server step; the web player has no other server. */
+	change?: () => void;
+} = $props();
 
 let methods = $state<AuthMethods | null>(null);
 let host = $state("");
-let busy = $state<"sso" | "email" | null>(null);
-let emailOpen = $state(false);
-let email = $state("");
-let password = $state("");
+let busy = $state(false);
 let code = $state<SignInErrorCode | null>(null);
 
 const COPY: Record<SignInErrorCode, () => string> = {
-	credentials: () => i18n.signin_error_credentials(),
 	denied: () => i18n.signin_error_denied(),
 	state: () => i18n.signin_error_expired(),
 	invalid_grant: () => i18n.signin_error_expired(),
 	network: () => i18n.signin_error_network({ host }),
 };
 const KNOWN = Object.keys(COPY) as SignInErrorCode[];
+const known = (c: unknown): c is SignInErrorCode => (KNOWN as unknown[]).includes(c);
 
 const error = $derived(code ? COPY[code]() : "");
 
-const fail = (e: unknown) => {
-	busy = null;
-	code = e instanceof SignInError ? e.code : "network";
-};
-
-async function sso(provider: string) {
-	if (busy) return;
-	busy = "sso";
+async function signIn() {
+	// An app may click again while its browser tab waits: the newer round trip replaces the older.
+	if (busy && IS_WEB) return;
+	busy = true;
 	code = null;
 	try {
-		await startSso(provider, next);
+		const signedIn = await startSignIn(next);
+		busy = false;
+		done(signedIn ?? undefined);
 	} catch (e) {
-		fail(e);
-	}
-}
-
-async function submit(e: SubmitEvent) {
-	e.preventDefault();
-	if (busy) return;
-	busy = "email";
-	code = null;
-	try {
-		await signInEmail(email, password);
-		done();
-	} catch (err) {
-		fail(err);
+		const c = e instanceof SignInError ? e.code : String(e);
+		if (c === "replaced") return;
+		busy = false;
+		code = known(c) ? c : "network";
 	}
 }
 
 onMount(() => {
-	if (failed && (KNOWN as string[]).includes(failed)) code = failed as SignInErrorCode;
+	if (known(failed)) code = failed;
 	serverHost().then((h) => (host = h));
 	authMethods()
 		.then((v) => (methods = v))
 		.catch(() => {
-			methods = { sso: [], email: true, register_url: null };
+			methods = { register_url: null };
 			code = "network";
 		});
 });
@@ -87,52 +80,24 @@ onMount(() => {
 				{#if error}
 					<p class="error" role="alert">{error}</p>
 				{/if}
-				{#each methods.sso as provider (provider.id)}
-					<button type="button" class="primary sso" onclick={() => sso(provider.id)}>
-						{#if busy === "sso"}
-							<span class="spin"></span>
-						{:else}
-							<Icon name="key-round" size={18} stroke={1.9} />
-						{/if}
-						{busy === "sso"
-							? i18n.signin_sso_busy({ label: provider.label })
-							: i18n.signin_sso({ label: provider.label })}
-					</button>
-				{/each}
-				{#if methods.email}
-					{#if methods.sso.length}
-						<div class="or">
-							<span class="rule"></span>
-							<span class="or-text">{i18n.signin_or()}</span>
-							<span class="rule"></span>
-						</div>
+				<button type="button" class="primary sso" onclick={signIn}>
+					{#if busy}
+						<span class="spin"></span>
+					{:else}
+						<Icon name="key-round" size={18} stroke={1.9} />
 					{/if}
-					<button
-						type="button"
-						class="toggle"
-						aria-expanded={emailOpen}
-						onclick={() => (emailOpen = !emailOpen)}
-					>
-						<Icon name="mail" size={16} stroke={1.75} />{i18n.signin_email_toggle()}
-						<span class="chev" class:open={emailOpen}
-							><Icon name="chevron-down" size={16} stroke={2} /></span
-						>
-					</button>
-					{#if emailOpen}
-						<form class="form" onsubmit={submit}>
-							<label>
-								<span>{i18n.signin_email()}</span>
-								<input type="email" autocomplete="username" bind:value={email}>
-							</label>
-							<label>
-								<span>{i18n.signin_password()}</span>
-								<input type="password" autocomplete="current-password" bind:value={password}>
-							</label>
-							<button type="submit" class="primary" style:opacity={busy === "email" ? 0.75 : 1}>
-								{busy === "email" ? i18n.signin_submitting() : i18n.signin_submit()}
-							</button>
-						</form>
-					{/if}
+					{busy
+						? IS_WEB
+							? i18n.signin_continue_busy()
+							: i18n.welcome_finish_in_browser()
+						: i18n.signin_continue()}
+				</button>
+				<p class="note">{IS_WEB ? i18n.signin_note() : i18n.signin_note_app()}</p>
+				{#if change}
+					<span class="where">
+						<Icon name="server" size={13} stroke={2} />{host}
+						<button type="button" class="link" onclick={change}>{i18n.welcome_change()}</button>
+					</span>
 				{/if}
 			</div>
 			{#if methods.register_url}
@@ -270,83 +235,37 @@ button {
 	}
 }
 
-.or {
+.note {
+	margin: 16px 0 0;
+	font-size: 13px;
+	line-height: 1.55;
+	color: var(--fg-subtle);
+	text-align: center;
+}
+
+.where {
 	display: flex;
 	align-items: center;
-	gap: 10px;
-	margin: 20px 0 14px;
-}
-
-.rule {
-	flex: 1;
-	height: 1px;
-	background: rgba(255, 255, 255, 0.08);
-}
-
-.or-text {
-	font: 500 11px var(--font-mono);
-	letter-spacing: 0.1em;
-	text-transform: uppercase;
-	color: var(--fg-faint);
-}
-
-.toggle {
-	width: 100%;
+	justify-content: center;
 	gap: 8px;
-	border-radius: var(--radius-md);
+	margin-top: 18px;
+	padding-top: 16px;
+	border-top: 1px solid var(--border);
+	font: 400 12px var(--font-mono);
+	color: var(--fg-subtle);
+}
+
+.link {
+	height: 24px;
+	padding: 0 6px;
+	border-radius: var(--radius-sm);
 	background: transparent;
-	color: var(--fg-muted);
-	font-size: 14px;
-	font-weight: 500;
+	color: var(--accent-text);
+	font: 500 12px var(--font-sans);
 }
 
-.toggle:hover {
-	color: var(--fg);
-}
-
-.chev {
-	display: inline-flex;
-	transition: transform 180ms;
-}
-
-.chev.open {
-	transform: rotate(180deg);
-}
-
-.form {
-	display: flex;
-	flex-direction: column;
-	gap: 14px;
-	padding-top: 12px;
-	animation: sl-rise 220ms var(--ease);
-}
-
-label {
-	display: flex;
-	flex-direction: column;
-	gap: 7px;
-}
-
-label span {
-	font-size: 13px;
-	font-weight: 500;
-	color: var(--fg-muted);
-}
-
-input {
-	height: 44px;
-	padding: 0 12px;
-	border-radius: var(--radius-md);
-	border: 1px solid var(--border-strong);
-	background: var(--bg-deep);
-	color: var(--fg);
-	font: 400 14px var(--font-sans);
-	outline: none;
-}
-
-input:focus {
-	border-color: var(--accent);
-	box-shadow: 0 0 0 3px var(--accent-glow);
+.link:hover {
+	background: color-mix(in srgb, var(--accent) 12%, transparent);
 }
 
 .register {
