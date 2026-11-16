@@ -1,12 +1,9 @@
-// What the browse screens read and write, through the contract proxy: the home feed, the profile, the picture,
-// an empty library and failing artwork.
-import { spawn } from "node:child_process";
 import { strictEqual as eq, ok } from "node:assert";
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { HomeFeed, Me, Title } from "../../src/lib/core/types.ts";
-import { browserToken } from "./sign-in.ts";
+import { kind, startTarget, violationLines } from "./target.ts";
 
 type ApiError = { error: { code: string } };
 
@@ -14,76 +11,19 @@ const NOW = "1794225600";
 const REASONS = ["continue", "new_episodes", "added"];
 const PNG = Buffer.concat([Buffer.from("89504e470d0a1a0a", "hex"), Buffer.alloc(1024 - 8)]);
 
-function firstLine(child: ReturnType<typeof spawn>, pattern: RegExp) {
-	return new Promise<string>((resolve, reject) => {
-		child.once("exit", (code) => reject(new Error(`exited with ${code} before ${pattern}`)));
-		let seen = "";
-		child.stdout?.on("data", (chunk) => {
-			seen += String(chunk);
-			const m = pattern.exec(seen);
-			if (m) resolve(m[1]);
-		});
-	});
-}
-
-const children: ReturnType<typeof spawn>[] = [];
 const dir = mkdtempSync(join(tmpdir(), "browse-check-"));
 mkdirSync(join(dir, "art", "p"), { recursive: true });
 writeFileSync(join(dir, "art", "p", "dune2.jpg"), PNG);
 
-// A mock behind a proxy; returns the proxy's API root and the file its violations land in.
-async function start(name: string, ...extra: string[]) {
-	const mock = spawn(
-		"python3",
-		[
-			"dev/mock-streamline.py",
-			"--listen",
-			"127.0.0.1:0",
-			"--secret",
-			"check",
-			"--engine",
-			"http://127.0.0.1:9",
-			"--clip",
-			"/nonexistent.mkv",
-			"--now",
-			NOW,
-			"--art",
-			join(dir, "art"),
-			...extra,
-		],
-		{ stdio: ["ignore", "pipe", "ignore"] },
-	);
-	children.push(mock);
-	const report = join(dir, `${name}.jsonl`);
-	const mockAt = await firstLine(mock, /listening on (\S+)/);
-	const proxy = spawn(
-		process.execPath,
-		[
-			"dev/contract/proxy.ts",
-			"--listen",
-			"127.0.0.1:0",
-			"--upstream",
-			`http://${mockAt}`,
-			"--spec",
-			"docs/contract/player.openapi.yaml",
-			"--report",
-			report,
-		],
-		{ stdio: ["ignore", "pipe", "inherit"] },
-	);
-	children.push(proxy);
-	const root = `http://${await firstLine(proxy, /listening on (\S+)/)}`;
-	return { root, report };
-}
-
-const violations = (report: string) =>
-	existsSync(report) ? readFileSync(report, "utf8").split("\n").filter(Boolean) : [];
-
+const stops: (() => void)[] = [];
 try {
-	const full = await start("full");
-	const api = `${full.root}/extensions/player`;
-	const login = { access_token: await browserToken(api, "Chrome") };
-	const auth = { Authorization: `Bearer ${login.access_token}` };
+	const full = await startTarget(
+		"full",
+		kind === "mock" ? ["--clip", "/nonexistent.mkv", "--now", NOW, "--art", join(dir, "art")] : [],
+	);
+	stops.push(full.stop);
+	const api = full.api;
+	const auth = { Authorization: `Bearer ${await full.signIn()}` };
 	const call = (path: string, init: RequestInit = {}) =>
 		fetch(`${api}${path}`, { ...init, headers: { ...auth, ...(init.headers as object) } });
 	const json = <T>(path: string, init?: RequestInit) =>
@@ -92,7 +32,7 @@ try {
 		call("/me/picture", { method: "PUT", headers: { "Content-Type": type }, body });
 
 	const home = await json<HomeFeed>("/home");
-	eq(home.featured.length, 3);
+	if (kind === "mock") eq(home.featured.length, 3);
 	for (const f of home.featured) ok(REASONS.includes(f.reason), f.reason);
 	ok(home.arrivals.length > 0);
 	const days = home.arrivals.map((d) => d.date);
@@ -103,6 +43,7 @@ try {
 	eq(profile.role, "Admin");
 	ok(/^http:\/\/127\.0\.0\.1:\d+$/.test(profile.streamline_url), profile.streamline_url);
 
+	await call("/me/picture", { method: "DELETE" });
 	eq((await json<Me>("/me")).picture, false);
 	eq((await put(PNG, "image/png")).status, 204);
 	const me = await json<Me>("/me");
@@ -110,42 +51,62 @@ try {
 	ok(/^[A-Z]{1,2}$/.test(me.initials), me.initials);
 	eq((await call("/posters/users/me/photo.jpg")).status, 200);
 	eq((await fetch(`${api}/posters/users/me/photo.jpg`)).status, 401);
-	const big = await put(Buffer.alloc(3 * 1024 * 1024), "image/png");
+	const big = await put(Buffer.alloc(768 * 1024), "image/png");
 	eq(big.status, 413);
-	eq(((await big.json()) as ApiError).error.code, "too_large");
-	eq((await put(PNG, "image/gif")).status, 415);
+	eq(((await big.json()) as Partial<ApiError>).error?.code, "too_large");
+	eq((await put(Buffer.concat([Buffer.from("GIF89a"), PNG]), "image/gif")).status, 415);
 	eq((await call("/me/picture", { method: "DELETE" })).status, 204);
 	eq((await json<Me>("/me")).picture, false);
 	eq((await call("/posters/users/me/photo.jpg")).status, 404);
 
 	const poster = "/posters/movies/1/poster.jpg";
-	const mock = (path: string) => fetch(`${full.root}${path}`, { method: "POST" });
-	eq((await call(poster)).status, 200);
-	eq((await mock("/dev/art/off")).status, 204);
-	eq((await call(poster)).status, 404);
-	eq((await mock("/dev/art/on")).status, 204);
-	eq((await call(poster)).status, 200);
+	if (full.mock) {
+		const mock = (path: string) => fetch(`${full.mock}${path}`, { method: "POST" });
+		eq((await call(poster)).status, 200);
+		eq((await mock("/dev/art/off")).status, 204);
+		eq((await call(poster)).status, 404);
+		eq((await mock("/dev/art/on")).status, 204);
+	}
+	// The stack serves the artwork folder it booted with, which the contract task fills (CONTRACT_ART).
+	if (full.mock || process.env.CONTRACT_ART) eq((await call(poster)).status, 200);
+	else eq([200, 404].includes((await call(poster)).status), true);
 
 	const files = (await json<{ items: Title[] }>("/movies")).items;
 	ok(files.every((m) => m.file_summary.size > 0));
 
-	const lines = violations(full.report);
+	const lines = await violationLines(full);
 	eq(lines.length, 0, lines.join("\n"));
 
-	const empty = await start("empty", "--empty");
-	const emptyApi = `${empty.root}/extensions/player`;
-	const feed = await fetch(`${emptyApi}/home`).then((r) => r.json() as Promise<HomeFeed>);
-	eq(feed.featured.length, 0);
-	eq(feed.arrivals.length, 0);
-	eq(
-		(await fetch(`${emptyApi}/movies`).then((r) => r.json() as Promise<{ items: Title[] }>)).items
-			.length,
-		0,
-	);
-	const emptyLines = violations(empty.report);
-	eq(emptyLines.length, 0, emptyLines.join("\n"));
+	// An empty library is a mock flag; the stack boots on one library.
+	if (kind === "mock") {
+		const empty = await startTarget("empty", [
+			"--clip",
+			"/nonexistent.mkv",
+			"--now",
+			NOW,
+			"--empty",
+		]);
+		stops.push(empty.stop);
+		const emptyApi = empty.api;
+		const emptyAuth = { Authorization: `Bearer ${await empty.signIn()}` };
+		const feed = await fetch(`${emptyApi}/home`, { headers: emptyAuth }).then(
+			(r) => r.json() as Promise<HomeFeed>,
+		);
+		eq(feed.featured.length, 0);
+		eq(feed.arrivals.length, 0);
+		eq(
+			(
+				await fetch(`${emptyApi}/movies`, { headers: emptyAuth }).then(
+					(r) => r.json() as Promise<{ items: Title[] }>,
+				)
+			).items.length,
+			0,
+		);
+		const emptyLines = await violationLines(empty);
+		eq(emptyLines.length, 0, emptyLines.join("\n"));
+	}
 
 	console.log("browse-check: ok");
 } finally {
-	for (const child of children) child.kill();
+	for (const stop of stops) stop();
 }

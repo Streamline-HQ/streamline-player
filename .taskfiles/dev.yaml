@@ -2,6 +2,14 @@ version: "3"
 
 vars:
   ANDROID_SHELL: run inside `nix develop .#android`
+  STREAMLINE_DIR:
+    sh: echo "${STREAMLINE_DIR:-../streamline}"
+  EXT_DIR:
+    sh: echo "${EXT_DIR:-../streamline-player-ext}"
+  STREAMLINE_BIN:
+    sh: echo "${STREAMLINE_BIN:-/tmp/streamline-player-ext/streamline}"
+  # Go is not in this devshell; Streamline's carries it.
+  GO_SHELL: nix develop {{.STREAMLINE_DIR}} -c bash -c
 
 tasks:
   engine:
@@ -14,13 +22,30 @@ tasks:
     cmd: python3 dev/mock-streamline.py --listen 127.0.0.1:8081 --secret dev-secret-0123456789abcdef {{.CLI_ARGS}}
     interactive: true
 
+  stack:build:
+    desc: Build Streamline, the player extension's wasm and the engine for the stack
+    cmds:
+      - "{{.GO_SHELL}} 'cd {{.STREAMLINE_DIR}} && go build -o {{.STREAMLINE_BIN}} ./cmd'"
+      - "{{.GO_SHELL}} 'cd {{.EXT_DIR}} && GOOS=wasip1 GOARCH=wasm go build -trimpath -buildmode=c-shared -o player.wasm .'"
+      - cargo build -p engine
+
+  stack:
+    desc: Boot Streamline with the player extension and the engine on the mock's library (pass --art <dir> after --)
+    cmds:
+      - task: stack:build
+      - >-
+        {{.GO_SHELL}} 'cd {{.EXT_DIR}} &&
+        STREAMLINE_BIN={{.STREAMLINE_BIN}} ENGINE_BIN={{.ROOT_DIR}}/target/debug/engine
+        go run ./e2e/cmd/stack --library {{.ROOT_DIR}}/dev/mock-library.json {{.CLI_ARGS}}'
+    interactive: true
+
   desktop:
     desc: Run the desktop app with live reload
     cmd: cargo tauri dev
     interactive: true
 
   web:
-    desc: Run the web build in a browser (Vite on :1430)
+    desc: Run the web build in a browser (Vite on :1430). Against dev:stack the page is cross-origin and Streamline sends no CORS headers, so the browser blocks its calls; the deployed web is served from Streamline's own origin
     cmd: pnpm dev --port 1430
     interactive: true
 

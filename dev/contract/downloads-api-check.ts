@@ -1,12 +1,12 @@
-// Downloads, through the contract proxy: the engine prepares the file, the mock hands out its signed URL.
-// Starts its own engine, mock and proxy; needs ffmpeg.
+// Downloads, through the contract proxy: the engine prepares the file, the API hands out its signed URL.
+// On the mock it starts its own engine and a mock on a clip; needs ffmpeg. On the stack it uses the stack's engine and library.
 import { spawn, execFileSync } from "node:child_process";
 import { strictEqual as eq, notStrictEqual as ne, ok } from "node:assert";
-import { existsSync, mkdirSync, readFileSync, statSync, writeFileSync } from "node:fs";
+import { mkdirSync, readFileSync, statSync, writeFileSync } from "node:fs";
 import { createServer } from "node:net";
 import { join } from "node:path";
 import type { ActivityEvent, DownloadJob, Title, Watch } from "../../src/lib/core/types.ts";
-import { browserToken } from "./sign-in.ts";
+import { kind, startTarget, violationLines } from "./target.ts";
 
 type ApiError = { error: { code: string } };
 
@@ -20,93 +20,57 @@ const freePort = () =>
 			s.close(() => resolve(port));
 		});
 	});
-function firstLine(child: ReturnType<typeof spawn>, pattern: RegExp) {
-	return new Promise<string>((resolve, reject) => {
-		child.once("exit", (code) => reject(new Error(`exited with ${code} before ${pattern}`)));
-		let seen = "";
-		child.stdout?.on("data", (chunk) => {
-			seen += String(chunk);
-			const m = pattern.exec(seen);
-			if (m) resolve(m[1]);
-		});
-	});
-}
 
-const port = await freePort();
-const ENGINE = `http://127.0.0.1:${port}`;
-const source = readFileSync("dev/engine.yaml", "utf8")
-	.replace(/^listen:.*$/m, `listen: 127.0.0.1:${port}`)
-	.replace(/^tmp_dir:.*$/m, `tmp_dir: ${join(dir, "live")}`)
-	.replace(/^jobs_dir:.*$/m, `jobs_dir: ${join(dir, "jobs")}`);
-ok(source.includes(SECRET));
-writeFileSync(join(dir, "engine.yaml"), source);
-
-const children: ReturnType<typeof spawn>[] = [];
-const engine = spawn(
-	"cargo",
-	["run", "-q", "-p", "engine", "--", "--config", join(dir, "engine.yaml")],
-	{ stdio: ["ignore", "inherit", "inherit"], detached: true },
-);
+let engine: ReturnType<typeof spawn> | undefined;
+let stop = () => {};
 try {
-	for (let up = false; !up; ) {
-		if (engine.exitCode !== null) throw new Error("the engine exited");
-		up = await fetch(`${ENGINE}/v1/health`).then(
-			() => true,
-			() => false,
+	let ENGINE = "";
+	let clipSize = 0;
+	const mockArgs: string[] = [];
+	if (kind === "mock") {
+		const port = await freePort();
+		ENGINE = `http://127.0.0.1:${port}`;
+		const source = readFileSync("dev/engine.yaml", "utf8")
+			.replace(/^listen:.*$/m, `listen: 127.0.0.1:${port}`)
+			.replace(/^tmp_dir:.*$/m, `tmp_dir: ${join(dir, "live")}`)
+			.replace(/^jobs_dir:.*$/m, `jobs_dir: ${join(dir, "jobs")}`);
+		ok(source.includes(SECRET));
+		writeFileSync(join(dir, "engine.yaml"), source);
+		engine = spawn(
+			"cargo",
+			["run", "-q", "-p", "engine", "--", "--config", join(dir, "engine.yaml")],
+			{
+				stdio: ["ignore", "inherit", "inherit"],
+				detached: true,
+			},
 		);
-		if (!up) await new Promise((r) => setTimeout(r, 500));
+		for (let up = false; !up; ) {
+			if (engine.exitCode !== null) throw new Error("the engine exited");
+			up = await fetch(`${ENGINE}/v1/health`).then(
+				() => true,
+				() => false,
+			);
+			if (!up) await new Promise((r) => setTimeout(r, 500));
+		}
+		const clip = join(dir, "clip.mkv");
+		execFileSync("ffmpeg", [
+			...["-y", "-v", "error", "-f", "lavfi", "-i", "testsrc=d=3:s=320x180:r=24"],
+			...["-f", "lavfi", "-i", "sine=d=3", "-f", "lavfi", "-i", "sine=f=880:d=3"],
+			...["-map", "0", "-map", "1", "-map", "2", "-c:v", "libx264", "-preset", "ultrafast"],
+			...["-pix_fmt", "yuv420p", "-c:a", "aac", clip],
+		]);
+		clipSize = statSync(clip).size;
+		mockArgs.push("--secret", SECRET, "--engine", ENGINE, "--public", ENGINE, "--clip", clip);
 	}
-	const clip = join(dir, "clip.mkv");
-	execFileSync("ffmpeg", [
-		...["-y", "-v", "error", "-f", "lavfi", "-i", "testsrc=d=3:s=320x180:r=24"],
-		...["-f", "lavfi", "-i", "sine=d=3", "-f", "lavfi", "-i", "sine=f=880:d=3"],
-		...["-map", "0", "-map", "1", "-map", "2", "-c:v", "libx264", "-preset", "ultrafast"],
-		...["-pix_fmt", "yuv420p", "-c:a", "aac", clip],
-	]);
-	const clipSize = statSync(clip).size;
 
-	const reportPath = join(dir, "report.jsonl");
-	writeFileSync(reportPath, "");
-	const mock = spawn(
-		"python3",
-		[
-			...["dev/mock-streamline.py", "--listen", "127.0.0.1:0", "--secret", SECRET],
-			...["--engine", ENGINE, "--public", ENGINE, "--clip", clip],
-		],
-		{ stdio: ["ignore", "pipe", "inherit"] },
-	);
-	children.push(mock);
-	const mockAt = await firstLine(mock, /listening on (\S+)/);
-	const proxy = spawn(
-		process.execPath,
-		[
-			...["dev/contract/proxy.ts", "--listen", "127.0.0.1:0", "--upstream", `http://${mockAt}`],
-			...["--spec", "docs/contract/player.openapi.yaml", "--report", reportPath],
-		],
-		{ stdio: ["ignore", "pipe", "inherit"] },
-	);
-	children.push(proxy);
-	const root = `http://${await firstLine(proxy, /listening on (\S+)/)}`;
-	const api = `${root}/extensions/player`;
-	const direct = `http://${mockAt}`;
+	const t = await startTarget("downloads", mockArgs);
+	stop = t.stop;
+	const { api, direct } = t;
+	if (kind === "stack") ENGINE = t.engine as string;
 
 	const J = { "Content-Type": "application/json" };
-	async function pair(name: string) {
-		const code: { device_code: string } = await fetch(`${api}/auth/device/code`, {
-			method: "POST",
-			headers: J,
-			body: JSON.stringify({ client_id: name, name, platform: "linux" }),
-		}).then((r) => r.json());
-		eq((await fetch(`${direct}/dev/approve`, { method: "POST" })).status, 200);
-		const token: { api_key: string } = await fetch(`${api}/auth/device/token`, {
-			method: "POST",
-			headers: J,
-			body: JSON.stringify({ device_code: code.device_code }),
-		}).then((r) => r.json());
-		return { "X-API-Key": token.api_key as string };
-	}
-	const mine = await pair("desktop-a");
-	const other = await pair("desktop-b");
+	const mine = { "X-API-Key": await t.appKey("desktop-a", "ana") };
+	const other = { "X-API-Key": await t.appKey("desktop-b", "ben") };
 
 	const movies: { items: Title[] } = await fetch(`${api}/movies`, { headers: mine }).then((r) =>
 		r.json(),
@@ -124,7 +88,8 @@ try {
 		if (tracks.audio.length) break;
 		await new Promise((r) => setTimeout(r, 500));
 	}
-	eq(tracks.audio.length, 2);
+	if (kind === "mock") eq(tracks.audio.length, 2);
+	else ok(tracks.audio.length >= 1, "the file has an audio track");
 	const audio: number[] = tracks.audio.map((a) => a.index);
 	const capabilities = {
 		video: [
@@ -177,7 +142,8 @@ try {
 	const done = await ready(first.id);
 	eq(done.state, "ready");
 	eq(done.progress, 1);
-	eq(done.size, clipSize);
+	if (kind === "mock") eq(done.size, clipSize);
+	else ok(done.size > 0);
 	ok(done.url.startsWith(`${ENGINE}/dl/`), done.url);
 
 	const ranged = await fetch(done.url, { headers: { Range: "bytes=0-15" } });
@@ -199,7 +165,7 @@ try {
 		JSON.stringify({ media_id: mediaId, audio_indexes: audio, capabilities }),
 	]) {
 		// The proxy rightly reports these as breaking the contract, so they skip it.
-		const r = await fetch(`${direct}/extensions/player/downloads`, {
+		const r = await fetch(`${direct}/downloads`, {
 			method: "POST",
 			headers: { ...J, ...mine },
 			body: bad,
@@ -213,8 +179,7 @@ try {
 	eq((await get(first.id, other)).status, 404);
 	const bearer = { Authorization: "Bearer nobody" };
 	eq((await get(first.id, bearer)).status, 401);
-	const browser = { access_token: await browserToken(api, "Firefox") };
-	const asBrowser = { Authorization: `Bearer ${browser.access_token}` };
+	const asBrowser = { Authorization: `Bearer ${await t.signIn("ana")}` };
 	for (const r of [await get(first.id, asBrowser), await post(body(), asBrowser)]) {
 		eq(r.status, 403);
 		eq(((await r.json()) as ApiError).error.code, "forbidden");
@@ -229,17 +194,25 @@ try {
 			409,
 		);
 	}
-	await fetch(`${direct}/dev/downloads/fail`, { method: "POST" });
-	const broken: DownloadJob = await post(body()).then((r) => r.json());
-	eq(broken.state, "failed");
-	eq(((await get(broken.id).then((r) => r.json())) as ApiError).error.code, "prepare_failed");
-	eq(
-		(await fetch(`${api}/downloads/${broken.id}/complete`, { method: "POST", headers: mine }))
-			.status,
-		409,
-	);
+	// The mock can be told to fail the next preparation; the stack has no such switch.
+	let broken: DownloadJob | undefined;
+	if (t.mock) {
+		await fetch(`${t.mock}/dev/downloads/fail`, { method: "POST" });
+		broken = await post(body()).then((r) => r.json());
+		eq(broken.state, "failed");
+		eq(((await get(broken.id).then((r) => r.json())) as ApiError).error.code, "prepare_failed");
+		eq(
+			(await fetch(`${api}/downloads/${broken.id}/complete`, { method: "POST", headers: mine }))
+				.status,
+			409,
+		);
+	}
 
-	eq((await feed(mine)).filter((e) => e.kind === "download").length, 0);
+	const downloads = async (headers: object) =>
+		(await feed(headers)).filter((e) => e.kind === "download");
+	const seen = (await downloads(mine)).length;
+	// The stack keeps its feed between runs, so only the mock's starts without any.
+	if (kind === "mock") eq(seen, 0);
 	eq(
 		(await fetch(`${api}/downloads/${first.id}/complete`, { method: "POST", headers: mine }))
 			.status,
@@ -249,17 +222,32 @@ try {
 	eq(events[0].kind, "download");
 	eq(events[0].read, false);
 	eq(events[0].title.id, movie.id);
-	eq((await feed(other)).filter((e) => e.kind === "download").length, 0);
+	eq((await downloads(mine)).length, seen + 1);
+	eq((await downloads(other)).length, 0);
 	eq(
 		(
-			await fetch(`${ENGINE}/v1/jobs/${first.id}`, {
-				headers: { Authorization: `Bearer ${SECRET}` },
+			await fetch(`${api}/activity/read`, {
+				method: "POST",
+				headers: { ...J, ...mine },
+				body: JSON.stringify({ ids: [events[0].id, "nope"] }),
 			})
 		).status,
-		404,
+		204,
 	);
+	eq((await feed(mine)).find((e) => e.id === events[0].id)?.read, true);
+	// The engine's secret is the extension's own on the stack, and never leaves it.
+	if (kind === "mock") {
+		eq(
+			(
+				await fetch(`${ENGINE}/v1/jobs/${first.id}`, {
+					headers: { Authorization: `Bearer ${SECRET}` },
+				})
+			).status,
+			404,
+		);
+	}
 
-	for (const id of [slow.id, broken.id]) {
+	for (const id of [slow.id, ...(broken ? [broken.id] : [])]) {
 		for (let i = 0; i < 2; i++) {
 			eq((await fetch(`${api}/downloads/${id}`, { method: "DELETE", headers: mine })).status, 204);
 		}
@@ -297,11 +285,10 @@ try {
 	state = await put({ watched: true }).then((r) => r.json());
 	eq(state.watched, true);
 
-	ok(existsSync(reportPath));
-	const report = readFileSync(reportPath, "utf8").split("\n").filter(Boolean);
+	const report = await violationLines(t);
 	eq(report.length, 0, report.join("\n"));
 	console.log("downloads-api-check: ok");
 } finally {
-	for (const c of children) c.kill();
-	process.kill(-(engine.pid as number));
+	stop();
+	if (engine) process.kill(-(engine.pid as number));
 }

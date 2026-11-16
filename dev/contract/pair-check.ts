@@ -1,11 +1,7 @@
 // The device approval endpoints, the pairing lifetime and links, through the contract proxy.
-import { spawn } from "node:child_process";
 import { strictEqual as eq, ok } from "node:assert";
-import { existsSync, mkdtempSync, readFileSync } from "node:fs";
-import { tmpdir } from "node:os";
-import { join } from "node:path";
 import type { PairRequest } from "../../src/lib/core/types.ts";
-import { browserToken } from "./sign-in.ts";
+import { startTarget, violationLines } from "./target.ts";
 
 type ApiError = { error: { code: string } };
 type DeviceCode = {
@@ -15,70 +11,15 @@ type DeviceCode = {
 	verification_uri_complete: string;
 };
 
-function firstLine(child: ReturnType<typeof spawn>, pattern: RegExp) {
-	return new Promise<string>((resolve, reject) => {
-		child.once("exit", (code) => reject(new Error(`exited with ${code} before ${pattern}`)));
-		let seen = "";
-		child.stdout?.on("data", (chunk) => {
-			seen += String(chunk);
-			const m = pattern.exec(seen);
-			if (m) resolve(m[1]);
-		});
-	});
-}
-
-const children: ReturnType<typeof spawn>[] = [];
-const dir = mkdtempSync(join(tmpdir(), "pair-check-"));
-
-// A mock with no --clip behind a proxy; returns the proxy's API root and the file its violations land in.
-async function start(name: string, ...extra: string[]) {
-	const mock = spawn(
-		"python3",
-		[
-			"dev/mock-streamline.py",
-			"--listen",
-			"127.0.0.1:0",
-			"--secret",
-			"check",
-			"--engine",
-			"http://127.0.0.1:9",
-			...extra,
-		],
-		{ stdio: ["ignore", "pipe", "ignore"] },
-	);
-	children.push(mock);
-	const report = join(dir, `${name}.jsonl`);
-	const mockAt = await firstLine(mock, /listening on (\S+)/);
-	const proxy = spawn(
-		process.execPath,
-		[
-			"dev/contract/proxy.ts",
-			"--listen",
-			"127.0.0.1:0",
-			"--upstream",
-			`http://${mockAt}`,
-			"--spec",
-			"docs/contract/player.openapi.yaml",
-			"--report",
-			report,
-		],
-		{ stdio: ["ignore", "pipe", "inherit"] },
-	);
-	children.push(proxy);
-	const root = `http://${await firstLine(proxy, /listening on (\S+)/)}`;
-	return { api: `${root}/extensions/player`, report };
-}
-
-const violations = (report: string) =>
-	existsSync(report) ? readFileSync(report, "utf8").split("\n").filter(Boolean) : [];
 const JSON_HEADERS = { "Content-Type": "application/json" };
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
+const stops: (() => void)[] = [];
 try {
-	const main = await start("main", "--player-url", "http://localhost:1430");
+	const main = await startTarget("main", ["--player-url", "http://localhost:1430"]);
+	stops.push(main.stop);
 	const { api } = main;
-	const login = { access_token: await browserToken(api, "Chrome") };
-	const bearer = { Authorization: `Bearer ${login.access_token}` };
+	const bearer = { Authorization: `Bearer ${await main.signIn()}` };
 	const start1 = async () =>
 		(await fetch(`${api}/auth/device/code`, {
 			method: "POST",
@@ -150,24 +91,28 @@ try {
 	eq((await fetch(`${api}/auth/device/${loose}`, { headers: bearer })).status, 200);
 	eq((await post(loose, "approve")).status, 204);
 
-	const short = await start("short", "--pair-ttl", "1");
-	const d = (await fetch(`${short.api}/auth/device/code`, {
-		method: "POST",
-		headers: JSON_HEADERS,
-		body: JSON.stringify({ client_id: "c2", name: "tv", platform: "Android TV" }),
-	}).then((r) => r.json())) as DeviceCode;
-	eq(d.verification_uri_complete.endsWith(`/pair?code=${d.user_code}`), true);
-	await sleep(1200);
-	const late = await fetch(`${short.api}/auth/device/token`, {
-		method: "POST",
-		headers: JSON_HEADERS,
-		body: JSON.stringify({ device_code: d.device_code }),
-	});
-	eq(late.status, 400);
-	await code404(late, "expired_token");
+	if (main.kind === "mock") {
+		const short = await startTarget("short", ["--pair-ttl", "1"]);
+		stops.push(short.stop);
+		const d = (await fetch(`${short.api}/auth/device/code`, {
+			method: "POST",
+			headers: JSON_HEADERS,
+			body: JSON.stringify({ client_id: "c2", name: "tv", platform: "Android TV" }),
+		}).then((r) => r.json())) as DeviceCode;
+		eq(d.verification_uri_complete.endsWith(`/pair?code=${d.user_code}`), true);
+		await sleep(1200);
+		const late = await fetch(`${short.api}/auth/device/token`, {
+			method: "POST",
+			headers: JSON_HEADERS,
+			body: JSON.stringify({ device_code: d.device_code }),
+		});
+		eq(late.status, 400);
+		await code404(late, "expired_token");
+		eq((await violationLines(short)).join("\n"), "", "contract report");
+	}
 
-	for (const r of [main.report, short.report]) eq(violations(r).join("\n"), "", "contract report");
+	eq((await violationLines(main)).join("\n"), "", "contract report");
 	console.log("pair-check: ok");
 } finally {
-	for (const child of children) child.kill();
+	for (const stop of stops) stop();
 }

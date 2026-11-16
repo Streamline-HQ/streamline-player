@@ -1,10 +1,7 @@
 // The mock's browser sign-in: PKCE, password, rotating refresh tokens, revocation and CORS, all through the contract proxy.
-import { spawn } from "node:child_process";
 import { strictEqual as eq, ok } from "node:assert";
-import { existsSync, mkdtempSync, readFileSync } from "node:fs";
-import { tmpdir } from "node:os";
-import { join } from "node:path";
 import type { AdminDevice, AuthMethods } from "../../src/lib/core/types.ts";
+import { kind, startTarget, violationLines } from "./target.ts";
 
 type Tokens = {
 	token_type: string;
@@ -19,56 +16,14 @@ const CHALLENGE = "E9Melhoa2OwvFrEMTJguCHaoeK1t8URWbuGJSstw-cM";
 const ORIGIN = "http://localhost:1430";
 const REDIRECT = `${ORIGIN}/auth/callback`;
 
-function firstLine(child: ReturnType<typeof spawn>, pattern: RegExp) {
-	return new Promise<string>((resolve, reject) => {
-		child.once("exit", (code) => reject(new Error(`exited with ${code} before ${pattern}`)));
-		let seen = "";
-		child.stdout?.on("data", (chunk) => {
-			seen += String(chunk);
-			const m = pattern.exec(seen);
-			if (m) resolve(m[1]);
-		});
-	});
-}
-
-const mock = spawn(
-	"python3",
-	[
-		"dev/mock-streamline.py",
-		"--listen",
-		"127.0.0.1:0",
-		"--secret",
-		"check",
-		"--engine",
-		"http://127.0.0.1:9",
-		"--clip",
-		"/nonexistent.mkv",
-		"--access-ttl",
-		"2",
-	],
-	{ stdio: ["ignore", "pipe", "ignore"] },
+const t = await startTarget(
+	"auth",
+	kind === "mock" ? ["--clip", "/nonexistent.mkv", "--access-ttl", "2"] : [],
 );
-const report = join(mkdtempSync(join(tmpdir(), "auth-flow-")), "report.jsonl");
-let proxy: ReturnType<typeof spawn> | undefined;
 
 try {
-	const mockAt = await firstLine(mock, /listening on (\S+)/);
-	proxy = spawn(
-		process.execPath,
-		[
-			"dev/contract/proxy.ts",
-			"--listen",
-			"127.0.0.1:0",
-			"--upstream",
-			`http://${mockAt}`,
-			"--spec",
-			"docs/contract/player.openapi.yaml",
-			"--report",
-			report,
-		],
-		{ stdio: ["ignore", "pipe", "inherit"] },
-	);
-	const api = `http://${await firstLine(proxy, /listening on (\S+)/)}/extensions/player`;
+	const api = t.api;
+	const session = await t.cookie();
 
 	const call = (path: string, init: RequestInit & { token?: string } = {}) => {
 		const { token, ...rest } = init;
@@ -76,6 +31,7 @@ try {
 			redirect: "manual",
 			...rest,
 			headers: {
+				...(session && path.startsWith("/authorize") ? { Cookie: session } : {}),
 				...(rest.body ? { "Content-Type": "application/json" } : {}),
 				...(token ? { Authorization: `Bearer ${token}` } : {}),
 				...(rest.headers as Record<string, string>),
@@ -87,7 +43,8 @@ try {
 	const grant = <T = Tokens>(body: object) => token(body).then((r) => r.json() as Promise<T>);
 
 	const methods: AuthMethods = await call("/auth/methods").then((r) => r.json());
-	eq(methods.register_url, null);
+	if (kind === "mock") eq(methods.register_url, null);
+	else ok(methods.register_url === null || methods.register_url.endsWith("/register"));
 
 	const query = (redirect: string) =>
 		new URLSearchParams({
@@ -147,10 +104,12 @@ try {
 	eq((await call("/me", { headers: { "X-API-Key": app.api_key } })).status, 401);
 
 	eq((await call("/me", { token: signed.access_token })).status, 200);
-	await new Promise((r) => setTimeout(r, 2500));
-	const expired = await call("/me", { token: signed.access_token });
-	eq(expired.status, 401);
-	eq(((await expired.json()) as ApiError).error.code, "unauthorized");
+	if (kind === "mock") {
+		await new Promise((r) => setTimeout(r, 2500));
+		const expired = await call("/me", { token: signed.access_token });
+		eq(expired.status, 401);
+		eq(((await expired.json()) as ApiError).error.code, "unauthorized");
+	}
 
 	const refreshed = await grant({
 		grant_type: "refresh_token",
@@ -170,14 +129,17 @@ try {
 		"invalid_grant",
 	);
 
-	const preflight = await call("/me", { method: "OPTIONS", headers: { Origin: ORIGIN } });
-	eq(preflight.status, 204);
-	eq(preflight.headers.get("access-control-allow-origin"), ORIGIN);
-	const evil = await call("/me", {
-		method: "OPTIONS",
-		headers: { Origin: "https://evil.example" },
-	});
-	eq(evil.headers.get("access-control-allow-origin"), null);
+	// CORS is Streamline core's (`server.cors_origins`), which the stack's config leaves unset.
+	if (kind === "mock") {
+		const preflight = await call("/me", { method: "OPTIONS", headers: { Origin: ORIGIN } });
+		eq(preflight.status, 204);
+		eq(preflight.headers.get("access-control-allow-origin"), ORIGIN);
+		const evil = await call("/me", {
+			method: "OPTIONS",
+			headers: { Origin: "https://evil.example" },
+		});
+		eq(evil.headers.get("access-control-allow-origin"), null);
+	}
 
 	const kept = await signIn();
 	const devices: { items: AdminDevice[] } = await call("/devices", {
@@ -191,10 +153,9 @@ try {
 	eq((await call("/devices/current", { method: "DELETE", token: kept.access_token })).status, 204);
 	eq((await call("/me", { token: kept.access_token })).status, 401);
 
-	const lines = existsSync(report) ? readFileSync(report, "utf8").split("\n").filter(Boolean) : [];
+	const lines = await violationLines(t);
 	eq(lines.length, 0, lines.join("\n"));
 	console.log("auth-flow-check: ok");
 } finally {
-	proxy?.kill();
-	mock.kill();
+	t.stop();
 }

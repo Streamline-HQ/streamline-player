@@ -11,6 +11,18 @@ tasks:
     desc: Run the Rust tests of the whole workspace
     cmd: cargo test --workspace
 
+  contract:stack:
+    desc: Run the contract checks against a real Streamline with the player extension and the engine
+    cmd: >-
+      node dev/contract/stack-run.ts
+      dev/contract/auth-flow-check.ts
+      dev/contract/browse-check.ts
+      dev/contract/pair-check.ts
+      dev/contract/admin-check.ts
+      dev/contract/activity-check.ts
+      dev/contract/media-files-check.ts
+      dev/contract/downloads-api-check.ts
+
   js:
     desc: Run the UI's rule and message checks
     cmds:
