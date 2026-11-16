@@ -1248,7 +1248,7 @@ components:
         name: { type: string }
         email: { type: string }
         role: { type: string }
-        library_language: { type: string }
+        library_language: { type: string, description: "BCP 47 tag of the language titles and synopses are shown in, kept per account by the extension (default en)." }
         picture: { type: boolean, description: Whether a profile picture is set. }
         initials: { type: string, description: One or two capital letters of the name, drawn when there is no picture. }
     UpdateMe:

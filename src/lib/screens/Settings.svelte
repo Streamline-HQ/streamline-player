@@ -14,7 +14,7 @@ import { seen } from "#lib/core/devices.ts";
 import { lib, loadLibrary } from "#lib/core/library.svelte.ts";
 import { account, initialsOf, setMe } from "#lib/core/me.svelte.ts";
 import { type ChoiceKey, prefs, setPref, type ToggleKey } from "#lib/core/prefs.svelte.ts";
-import { QUALITIES, shown, subtitleLanguageName } from "#lib/core/prefs-labels.ts";
+import { languageName, QUALITIES, shown, subtitleLanguageName } from "#lib/core/prefs-labels.ts";
 import { pendingPairs } from "#lib/core/admin.svelte.ts";
 import { dl, refreshStorage } from "#lib/core/downloads.svelte.ts";
 import { storageView } from "#lib/core/downloads-view.ts";
@@ -709,7 +709,7 @@ onMount(() => {
 				desc={i18n.settings_titles_synopses_desc()}
 			>
 				{#snippet control()}
-					<span class="info">{me?.library_language}</span>
+					<span class="info">{languageName(me?.library_language)}</span>
 				{/snippet}
 			</SettingsRow>
 		</SettingsList>

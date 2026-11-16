@@ -152,7 +152,7 @@ ME = {
     "name": "Antoine Langlois",
     "email": USER_EMAIL,
     "role": "Member" if args.role == "member" else "Admin",
-    "library_language": "English",
+    "library_language": "en",
 }
 PICTURE = {"data": None, "type": ""}
 ART_ON = {"on": True}

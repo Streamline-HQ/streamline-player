@@ -27,6 +27,9 @@ export const subtitleLanguageName = () =>
 		myLanguage() === "French" ? "fr" : "en",
 	) ?? myLanguage();
 
+export const languageName = (tag?: string) =>
+	tag ? (new Intl.DisplayNames([getLocale()], { type: "language" }).of(tag) ?? tag) : "";
+
 export const shown = (key: ChoiceKey, v: string) => {
 	// Each app language is named in itself, so it can be found from any other.
 	if (key === "language") return v;

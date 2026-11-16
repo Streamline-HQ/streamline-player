@@ -5,7 +5,7 @@ import LoadFailed from "#lib/tv/LoadFailed.svelte";
 import TvScreen from "#lib/tv/TvScreen.svelte";
 import { focus, focusDefault } from "#lib/tv/focus.ts";
 import { prefs, setPref, type ChoiceKey, type ToggleKey } from "#lib/core/prefs.svelte.ts";
-import { QUALITIES, shown, subtitleLanguageName } from "#lib/core/prefs-labels.ts";
+import { languageName, QUALITIES, shown, subtitleLanguageName } from "#lib/core/prefs-labels.ts";
 import { seen } from "#lib/core/devices.ts";
 import {
 	authState,
@@ -196,7 +196,7 @@ const sections = $derived.by((): [Section, ...Section[]] => {
 				),
 				show(
 					i18n.settings_titles_synopses(),
-					me?.library_language ?? "",
+					languageName(me?.library_language),
 					i18n.settings_titles_synopses_desc(),
 				),
 			],
