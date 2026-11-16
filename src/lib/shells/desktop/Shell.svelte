@@ -14,7 +14,8 @@ import {
 } from "#lib/core/ask.svelte.ts";
 import { loadActivity, resetActivity, unread } from "#lib/core/activity.svelte.ts";
 import { bellLabel } from "#lib/core/activity-view.ts";
-import { account, clearMe, initialsOf, setMe } from "#lib/core/me.svelte.ts";
+import { account, clearMe, setMe } from "#lib/core/me.svelte.ts";
+import { picture as profilePicture, syncPicture } from "#lib/core/picture.svelte.ts";
 import { loadPendingPairs, pendingPairs, resetAdmin } from "#lib/core/admin.svelte.ts";
 import {
 	asking as dlAsking,
@@ -233,8 +234,11 @@ const toastTop = $derived((showBar ? 64 : 0) + 16);
 const COUNTDOWN_SHIFT = 74;
 
 const name = $derived(account.me?.name ?? "");
-const initials = $derived(initialsOf(name));
-const picture = $derived(account.me?.picture ? myPicture(account.version) : undefined);
+const initials = $derived(account.me?.initials ?? "");
+const picture = $derived(profilePicture.url);
+$effect(() => {
+	void syncPicture(myPicture, account.me?.picture, account.version);
+});
 const isAdmin = $derived(account.me?.role === "Admin");
 const bell = $derived(bellLabel(unread(), activityWords()));
 const modifier = mac ? "⌘" : "Ctrl";

@@ -4,7 +4,8 @@ import { type FieldError, PICTURE_TYPES, pictureProblem, refusal } from "#lib/co
 import { type Caps, chips } from "#lib/core/capabilities.ts";
 import { seen } from "#lib/core/devices.ts";
 import { lib, loadLibrary } from "#lib/core/library.svelte.ts";
-import { account, initialsOf, setMe } from "#lib/core/me.svelte.ts";
+import { account, setMe } from "#lib/core/me.svelte.ts";
+import { picture as profilePicture } from "#lib/core/picture.svelte.ts";
 import { type ChoiceKey, prefs, setPref, type ToggleKey } from "#lib/core/prefs.svelte.ts";
 import { languageName, QUALITIES, shown, subtitleLanguageName } from "#lib/core/prefs-labels.ts";
 import { pendingPairs } from "#lib/core/admin.svelte.ts";
@@ -38,6 +39,7 @@ import {
 	home,
 	library,
 	me as whoAmI,
+	openExternal,
 	playerCapabilities,
 	removePicture,
 	revokeDevice,
@@ -46,7 +48,6 @@ import {
 	signOut as signOutNow,
 	title as fetchTitle,
 	watchState,
-	myPicture,
 } from "#platform";
 import { onMount } from "svelte";
 
@@ -327,10 +328,10 @@ onMount(() => {
 			<Avatar
 				name={me?.name}
 				email={me?.email}
-				initials={me ? initialsOf(me.name) : ""}
+				initials={me ? me.initials : ""}
 				size={48}
 				color="var(--kind-album)"
-				picture={me?.picture ? myPicture(account.version) : undefined}
+				picture={me?.picture ? profilePicture.url : undefined}
 			/>
 			<span class="who">
 				<h1>{i18n.settings_title()}</h1>
@@ -368,9 +369,9 @@ onMount(() => {
 						<Avatar
 							name={me?.name}
 							email={me?.email}
-							initials={me ? initialsOf(me.name) : ""}
+							initials={me ? me.initials : ""}
 							color="var(--kind-album)"
-							picture={me?.picture ? myPicture(account.version) : undefined}
+							picture={me?.picture ? profilePicture.url : undefined}
 						/>
 						<input
 							bind:this={picker}
@@ -406,6 +407,21 @@ onMount(() => {
 			<SettingsRow label={i18n.settings_email()} desc={i18n.settings_email_desc()}>
 				{#snippet control()}
 					<span class="info">{me?.email}</span>
+				{/snippet}
+			</SettingsRow>
+			<SettingsRow
+				label={i18n.settings_account_link()}
+				desc={i18n.settings_account_link_desc({ host })}
+			>
+				{#snippet control()}
+					<Button
+						variant="secondary"
+						size="sm"
+						disabled={!me}
+						onclick={() => me && void openExternal(`${me.streamline_url}/account`)}
+					>
+						{i18n.settings_account_edit()}
+					</Button>
 				{/snippet}
 			</SettingsRow>
 			<SettingsRow

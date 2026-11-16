@@ -39,8 +39,14 @@ const failure = (code: string, extra: object = {}) =>
 
 function port() {
 	const settings = (): AdminSettings => ({
-		values: { "stream.max_live": 2, "player.url": "https://player.example", "engine.url": "" },
+		values: {
+			"stream.max_live": 2,
+			"player.url": "https://player.example",
+			"engine.url": "",
+			"player.origins": ["https://player.example"],
+		},
 		owners: {
+			"player.origins": "player",
 			"stream.max_live": "engine",
 			"player.url": "player",
 			"engine.url": "player",
@@ -123,7 +129,22 @@ function port() {
 		},
 		async adminUsers() {
 			await p.hit("adminUsers");
-			return [{ id: 1, name: "Antoine", role: "Admin" }] as never;
+			return [
+				{ id: 1, name: "Antoine", role: "Admin" },
+				{ id: 2, name: "Camille", role: "Member" },
+			] as never;
+		},
+		secretSet: true,
+		async adminEngineSecret() {
+			await p.hit("adminEngineSecret");
+			return (
+				p.secretSet ? { set: true, created_at: "2026-11-16T09:00:00Z" } : { set: false }
+			) as never;
+		},
+		async adminRotateEngineSecret() {
+			await p.hit("adminRotateEngineSecret");
+			p.secretSet = true;
+			return { secret: "s3cret" };
 		},
 	};
 	return p;
@@ -135,6 +156,8 @@ const LISTS = [
 	"adminPairings",
 	"adminDevices",
 	"adminLibrary",
+	"adminUsers",
+	"adminEngineSecret",
 ];
 
 let p = port();
@@ -444,6 +467,46 @@ same(S.scanDone.report, { finished: ["Movies"], added: 3, errors: 1 });
 S.scanDone.report = null;
 await S.refreshLibrary(p);
 eq(S.scanDone.report, null);
+
+S.resetAdmin();
+p = port();
+p.secretSet = false;
+await S.loadAdmin(p);
+eq(must(admin.data).secret.set, false);
+eq(await S.makeSecret(p), true);
+eq(must(admin.data).secretShown, "s3cret");
+eq(must(admin.data).secret.set, true);
+await S.refreshAdmin(p);
+eq(must(admin.data).secretShown, "s3cret");
+S.hideSecret();
+eq(must(admin.data).secretShown, undefined);
+await S.refreshAdmin(p);
+eq(must(admin.data).secretShown, undefined);
+eq(must(admin.data).secret.set, true);
+p.fail.adminRotateEngineSecret = failure("internal");
+eq(await S.makeSecret(p), false);
+eq(must(admin.data).secretShown, undefined);
+S.pickUser("R4W-X9P", 2);
+await S.refreshAdmin(p);
+same(must(admin.data).pairFor, { "R4W-X9P": 2 });
+same(
+	must(admin.data).users.map((u) => u.id),
+	[1, 2],
+);
+S.resetAdmin();
+eq(admin.data, null);
+
+S.resetAdmin();
+p = port();
+await S.loadAdmin(p);
+p.fail.saveAdminSettings = failure("invalid_setting");
+eq(await S.save(p, "player.origins", ["https://player.example", "nope"]), "invalid");
+same(must(admin.data).settings.values["player.origins"], ["https://player.example"]);
+p.fail.saveAdminSettings = undefined;
+eq(await S.save(p, "player.origins", ["https://player.example"]), "ok");
+eq(p.count("saveAdminSettings"), 1);
+eq(await S.save(p, "player.origins", []), "ok");
+same(p.calls.at(-1), ["saveAdminSettings", { "player.origins": [] }]);
 
 function ok(v: unknown) {
 	eq(!!v, true);

@@ -5,10 +5,14 @@ import {
 	clearCache,
 	commit,
 	draft,
+	hideSecret,
 	loadAdmin,
+	makeSecret,
+	pickUser,
 	refreshAdmin,
 	refreshLibrary,
 	resetAdmin,
+	sameValue,
 	resolvePairing,
 	restart,
 	scanDone,
@@ -25,6 +29,7 @@ import {
 	type Act,
 	commitNumber,
 	commitText,
+	pairUser,
 	type SectionKey,
 	sections,
 	sizeText,
@@ -50,6 +55,7 @@ import {
 	home,
 	library,
 	me as whoAmI,
+	openExternal,
 	serverHost,
 	title as fetchTitle,
 	watchState,
@@ -75,7 +81,7 @@ let spyHeldUntil = 0;
 const find = (kind: Kind, id: number) =>
 	(kind === "movies" ? lib.movies : lib.shows).find((t) => t.id === id);
 const words = $derived(serverWords());
-const data = $derived(admin.data);
+const data = $derived(admin.data ? { ...admin.data, viewer: account.me?.id } : null);
 const secs = $derived(data ? sections(data, find, now, getLocale(), words, admin.restarting) : []);
 const health = $derived(data ? status(data, admin.restarting, words) : null);
 const readOnly = $derived(!!data && data.settings.read_only.engine);
@@ -119,9 +125,10 @@ const countText = (one: () => string, other: () => string, n: number) =>
 
 async function saveKey(key: string, value: SettingValue) {
 	const before = admin.data?.settings.values[key];
-	if (before === value) return;
+	if (sameValue(before, value)) return true;
 	const result = await save(adminPort, key, value);
 	report(result, key, before);
+	return result === "ok";
 }
 
 function report(
@@ -193,20 +200,15 @@ function askStop(id: string) {
 	});
 }
 
-/** Until the screen lets the admin pick the person, a device is approved for the signed-in admin. */
-async function ownUserId(name: string) {
-	const user = (await adminPort.adminUsers()).find((u) => u.name === name);
-	if (!user) throw new Error("no such user");
-	return user.id;
-}
-
 async function pair(code: string, approve: boolean) {
 	const found = data?.pairings.find((p) => p.user_code === code);
 	if (!found || !data) return;
-	const who = account.me?.name ?? "";
+	const user = pairUser(data, code);
+	if (approve && !user) return fail();
+	const who = user?.name ?? "";
 	const result = await resolvePairing(
 		{
-			approvePairing: async (c) => adminResolvePairing(c, true, await ownUserId(who)),
+			approvePairing: (c) => adminResolvePairing(c, true, user?.id),
 			denyPairing: (c) => adminResolvePairing(c, false),
 		},
 		code,
@@ -284,6 +286,41 @@ async function cache() {
 	toast(i18n.server_toast_cache({ size: sizeText(size, getLocale(), words) }));
 }
 
+// navigator.clipboard exists only in a secure context, and a Streamline on a plain-http LAN name is not one.
+async function writeClipboard(text: string) {
+	if (navigator.clipboard) return navigator.clipboard.writeText(text);
+	const area = document.createElement("textarea");
+	area.value = text;
+	area.style.position = "fixed";
+	area.style.opacity = "0";
+	document.body.append(area);
+	area.select();
+	const done = document.execCommand("copy");
+	area.remove();
+	if (!done) throw new Error("copy refused");
+}
+
+async function copySecret() {
+	const value = admin.data?.secretShown;
+	if (!value) return;
+	try {
+		await writeClipboard(value);
+		toast(i18n.server_secret_copied());
+	} catch {
+		fail();
+	}
+}
+
+async function secret() {
+	if (!(await makeSecret(adminPort))) return fail();
+	toast(i18n.server_secret_made());
+}
+
+function openInStreamline(path: string) {
+	const base = account.me?.streamline_url ?? data?.overview.streamline_url;
+	if (base) void openExternal(`${base}${path}`);
+}
+
 async function act(a: Act) {
 	if (a.do === "go") jump(a.to);
 	else if (a.do === "stop") askStop(a.id);
@@ -295,12 +332,20 @@ async function act(a: Act) {
 	} else if (a.do === "restart") askRestart();
 	else if (a.do === "clearcache") await cache();
 	else if (a.do === "scan") await startScan(a.folder);
+	else if (a.do === "open") openInStreamline(a.path);
+	else if (a.do === "secret") await secret();
+	else if (a.do === "copysecret") await copySecret();
+	else if (a.do === "donesecret") {
+		hideSecret();
+		toast(i18n.server_secret_hidden());
+	}
 }
 
 const handlers: Handlers = {
 	go: jump,
 	act: (a) => void act(a),
-	save: (key, value) => void saveKey(key, value),
+	save: (key, value) => saveKey(key, value),
+	pick: pickUser,
 	draft,
 	commit: (row) => void commitRow(row),
 	busy: (key) => busy.keys.includes(key),
@@ -375,6 +420,7 @@ onMount(() => {
 	const box = getScroll?.();
 	box?.addEventListener("scroll", spy, { passive: true });
 	return () => {
+		hideSecret();
 		clearInterval(refresh);
 		clearInterval(scans);
 		clearInterval(tick);

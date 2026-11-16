@@ -7,6 +7,7 @@ import type {
 	AdminSettings,
 	AdminStream,
 	AdminUser,
+	EngineSecretStatus,
 	SettingOwner,
 	SettingValue,
 } from "#lib/core/types.ts";
@@ -25,6 +26,8 @@ export type AdminPort = {
 	adminScan(folderId?: string): Promise<unknown>;
 	adminClearCache(): Promise<unknown>;
 	adminUsers(): Promise<AdminUser[]>;
+	adminEngineSecret(): Promise<EngineSecretStatus>;
+	adminRotateEngineSecret(): Promise<{ secret: string }>;
 };
 
 export type PairPort = {
@@ -114,9 +117,11 @@ function load(port: AdminPort, reset: boolean) {
 		port.adminPairings(),
 		port.adminDevices(),
 		port.adminLibrary(),
+		port.adminUsers(),
+		port.adminEngineSecret(),
 	])
 		.then(
-			([overview, settings, streams, pairings, devices, library]) => {
+			([overview, settings, streams, pairings, devices, library, users, secret]) => {
 				if (run !== generation) return;
 				const ended = scansEnded(admin.data?.library, library);
 				admin.data = {
@@ -126,6 +131,10 @@ function load(port: AdminPort, reset: boolean) {
 					pairings,
 					devices: withFresh(devices),
 					library,
+					users,
+					secret: admin.data?.secretShown ? { ...secret, set: true } : secret,
+					secretShown: admin.data?.secretShown,
+					pairFor: admin.data?.pairFor ?? {},
 					cacheCleared: !!admin.data?.cacheCleared && overview.storage.cache?.size === 0,
 					web: devices.find((d) => d.current)?.kind === "browser",
 					tick: 0,
@@ -156,6 +165,32 @@ function load(port: AdminPort, reset: boolean) {
 export const loadAdmin = (port: AdminPort) => load(port, true);
 export const refreshAdmin = (port: AdminPort) => load(port, false);
 
+/** Chooses whose TV a waiting pairing becomes. */
+export function pickUser(code: string, userId: number) {
+	if (!admin.data) return;
+	admin.data.pairFor = { ...admin.data.pairFor, [code]: userId };
+}
+
+/** Makes the engine secret, replacing any older one. The value is held only to be shown once. */
+export async function makeSecret(port: AdminPort) {
+	const d = admin.data;
+	if (!d) return false;
+	try {
+		const { secret } = await port.adminRotateEngineSecret();
+		if (admin.data) {
+			admin.data.secretShown = secret;
+			admin.data.secret = { set: true, created_at: new Date().toISOString() };
+		}
+		return true;
+	} catch {
+		return false;
+	}
+}
+
+export function hideSecret() {
+	if (admin.data) delete admin.data.secretShown;
+}
+
 export function tickStreams() {
 	if (admin.data) admin.data.tick++;
 }
@@ -168,13 +203,19 @@ export async function loadPendingPairs(port: Pick<AdminPort, "adminPairings">) {
 	}
 }
 
+/** Lists compare by content: a value read back from the state is a proxy, never the array that was assigned. */
+export const sameValue = (a: SettingValue | undefined, b: SettingValue | undefined) =>
+	Array.isArray(a) && Array.isArray(b)
+		? a.length === b.length && a.every((x, i) => x === b[i])
+		: a === b;
+
 export async function save(port: AdminPort, key: string, value: SettingValue): Promise<SaveResult> {
 	const settings = admin.data?.settings;
 	if (!settings) return "failed";
 	const owner: SettingOwner = settings.owners[key] ?? "player";
 	if (settings.read_only[owner]) return "read_only";
 	const before = settings.values[key];
-	if (before === value) return "ok";
+	if (sameValue(before, value)) return "ok";
 	settings.values[key] = value;
 	saving.set(key, value);
 	busy.keys = [...busy.keys, key];
@@ -191,7 +232,7 @@ export async function save(port: AdminPort, key: string, value: SettingValue): P
 		busy.keys = busy.keys.filter((k) => k !== key);
 		saveEpoch++;
 		const now = admin.data?.settings;
-		if (now && now.values[key] === value && before !== undefined) now.values[key] = before;
+		if (now && sameValue(now.values[key], value) && before !== undefined) now.values[key] = before;
 		const { code, owner: lockedOwner } = errorOf(e);
 		if (code === "read_only") {
 			if (now) now.read_only[(lockedOwner as SettingOwner | undefined) ?? owner] = true;

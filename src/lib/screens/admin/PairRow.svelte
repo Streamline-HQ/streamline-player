@@ -1,38 +1,92 @@
 <script lang="ts">
 import type { Act, Row } from "#lib/core/server-view.ts";
 import { m as i18n } from "#lib/paraglide/messages.js";
+import ChoicePills from "#lib/ui/ChoicePills.svelte";
 import Icon, { type IconName } from "#lib/ui/Icon.svelte";
 
-let { row, onact }: { row: Extract<Row, { t: "pair" }>; onact?: (a: Act) => void } = $props();
+let {
+	row,
+	onact,
+	onpick,
+}: {
+	row: Extract<Row, { t: "pair" }>;
+	onact?: (a: Act) => void;
+	onpick?: (code: string, userId: number) => void;
+} = $props();
+
+const options = $derived(row.users.map((u): [string, string] => [String(u.id), u.label]));
+const chosen = $derived(String(row.users.find((u) => u.on)?.id ?? ""));
 </script>
 
 <div class="pair">
-	<span class="icon"><Icon name={row.icon as IconName} size={18} stroke={1.75} /></span>
-	<span class="who">
-		<span class="name">{row.device}</span>
-		<span class="sub">{row.sub}</span>
-	</span>
-	<span class="code">{row.code}</span>
-	<span class="btns">
-		<button type="button" class="deny" onclick={() => onact?.({ do: "deny", code: row.code })}>
-			{i18n.approve_deny()}
-		</button>
-		<button
-			type="button"
-			class="approve"
-			onclick={() => onact?.({ do: "approve", code: row.code })}
-		>
-			{i18n.approve_approve()}
-		</button>
-	</span>
+	<div class="top">
+		<span class="icon"><Icon name={row.icon as IconName} size={18} stroke={1.75} /></span>
+		<span class="who">
+			<span class="name">{row.device}</span>
+			<span class="sub">{row.sub}</span>
+		</span>
+		<span class="code">{row.code}</span>
+	</div>
+	<div class="bottom">
+		<div class="to">
+			<span class="to-label">{i18n.server_pair_to()}</span>
+			<ChoicePills
+				{options}
+				value={chosen}
+				label={i18n.server_pair_group()}
+				compact
+				onchange={(v) => onpick?.(row.code, Number(v))}
+			/>
+		</div>
+		<span class="btns">
+			<button type="button" class="deny" onclick={() => onact?.({ do: "deny", code: row.code })}>
+				{i18n.approve_deny()}
+			</button>
+			<button
+				type="button"
+				class="approve"
+				onclick={() => onact?.({ do: "approve", code: row.code })}
+			>
+				{i18n.approve_approve()}
+			</button>
+		</span>
+	</div>
 </div>
 
 <style>
 .pair {
 	display: flex;
+	flex-direction: column;
+	gap: 14px;
+}
+
+.top {
+	display: flex;
 	align-items: center;
 	gap: 12px 14px;
+}
+
+.bottom {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: 12px 14px;
 	flex-wrap: wrap;
+	padding-left: 52px;
+}
+
+.to {
+	flex: 0 1 auto;
+	min-width: 0;
+	display: flex;
+	align-items: center;
+	gap: 10px;
+	flex-wrap: wrap;
+}
+
+.to-label {
+	font-size: 12.5px;
+	color: var(--fg-subtle);
 }
 
 .icon {
@@ -48,7 +102,7 @@ let { row, onact }: { row: Extract<Row, { t: "pair" }>; onact?: (a: Act) => void
 }
 
 .who {
-	flex: 1 1 200px;
+	flex: 1 1 auto;
 	min-width: 0;
 	display: flex;
 	flex-direction: column;

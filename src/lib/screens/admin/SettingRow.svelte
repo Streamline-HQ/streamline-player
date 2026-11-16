@@ -7,7 +7,7 @@ import Button from "#lib/ui/Button.svelte";
 import ChoicePills from "#lib/ui/ChoicePills.svelte";
 import Icon from "#lib/ui/Icon.svelte";
 
-type Std = Extract<Row, { t: "toggle" | "choice" | "text" | "num" | "kv" | "action" }>;
+type Std = Extract<Row, { t: "toggle" | "choice" | "text" | "num" | "kv" | "action" | "list" }>;
 
 let {
 	row,
@@ -20,7 +20,13 @@ let {
 } = $props();
 
 const editable = $derived(
-	row.t === "toggle" || row.t === "choice" || row.t === "text" || row.t === "num" ? row : null,
+	row.t === "toggle" ||
+		row.t === "choice" ||
+		row.t === "text" ||
+		row.t === "num" ||
+		row.t === "list"
+		? row
+		: null,
 );
 const off = $derived(
 	!!editable && (editable.disabled || editable.locked || !!h.busy?.(editable.key)),
@@ -29,63 +35,117 @@ const on = $derived(row.t === "toggle" && row.value === true);
 const blurOnEnter = (e: KeyboardEvent) => {
 	if (e.key === "Enter") (e.currentTarget as HTMLElement).blur();
 };
+
+async function add() {
+	if (row.t !== "list") return;
+	const value = (draft ?? "").trim();
+	if (!value) return;
+	if (row.items.includes(value)) return h.draft?.(row.key, "");
+	const saved = await h.save?.(row.key, [...row.items, value]);
+	if (saved !== false) h.draft?.(row.key, "");
+}
+const addOnEnter = (e: KeyboardEvent) => {
+	if (e.key === "Enter") void add();
+};
 </script>
 
-<div class="std">
-	<span class="text">
-		<span class="line">
-			<span class="label">{row.label}</span>
-			{#if editable?.restart}
-				<span class="after">{i18n.server_after_restart()}</span>
+<div class="wrap">
+	<div class="std">
+		<span class="text">
+			<span class="line">
+				<span class="label">{row.label}</span>
+				{#if editable?.restart}
+					<span class="after">{i18n.server_after_restart()}</span>
+				{/if}
+			</span>
+			{#if row.desc}
+				<span class="desc">{row.desc}</span>
 			{/if}
 		</span>
-		{#if row.desc}
-			<span class="desc">{row.desc}</span>
+
+		{#if editable?.locked}
+			<span class="lock" title={i18n.server_ro_lock()}><Icon name="lock" size={14} /></span>
 		{/if}
-	</span>
 
-	{#if editable?.locked}
-		<span class="lock" title={i18n.server_ro_lock()}><Icon name="lock" size={14} /></span>
-	{/if}
-
-	{#if row.t === "toggle"}
-		<button
-			type="button"
-			class="switch"
-			class:on
-			role="switch"
-			aria-checked={on}
-			aria-label={row.label}
-			disabled={off}
-			onclick={() => h.save?.(row.key, !on)}
-		>
-			<span class="knob"></span>
-		</button>
-	{:else if row.t === "choice"}
-		<ChoicePills
-			options={row.options ?? []}
-			value={String(row.value)}
-			label={row.label}
-			disabled={off}
-			compact
-			onchange={(v) => h.save?.(row.key, v)}
-		/>
-	{:else if row.t === "kv"}
-		<span class="kv">
-			{#if row.pill}
-				<span
-					class="pill"
-					style:color={TONES[row.pill[1]].fg}
-					style:background={TONES[row.pill[1]].bg}
-					style:border-color={TONES[row.pill[1]].line}
-					>{row.pill[0]}</span
+		{#if row.t === "toggle"}
+			<button
+				type="button"
+				class="switch"
+				class:on
+				role="switch"
+				aria-checked={on}
+				aria-label={row.label}
+				disabled={off}
+				onclick={() => h.save?.(row.key, !on)}
+			>
+				<span class="knob"></span>
+			</button>
+		{:else if row.t === "choice"}
+			<ChoicePills
+				options={row.options ?? []}
+				value={String(row.value)}
+				label={row.label}
+				disabled={off}
+				compact
+				onchange={(v) => h.save?.(row.key, v)}
+			/>
+		{:else if row.t === "kv"}
+			<span class="kv">
+				{#if row.pill}
+					<span
+						class="pill"
+						style:color={TONES[row.pill[1]].fg}
+						style:background={TONES[row.pill[1]].bg}
+						style:border-color={TONES[row.pill[1]].line}
+						>{row.pill[0]}</span
+					>
+				{/if}
+				<span class="value">{row.value}</span>
+			</span>
+		{:else if row.t === "text" && !row.wide}
+			<input
+				class="short"
+				value={draft ?? String(row.value)}
+				placeholder={row.placeholder}
+				disabled={off}
+				spellcheck="false"
+				autocomplete="off"
+				aria-label={row.label}
+				oninput={(e) => h.draft?.(row.key, e.currentTarget.value)}
+				onblur={() => h.commit?.(row)}
+				onkeydown={blurOnEnter}
+			>
+		{:else if row.t === "num"}
+			<span class="num">
+				<input
+					value={draft ?? String(row.value)}
+					inputmode="numeric"
+					autocomplete="off"
+					disabled={off}
+					aria-label={row.label}
+					oninput={(e) => h.draft?.(row.key, e.currentTarget.value)}
+					onblur={() => h.commit?.(row)}
+					onkeydown={blurOnEnter}
 				>
-			{/if}
-			<span class="value">{row.value}</span>
-		</span>
-	{:else if row.t === "text"}
+				{#if row.unit}
+					<span class="unit">{row.unit}</span>
+				{/if}
+			</span>
+		{:else if row.t === "action"}
+			<Button
+				variant={row.tone === "danger" ? "destructive" : "secondary"}
+				size="sm"
+				disabled={row.disabled}
+				onclick={() => h.act?.(row.act as Act)}
+			>
+				{row.button}
+			</Button>
+		{/if}
+	</div>
+
+	{#if row.t === "text" && row.wide}
 		<input
-			class="short"
+			class="wide"
 			value={draft ?? String(row.value)}
 			placeholder={row.placeholder}
 			disabled={off}
@@ -96,35 +156,125 @@ const blurOnEnter = (e: KeyboardEvent) => {
 			onblur={() => h.commit?.(row)}
 			onkeydown={blurOnEnter}
 		>
-	{:else if row.t === "num"}
-		<span class="num">
-			<input
-				value={draft ?? String(row.value)}
-				inputmode="numeric"
-				autocomplete="off"
-				disabled={off}
-				aria-label={row.label}
-				oninput={(e) => h.draft?.(row.key, e.currentTarget.value)}
-				onblur={() => h.commit?.(row)}
-				onkeydown={blurOnEnter}
-			>
-			{#if row.unit}
-				<span class="unit">{row.unit}</span>
-			{/if}
-		</span>
-	{:else if row.t === "action"}
-		<Button
-			variant={row.tone === "danger" ? "destructive" : "secondary"}
-			size="sm"
-			disabled={row.disabled}
-			onclick={() => h.act?.(row.act as Act)}
-		>
-			{row.button}
-		</Button>
+	{:else if row.t === "list"}
+		<div class="list">
+			<ul aria-label={row.label}>
+				{#each row.items as item (item)}
+					<li>
+						{item}
+						<button
+							type="button"
+							aria-label={i18n.server_list_remove({ value: item })}
+							disabled={off}
+							onclick={() =>
+								h.save?.(
+									row.key,
+									row.items.filter((x) => x !== item),
+								)}
+						>
+							<Icon name="x" size={14} stroke={2} />
+						</button>
+					</li>
+				{:else}
+					<li class="none">{i18n.server_list_empty()}</li>
+				{/each}
+			</ul>
+			<div class="add">
+				<input
+					value={draft ?? ""}
+					placeholder={row.placeholder}
+					disabled={off}
+					spellcheck="false"
+					autocomplete="off"
+					aria-label={i18n.server_list_add_to({ label: row.label.toLocaleLowerCase() })}
+					oninput={(e) => h.draft?.(row.key, e.currentTarget.value)}
+					onkeydown={addOnEnter}
+				>
+				<Button variant="secondary" size="sm" disabled={off} onclick={() => void add()}>
+					{i18n.server_list_add()}
+				</Button>
+			</div>
+		</div>
 	{/if}
 </div>
 
 <style>
+.wrap {
+	display: flex;
+	flex-direction: column;
+	gap: 10px;
+}
+
+.wide {
+	width: 100%;
+	box-sizing: border-box;
+	font-size: 12px;
+}
+
+.list {
+	display: flex;
+	flex-direction: column;
+	gap: 8px;
+}
+
+ul {
+	margin: 0;
+	padding: 0;
+	list-style: none;
+	display: flex;
+	flex-wrap: wrap;
+	gap: 6px;
+}
+
+li {
+	height: 30px;
+	display: inline-flex;
+	align-items: center;
+	gap: 4px;
+	padding: 0 4px 0 10px;
+	border-radius: 8px;
+	background: var(--bg-deep);
+	border: 1px solid var(--border-strong);
+	font: 400 12px var(--font-mono);
+	color: var(--fg);
+}
+
+li.none {
+	padding: 0;
+	border: 0;
+	background: none;
+	font: inherit;
+	font-size: 12.5px;
+	color: var(--fg-faint);
+}
+
+li button {
+	width: 24px;
+	height: 24px;
+	display: grid;
+	place-items: center;
+	border: 0;
+	border-radius: 6px;
+	background: transparent;
+	color: var(--fg-subtle);
+	cursor: pointer;
+}
+
+li button:hover:not(:disabled) {
+	background: var(--surface-2);
+	color: var(--fg);
+}
+
+li button:disabled {
+	opacity: 0.45;
+	cursor: default;
+}
+
+.add {
+	display: flex;
+	gap: 8px;
+}
+
 .std {
 	display: flex;
 	align-items: center;
@@ -285,5 +435,11 @@ input:disabled {
 	min-width: 18px;
 	font: 400 12px var(--font-mono);
 	color: var(--fg-subtle);
+}
+
+.add input {
+	flex: 1 1 auto;
+	min-width: 0;
+	font-size: 12px;
 }
 </style>

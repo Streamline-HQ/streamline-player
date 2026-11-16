@@ -3,6 +3,7 @@ import type { Block } from "#lib/core/server-view.ts";
 import type { Handlers } from "#lib/screens/admin/handlers.ts";
 import ItemRow from "#lib/screens/admin/ItemRow.svelte";
 import NoteRow from "#lib/screens/admin/NoteRow.svelte";
+import SecretRow from "#lib/screens/admin/SecretRow.svelte";
 import PairRow from "#lib/screens/admin/PairRow.svelte";
 import SettingRow from "#lib/screens/admin/SettingRow.svelte";
 import StreamRow from "#lib/screens/admin/StreamRow.svelte";
@@ -48,7 +49,9 @@ let {
 				{:else if row.t === "stream"}
 					<StreamRow {row} onact={h.act} />
 				{:else if row.t === "pair"}
-					<PairRow {row} onact={h.act} />
+					<PairRow {row} onact={h.act} onpick={h.pick} />
+				{:else if row.t === "secret"}
+					<SecretRow {row} onact={h.act} />
 				{:else if row.t === "note"}
 					<NoteRow {row} onact={h.act} />
 				{:else if row.t === "item"}

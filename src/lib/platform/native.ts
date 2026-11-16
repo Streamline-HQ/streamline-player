@@ -13,6 +13,7 @@ import type {
 	AdminPairing,
 	AdminSettings,
 	AdminUser,
+	EngineSecretStatus,
 	AdminStream,
 	Device,
 	DeviceInfo,
@@ -113,7 +114,8 @@ export const artwork = (kind: Kind, id: number, name: "poster" | "backdrop") =>
 	`${ARTWORK}${kind}/${id}/${name}.jpg`;
 /** A picture by the path a download saved it under, as the `artwork` scheme takes it. */
 export const artworkAt = (path: string) => `${ARTWORK}${path.replace(/^\//, "")}`;
-export const myPicture = (version: number) => `${ARTWORK}users/me/photo.jpg?v=${version}`;
+export const myPicture = (version: number) =>
+	Promise.resolve(`${ARTWORK}users/me/photo.jpg?v=${version}`);
 export const headshot = (person: string) => `${ARTWORK}people/${person}/photo.jpg`;
 
 /** Movies and shows together; ids are only unique within a kind. */
@@ -162,6 +164,9 @@ export const adminResolvePairing = (code: string, approve: boolean, userId?: num
 export const adminRevokeDevice = (id: string) => invoke<void>("admin_revoke_device", { id });
 export const adminLibrary = () => invoke<AdminLibrary>("admin_library");
 export const adminScan = (folderId?: string) => invoke<void>("admin_scan", { folderId });
+export const adminEngineSecret = () => invoke<EngineSecretStatus>("admin_engine_secret");
+export const adminRotateEngineSecret = () =>
+	invoke<{ secret: string }>("admin_rotate_engine_secret");
 export const adminClearCache = () => invoke<{ freed: number }>("admin_clear_cache");
 export const playbackStatus = () => invoke<{ network?: string }>("playback_status");
 export const serverHost = () => invoke<string>("server_host");

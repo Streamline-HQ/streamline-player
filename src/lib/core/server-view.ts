@@ -6,12 +6,21 @@ import type {
 	AdminPairing,
 	AdminSettings,
 	AdminStream,
+	AdminUser,
+	EngineSecretStatus,
 	Kind,
 	SettingValue,
 	Title,
 } from "#lib/core/types.ts";
 
-export type SectionKey = "overview" | "streams" | "devices" | "transcoding" | "library";
+export type SectionKey =
+	| "overview"
+	| "streams"
+	| "devices"
+	| "transcoding"
+	| "library"
+	| "engine"
+	| "access";
 export type Tone = "ok" | "warn" | "err" | "accent" | "muted";
 
 export type Act =
@@ -22,7 +31,9 @@ export type Act =
 	| { do: "end"; id: string }
 	| { do: "restart" }
 	| { do: "clearcache" }
-	| { do: "scan"; folder?: string };
+	| { do: "scan"; folder?: string }
+	| { do: "open"; path: string }
+	| { do: "secret" | "copysecret" | "donesecret" };
 
 type Button = { label: string; act: Act; tone: "ghost" | "danger"; disabled: boolean };
 type Tile = {
@@ -49,10 +60,23 @@ export type Row =
 			max?: number;
 			unit?: string;
 			allowEmpty?: boolean;
+			wide?: boolean;
 			disabled: boolean;
 			locked: boolean;
 			restart: boolean;
 	  }
+	| {
+			t: "list";
+			key: string;
+			label: string;
+			desc?: string;
+			items: string[];
+			placeholder: string;
+			disabled: boolean;
+			locked: boolean;
+			restart: boolean;
+	  }
+	| { t: "secret"; value: string }
 	| { t: "kv"; label: string; value: string; desc?: string; pill?: [string, Tone] }
 	| {
 			t: "action";
@@ -93,7 +117,14 @@ export type Row =
 			mbps: string;
 			playing: boolean;
 	  }
-	| { t: "pair"; code: string; device: string; icon: string; sub: string }
+	| {
+			t: "pair";
+			code: string;
+			device: string;
+			icon: string;
+			sub: string;
+			users: { id: number; label: string; on: boolean }[];
+	  }
 	| { t: "note"; tone: Tone; text: string; button?: [string, Act]; disabled?: boolean }
 	| { t: "tiles"; tiles: Tile[] };
 
@@ -125,6 +156,14 @@ export type AdminData = {
 	pairings: AdminPairing[];
 	devices: AdminDevice[];
 	library: AdminLibrary;
+	users: AdminUser[];
+	secret: EngineSecretStatus;
+	/** The secret just made, shown once and never kept past this screen. */
+	secretShown?: string;
+	/** The user each waiting TV is approved for, by pairing code; absent means the viewer. */
+	pairFor?: Record<string, number>;
+	/** The signed-in admin's id, to tell which of the users is them. */
+	viewer?: number;
 	cacheCleared: boolean;
 	web: boolean;
 	/** Seconds since the streams were last fetched. */
@@ -138,6 +177,7 @@ export type TextId =
 	| Section_
 	| "group_streaming"
 	| "group_library"
+	| "group_system"
 	| "cap_now"
 	| "cap_engine"
 	| "blk_build"
@@ -152,25 +192,45 @@ export type TextId =
 	| "blk_cache"
 	| "blk_cache_desc"
 	| "blk_folders"
+	| "blk_folders_desc"
+	| "blk_ready"
+	| "blk_ready_desc"
+	| "blk_kept"
+	| "blk_connection"
+	| "blk_secret"
+	| "blk_secret_desc"
+	| "blk_web"
+	| "blk_app_links"
+	| "blk_home"
 	| "act_restart_title"
 	| "act_restart_desc"
 	| "act_restart"
 	| "act_cache_title"
 	| "act_clear"
+	| "act_rotate_title"
+	| "act_rotate_desc"
+	| "act_rotate"
 	| "btn_restart_now"
 	| "btn_scan_all"
 	| "btn_scan"
 	| "btn_scanning"
 	| "btn_revoke"
+	| "btn_open"
+	| "btn_make_secret"
 	| "tile_streams"
 	| "tile_pairing"
-	| "tile_health"
-	| "tile_url"
+	| "tile_library"
+	| "tile_engine"
+	| "tile_connected"
+	| "tile_no_secret"
+	| "tile_needs_secret"
+	| "tile_engine_addr"
+	| "tile_public_addr"
+	| "tile_players_stream"
+	| "tile_waiting_secret"
 	| "tile_cache"
 	| "tile_nobody"
 	| "tile_no_requests"
-	| "tile_https"
-	| "tile_http"
 	| "tile_empty"
 	| "tile_ffmpeg_missing"
 	| "tile_engine_down"
@@ -182,19 +242,36 @@ export type TextId =
 	| "kv_version"
 	| "kv_status"
 	| "kv_ffmpeg"
+	| "kv_analysis"
+	| "kv_tonemap"
+	| "kv_dovi"
+	| "kv_dovi_desc"
+	| "kv_secret"
+	| "kv_secret_desc"
 	| "kv_last_scan"
 	| "pill_off"
 	| "pill_ready"
 	| "pill_not_ready"
 	| "pill_found"
 	| "pill_not_found"
+	| "pill_connected"
+	| "pill_no_secret"
+	| "pill_set"
 	| "pill_this_device"
 	| "pill_this_browser"
 	| "pill_new"
+	| "status_not_connected"
 	| "note_nobody"
 	| "note_no_apps"
 	| "note_no_browsers"
 	| "note_cache_cleared"
+	| "note_no_secret"
+	| "open_general"
+	| "open_general_desc"
+	| "open_logs"
+	| "open_logs_desc"
+	| "open_import"
+	| "open_import_desc"
 	| "mode_copy"
 	| "mode_audio"
 	| "mode_transcode"
@@ -241,6 +318,11 @@ export type Words = {
 	folderCount(kind: Kind, n: number): string;
 	scanProgress(pct: number, left: string): string;
 	lastScan(when: string, added: number, replaced: number, errors: number): string;
+	keptDesc(host: string): string;
+	reachable(version: string): string;
+	engineBuild(version: string, api: number | undefined): string;
+	analysisVersion(n: number): string;
+	secretSince(date: string): string;
 };
 
 type Find = (kind: Kind, id: number) => Title | undefined;
@@ -289,6 +371,15 @@ const deviceIcon = (platform: string, name: string, browser: boolean) => {
 	if (p.includes("ios") || p.includes("android")) return "smartphone";
 	return "monitor";
 };
+
+/** Who a waiting TV is approved for: the pick, else the signed-in admin, else the first user. */
+export function pairUser(d: AdminData, code: string): AdminUser | undefined {
+	return (
+		d.users.find((u) => u.id === d.pairFor?.[code]) ??
+		d.users.find((u) => u.id === d.viewer) ??
+		d.users[0]
+	);
+}
 
 export const canRestart = (s: AdminSettings) => !s.read_only.engine;
 
@@ -364,6 +455,7 @@ export function sections(
 			max?: number;
 			unit?: string;
 			allowEmpty?: boolean;
+			wide?: boolean;
 			disabled?: boolean;
 		} = {},
 	): Row => {
@@ -378,6 +470,22 @@ export function sections(
 			...(options ? { options: options.map((o): [string, string] => [o, w.choice(key, o)]) } : {}),
 			...rest,
 			disabled: disabled ?? false,
+			locked: !!s.read_only[s.owners[key] ?? "player"],
+			restart: pending.includes(key),
+		};
+	};
+
+	const list = (key: string, placeholder: string): Row => {
+		const desc = w.desc(key);
+		const value = v(key);
+		return {
+			t: "list",
+			key,
+			label: w.label(key),
+			...(desc ? { desc } : {}),
+			items: Array.isArray(value) ? value : [],
+			placeholder,
+			disabled: false,
 			locked: !!s.read_only[s.owners[key] ?? "player"],
 			restart: pending.includes(key),
 		};
@@ -471,10 +579,39 @@ export function sections(
 	const first = d.pairings[0];
 	const hw = o.engine.hw;
 	const engineUp = o.engine.reachable;
+	const secretSet = d.secret.set;
 	const cache = o.storage.cache;
 	const hwSoftware = hwOff || !hw || !hw.ready || hw.mode === "software";
+	const host = (() => {
+		try {
+			return new URL(o.streamline_url).host;
+		} catch {
+			return o.streamline_url;
+		}
+	})();
 
 	const tile = (t: Omit<Tile, "mono"> & { mono?: boolean }): Tile => ({ mono: false, ...t });
+	const open = (path: string): Act => ({ do: "open", path });
+	const openRow = (icon: string, title: string, meta: string, path: string): Row => ({
+		t: "item",
+		icon,
+		title,
+		meta,
+		pills: [],
+		buttons: [{ label: w.t("btn_open"), act: open(path), tone: "ghost", disabled: false }],
+	});
+
+	const libFolders = d.library.folders;
+	const libCount = libFolders.reduce((n, f) => n + f.count, 0);
+	const libParts = (["movies", "series"] as const)
+		.filter((k) => libFolders.some((f) => f.kind === k))
+		.map((k) =>
+			w.folderCount(
+				k,
+				libFolders.filter((f) => f.kind === k).reduce((n, f) => n + f.count, 0),
+			),
+		);
+	const libSub = [...libParts, size(libFolders.reduce((n, f) => n + f.size, 0))].join(" · ");
 
 	const tilesNow: Block = block({
 		bare: true,
@@ -499,30 +636,40 @@ export function sections(
 						go: "devices",
 						tone: first ? "accent" : "muted",
 					}),
-					restartOn
+					tile({
+						icon: "hard-drive",
+						label: w.t("tile_library"),
+						value: String(libCount),
+						sub: libSub,
+						go: "library",
+						tone: "ok",
+					}),
+					!secretSet
 						? tile({
 								icon: "triangle-alert",
-								label: w.t("tile_health"),
-								value: w.t("health_restart"),
-								sub: w.changesWaiting(pending.length),
-								go: "overview",
+								label: w.t("tile_engine"),
+								value: w.t("tile_no_secret"),
+								sub: w.t("tile_needs_secret"),
+								go: "engine",
 								tone: "warn",
 							})
 						: !engineUp
 							? tile({
 									icon: "triangle-alert",
-									label: w.t("tile_health"),
+									label: w.t("tile_engine"),
 									value: w.t("tile_engine_down"),
 									sub: "",
+									go: "engine",
 									tone: "err",
 								})
 							: tile({
 									icon: "circle-check",
-									label: w.t("tile_health"),
-									value: w.t("health_ok"),
+									label: w.t("tile_engine"),
+									value: w.t("tile_connected"),
 									sub: o.engine.ffmpeg_version
 										? w.healthSub(o.engine.ffmpeg_version, hwSoftware)
 										: w.t("tile_ffmpeg_missing"),
+									go: "engine",
 									tone: o.engine.ffmpeg_version ? "ok" : "warn",
 								}),
 				],
@@ -530,7 +677,6 @@ export function sections(
 		],
 	});
 
-	const httpsUrl = o.streamline_url.startsWith("https:");
 	const engineTiles: Block = block({
 		bare: true,
 		cap: w.t("cap_engine"),
@@ -539,12 +685,26 @@ export function sections(
 				t: "tiles",
 				tiles: [
 					tile({
-						icon: "globe",
-						label: w.t("tile_url"),
-						value: o.streamline_url,
+						icon: "layers",
+						label: w.t("tile_engine_addr"),
+						value: String(v("engine.url") ?? ""),
 						mono: true,
-						sub: w.t(httpsUrl ? "tile_https" : "tile_http"),
-						tone: httpsUrl ? "ok" : "warn",
+						sub: !secretSet
+							? w.t("tile_waiting_secret")
+							: engineUp
+								? w.reachable(o.engine.version ?? "—")
+								: w.t("tile_engine_down"),
+						go: "engine",
+						tone: secretSet && engineUp ? "ok" : secretSet ? "err" : "warn",
+					}),
+					tile({
+						icon: "globe",
+						label: w.t("tile_public_addr"),
+						value: String(v("engine.public_url") ?? ""),
+						mono: true,
+						sub: w.t("tile_players_stream"),
+						go: "engine",
+						tone: "ok",
 					}),
 					...(cache
 						? [
@@ -553,6 +713,7 @@ export function sections(
 									label: w.t("tile_cache"),
 									value: d.cacheCleared || cache.size === 0 ? w.t("tile_empty") : size(cache.size),
 									sub: d.cacheCleared ? "" : w.streamCount(cache.streams),
+									go: "transcoding",
 									tone: "ok",
 								}),
 							]
@@ -575,16 +736,43 @@ export function sections(
 			block({
 				title: w.t("blk_build"),
 				rows: [
-					kv(w.t("kv_version"), `Player extension ${o.extension.version}`),
+					kv(w.t("kv_version"), o.extension.version),
 					...(engineUp
 						? [
-								kv(
-									w.t("cap_engine"),
-									`${o.engine.version ?? "—"}${o.engine.api_version === undefined ? "" : ` (API ${o.engine.api_version})`}`,
-								),
+								kv(w.t("cap_engine"), w.engineBuild(o.engine.version ?? "—", o.engine.api_version)),
 								kv(w.t("kv_ffmpeg"), o.engine.ffmpeg_version ?? "—"),
+								...(o.engine.analysis_version === undefined
+									? []
+									: [kv(w.t("kv_analysis"), w.analysisVersion(o.engine.analysis_version))]),
+								...(o.engine.libplacebo === undefined
+									? []
+									: [
+											kv(w.t("kv_tonemap"), "libplacebo", {
+												pill: o.engine.libplacebo
+													? [w.t("pill_ready"), "ok"]
+													: [w.t("pill_not_found"), "warn"],
+											}),
+										]),
+								...(o.engine.dovi_tool === undefined
+									? []
+									: [
+											kv(w.t("kv_dovi"), "dovi_tool", {
+												pill: o.engine.dovi_tool
+													? [w.t("pill_found"), "ok"]
+													: [w.t("pill_not_found"), "warn"],
+												desc: w.t("kv_dovi_desc"),
+											}),
+										]),
 							]
 						: []),
+				],
+			}),
+			block({
+				title: w.t("blk_kept"),
+				desc: w.keptDesc(host),
+				rows: [
+					openRow("server", w.t("open_general"), w.t("open_general_desc"), "/settings/general"),
+					openRow("text", w.t("open_logs"), w.t("open_logs_desc"), "/settings/logs"),
 				],
 			}),
 			...(restartable
@@ -662,6 +850,8 @@ export function sections(
 		};
 	};
 
+	const firstNames = d.users.map((u) => u.name.split(" ")[0] ?? u.name);
+
 	const devices: Section = {
 		key: "devices",
 		group: w.t("group_streaming"),
@@ -676,15 +866,25 @@ export function sections(
 						block({
 							title: w.t("blk_waiting"),
 							desc: w.t("blk_waiting_desc"),
-							rows: d.pairings.map(
-								(p): Row => ({
+							rows: d.pairings.map((p): Row => {
+								const chosen = pairUser(d, p.user_code)?.id;
+								return {
 									t: "pair",
 									code: p.user_code,
 									device: p.name,
 									icon: deviceIcon(p.platform, p.name, false),
 									sub: `${p.platform} · ${ago(p.created_at, now, w)}`,
-								}),
-							),
+									users: d.users.map((u, i) => {
+										const first = firstNames[i] ?? u.name;
+										const name = firstNames.filter((f) => f === first).length > 1 ? u.name : first;
+										return {
+											id: u.id,
+											label: u.id === d.viewer ? w.you(name) : name,
+											on: u.id === chosen,
+										};
+									}),
+								};
+							}),
 						}),
 					]
 				: []),
@@ -822,6 +1022,7 @@ export function sections(
 		blocks: [
 			block({
 				title: w.t("blk_folders"),
+				desc: w.t("blk_folders_desc"),
 				button: { label: w.t("btn_scan_all"), icon: "refresh-cw", act: { do: "scan" } },
 				rows: [
 					...d.library.folders.map(folderRow),
@@ -835,8 +1036,98 @@ export function sections(
 						: []),
 				],
 			}),
+			block({
+				title: w.t("blk_ready"),
+				desc: w.t("blk_ready_desc"),
+				rows: [openRow("folder", w.t("open_import"), w.t("open_import_desc"), "/settings/library")],
+			}),
 		],
 	};
 
-	return [overview, streams, devices, transcoding, library];
+	const secretRows: Row[] = d.secretShown
+		? [{ t: "secret", value: d.secretShown }]
+		: secretSet
+			? [
+					kv(
+						w.t("kv_secret"),
+						w.secretSince(
+							d.secret.created_at
+								? new Date(d.secret.created_at).toLocaleDateString(lang, {
+										day: "numeric",
+										month: "short",
+										year: "numeric",
+									})
+								: "—",
+						),
+						{ pill: [w.t("pill_set"), "ok"], desc: w.t("kv_secret_desc") },
+					),
+					{
+						t: "action",
+						label: w.t("act_rotate_title"),
+						desc: w.t("act_rotate_desc"),
+						button: w.t("act_rotate"),
+						act: { do: "secret" },
+						tone: "danger",
+					},
+				]
+			: [note("warn", w.t("note_no_secret"), [w.t("btn_make_secret"), { do: "secret" }])];
+
+	const engine: Section = {
+		key: "engine",
+		group: w.t("group_system"),
+		title: w.t("sec_engine"),
+		icon: "layers",
+		intro: w.t("sec_engine_intro"),
+		blocks: [
+			block({
+				title: w.t("blk_connection"),
+				rows: [
+					setting("text", "engine.url", { placeholder: "http://engine.lan:8097", wide: true }),
+					setting("text", "engine.public_url", {
+						placeholder: "https://engine.example.net",
+						wide: true,
+					}),
+					kv(
+						w.t("kv_status"),
+						secretSet && engineUp
+							? w.reachable(o.engine.version ?? "—")
+							: w.t("status_not_connected"),
+						{
+							pill:
+								secretSet && engineUp
+									? [w.t("pill_connected"), "ok"]
+									: secretSet
+										? [w.t("tile_engine_down"), "err"]
+										: [w.t("pill_no_secret"), "warn"],
+						},
+					),
+				],
+			}),
+			block({ title: w.t("blk_secret"), desc: w.t("blk_secret_desc"), rows: secretRows }),
+		],
+	};
+
+	const access: Section = {
+		key: "access",
+		group: w.t("group_system"),
+		title: w.t("sec_access"),
+		icon: "globe",
+		intro: w.t("sec_access_intro"),
+		blocks: [
+			block({
+				title: w.t("blk_web"),
+				rows: [
+					setting("text", "player.url", { placeholder: "https://watch.example.net", wide: true }),
+					list("player.origins", "https://watch.example.net"),
+				],
+			}),
+			block({
+				title: w.t("blk_app_links"),
+				rows: [list("player.app_links", "streamline://signin")],
+			}),
+			block({ title: w.t("blk_home"), rows: [list("network.home", "192.168.1.0/24")] }),
+		],
+	};
+
+	return [overview, streams, devices, transcoding, library, engine, access];
 }

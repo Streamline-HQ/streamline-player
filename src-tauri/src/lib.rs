@@ -443,6 +443,18 @@ async fn admin_scan(api: tauri::State<'_, Api>, folder_id: Option<String>) -> Re
 }
 
 #[tauri::command]
+async fn admin_engine_secret(api: tauri::State<'_, Api>) -> Result<Value, String> {
+    api.call(reqwest::Method::GET, "/admin/engine/secret", None)
+        .await
+}
+
+#[tauri::command]
+async fn admin_rotate_engine_secret(api: tauri::State<'_, Api>) -> Result<Value, String> {
+    api.call(reqwest::Method::POST, "/admin/engine/secret", None)
+        .await
+}
+
+#[tauri::command]
 async fn admin_clear_cache(api: tauri::State<'_, Api>) -> Result<Value, String> {
     api.call(reqwest::Method::POST, "/admin/cache/clear", None)
         .await
@@ -836,6 +848,8 @@ pub fn run() {
             admin_revoke_device,
             admin_library,
             admin_scan,
+            admin_engine_secret,
+            admin_rotate_engine_secret,
             admin_clear_cache,
             playback_status,
             decisions,

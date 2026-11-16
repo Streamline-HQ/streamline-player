@@ -125,6 +125,11 @@ const sections = $derived.by((): [Section, ...Section[]] => {
 			rows: [
 				show(i18n.settings_name(), me?.name ?? "", i18n.settings_name_desc()),
 				show(i18n.settings_email(), me?.email ?? "", i18n.settings_email_desc()),
+				show(
+					i18n.settings_account_change(),
+					i18n.settings_account_in_streamline(),
+					i18n.settings_account_change_desc({ host }),
+				),
 				show(i18n.settings_role(), me?.role ?? ""),
 			],
 		},

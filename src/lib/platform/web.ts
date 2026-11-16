@@ -16,6 +16,7 @@ import type {
 	AdminSettings,
 	AdminUser,
 	AdminStream,
+	EngineSecretStatus,
 	Device,
 	DeviceInfo,
 	DownloadEntry,
@@ -193,7 +194,7 @@ function refresh(stale: string | null): Promise<boolean> {
 }
 
 /** A `Blob` goes out as it is, with its own type; anything else as JSON. */
-async function call<T = unknown>(method: string, path: string, body?: unknown): Promise<T> {
+async function request(method: string, path: string, body?: unknown): Promise<Response> {
 	await init();
 	if (!access && store.get(REFRESH)) await refresh(null);
 	const send = () => {
@@ -213,6 +214,11 @@ async function call<T = unknown>(method: string, path: string, body?: unknown): 
 	if (res.status === 401 && store.get(REFRESH)) {
 		if (await refresh(sent)) ({ res, sent } = await send().catch((e) => fail(String(e))));
 	}
+	return res;
+}
+
+async function call<T = unknown>(method: string, path: string, body?: unknown): Promise<T> {
+	const res = await request(method, path, body);
 	const text = await res.text();
 	if (!res.ok) return fail(text);
 	return (text ? JSON.parse(text) : null) as T;
@@ -255,8 +261,12 @@ export const artwork = (kind: Kind, id: number, name: "poster" | "backdrop") =>
 	`${streamline}/extensions/player/posters/${kind}/${id}/${name}.jpg`;
 export const artworkAt = (path: string) =>
 	`${streamline}/extensions/player/posters/${path.replace(/^\//, "")}`;
-export const myPicture = (version: number) =>
-	`${streamline}/extensions/player/posters/users/me/photo.jpg?v=${version}`;
+/** An `<img>` cannot send the bearer, so the picture is fetched with it and handed over as a blob URL. */
+export const myPicture = async (version: number): Promise<string> => {
+	const res = await request("GET", `/posters/users/me/photo.jpg?v=${version}`);
+	if (!res.ok) return fail(await res.text());
+	return URL.createObjectURL(await res.blob());
+};
 export const headshot = (person: string) =>
 	`${streamline}/extensions/player/posters/people/${person}/photo.jpg`;
 
@@ -325,6 +335,9 @@ export const adminRevokeDevice = (id: string) =>
 export const adminLibrary = () => call<AdminLibrary>("GET", "/admin/library");
 export const adminScan = (folderId?: string) =>
 	call<void>("POST", "/admin/library/scan", folderId === undefined ? {} : { folder_id: folderId });
+export const adminEngineSecret = () => call<EngineSecretStatus>("GET", "/admin/engine/secret");
+export const adminRotateEngineSecret = () =>
+	call<{ secret: string }>("POST", "/admin/engine/secret");
 export const adminClearCache = () => call<{ freed: number }>("POST", "/admin/cache/clear");
 export const playbackStatus = () => call<{ network?: string }>("GET", "/playback/status");
 export const serverHost = () => Promise.resolve(streamline.replace(/^[a-z]+:\/\//, ""));

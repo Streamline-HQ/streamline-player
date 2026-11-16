@@ -2,11 +2,13 @@ import type { AdminPort } from "#lib/core/admin.svelte.ts";
 import {
 	adminClearCache,
 	adminDevices,
+	adminEngineSecret,
 	adminLibrary,
 	adminOverview,
 	adminPairings,
 	adminRestart,
 	adminRevokeDevice,
+	adminRotateEngineSecret,
 	adminScan,
 	adminSettings,
 	adminStreams,
@@ -29,4 +31,6 @@ export const adminPort: AdminPort = {
 	adminScan,
 	adminClearCache,
 	adminUsers,
+	adminEngineSecret,
+	adminRotateEngineSecret,
 };

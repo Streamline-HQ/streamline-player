@@ -6,6 +6,7 @@ import {
 	canRestart,
 	commitNumber,
 	commitText,
+	pairUser,
 	type AdminData,
 	type Row,
 	type Section,
@@ -24,46 +25,71 @@ const EN: Record<TextId, string> = {
 	sec_devices: "Devices",
 	sec_transcoding: "Transcoding",
 	sec_library: "Library",
+	sec_engine: "Engine",
+	sec_access: "Player access",
+	sec_engine_intro: "Where the player reaches the engine.",
+	sec_access_intro: "Where the web player lives.",
 	sec_overview_intro: "What the engine runs.",
 	sec_streams_intro: "Everyone watching right now.",
-	sec_devices_intro: "Apps paired with this server.",
+	sec_devices_intro: "TVs paired with this server.",
 	sec_transcoding_intro: "When a player can’t decode a file.",
 	sec_library_intro: "The folders the engine serves.",
 	group_streaming: "Streaming",
 	group_library: "Library",
+	group_system: "System",
 	cap_now: "Right now",
 	cap_engine: "Engine",
-	blk_build: "Build & runtime",
+	blk_build: "Versions",
 	blk_restart: "Restart",
 	blk_waiting: "Waiting for approval",
-	blk_waiting_desc: "Check the code matches the one on the device. Codes expire after 10 minutes.",
-	blk_apps: "Paired apps",
-	blk_browsers: "Browser sessions",
-	blk_browsers_desc: "Signed in from a web browser.",
+	blk_waiting_desc: "Check the code matches the one on the TV. Codes expire after 10 minutes.",
+	blk_apps: "Apps and TVs",
+	blk_browsers: "Browsers",
+	blk_browsers_desc: "Signed in through Streamline from a web browser.",
 	blk_hw: "Hardware acceleration",
 	blk_live: "Live streams",
 	blk_cache: "Cache",
 	blk_cache_desc: "Converted segments are kept while a stream runs.",
 	blk_folders: "Folders",
+	blk_folders_desc: "A scan compares what Streamline holds with what the player has prepared.",
+	blk_ready: "Getting files ready",
+	blk_ready_desc: "After each import or scan, the engine prepares new files.",
+	blk_kept: "Kept by Streamline",
+	blk_connection: "Connection",
+	blk_secret: "Shared secret",
+	blk_secret_desc: "The engine only answers the player when its requests carry this secret.",
+	blk_web: "Web player",
+	blk_app_links: "Apps",
+	blk_home: "Home network",
 	act_restart_title: "Restart the engine",
 	act_restart_desc: "Streams in progress stop for about 10 seconds.",
 	act_restart: "Restart",
 	act_cache_title: "Clear the cache",
 	act_clear: "Clear",
+	act_rotate_title: "Rotate the secret",
+	act_rotate_desc: "Makes a new secret and shows it once.",
+	act_rotate: "Rotate",
 	btn_restart_now: "Restart now",
 	btn_scan_all: "Scan all",
 	btn_scan: "Scan",
 	btn_scanning: "Scanning…",
 	btn_revoke: "Revoke",
+	btn_open: "Open in Streamline",
+	btn_make_secret: "Make a secret",
 	tile_streams: "Streams",
 	tile_pairing: "Pairing",
-	tile_health: "Health",
-	tile_url: "Streamline URL",
+	tile_library: "Library",
+	tile_engine: "Engine",
+	tile_connected: "Connected",
+	tile_no_secret: "No secret",
+	tile_needs_secret: "Playback is off until the engine has one",
+	tile_engine_addr: "Engine address",
+	tile_public_addr: "Public address",
+	tile_players_stream: "Players stream from here",
+	tile_waiting_secret: "Waiting for a secret",
 	tile_cache: "Transcode cache",
 	tile_nobody: "Nobody is watching",
 	tile_no_requests: "No requests waiting",
-	tile_https: "Served over HTTPS",
-	tile_http: "Served over HTTP",
 	tile_empty: "Empty",
 	tile_ffmpeg_missing: "ffmpeg not found",
 	tile_engine_down: "Engine unreachable",
@@ -72,18 +98,35 @@ const EN: Record<TextId, string> = {
 	status_restarting: "Restarting…",
 	hw_software: "Software encoding",
 	hw_status_desc: "Checked with a short test encode after every change.",
-	kv_version: "Version",
+	kv_version: "Player extension",
 	kv_status: "Status",
 	kv_ffmpeg: "ffmpeg",
+	kv_analysis: "File analysis",
+	kv_tonemap: "HDR tone mapping",
+	kv_dovi: "Dolby Vision profile 7",
+	kv_dovi_desc: "Turns profile 7 into 8.1.",
+	kv_secret: "Secret",
+	kv_secret_desc: "It is shown once, when it is made.",
 	kv_last_scan: "Last scan",
 	pill_off: "Off",
 	pill_ready: "Ready",
 	pill_not_ready: "Not ready",
 	pill_found: "Found",
 	pill_not_found: "Not found",
+	pill_connected: "Connected",
+	pill_no_secret: "No secret",
+	pill_set: "Set",
 	pill_this_device: "This device",
 	pill_this_browser: "This browser",
 	pill_new: "New",
+	status_not_connected: "Not connected",
+	note_no_secret: "No secret yet.",
+	open_general: "General settings",
+	open_general_desc: "Address, sign-in, users and metadata",
+	open_logs: "Logs",
+	open_logs_desc: "What Streamline and its extensions write",
+	open_import: "Import settings",
+	open_import_desc: "Where new files come from",
 	note_nobody: "Nobody is watching right now.",
 	note_no_apps: "No apps are paired.",
 	note_no_browsers: "No browser sessions.",
@@ -123,6 +166,11 @@ const CHOICES: Record<string, string> = {
 };
 
 const words: Words = {
+	keptDesc: (host) => `Managed in Streamline, at ${host}.`,
+	reachable: (v) => `Reachable · ${v}`,
+	engineBuild: (v, api) => (api === undefined ? v : `${v} · API ${api}`),
+	analysisVersion: (n) => `version ${n}`,
+	secretSince: (date) => `Set ${date}`,
 	t: (id) => EN[id],
 	label: (k) => LABELS[k] ?? k,
 	desc: (k) => DESCS[k],
@@ -200,6 +248,11 @@ const demo = (): AdminData => ({
 			"stream.tonemap": true,
 			"stream.max_live": 2,
 			"engine.url": "http://engine:8097",
+			"engine.public_url": "https://engine.example.net",
+			"player.url": "https://watch.example.net",
+			"player.origins": ["https://watch.example.net"],
+			"player.app_links": ["streamline://signin"],
+			"network.home": ["192.168.1.0/24", "fd00::/8"],
 		},
 		owners: {
 			"transcoding.hw_accel": "engine",
@@ -207,6 +260,11 @@ const demo = (): AdminData => ({
 			"stream.tonemap": "engine",
 			"stream.max_live": "engine",
 			"engine.url": "player",
+			"engine.public_url": "player",
+			"player.url": "player",
+			"player.origins": "player",
+			"player.app_links": "player",
+			"network.home": "player",
 		},
 		read_only: { engine: false, player: false },
 		pending: [],
@@ -351,6 +409,13 @@ const demo = (): AdminData => ({
 		],
 		last_scan: { at: "2026-11-03T03:00:00+00:00", added: 4, replaced: 2, errors: 0 },
 	},
+	users: [
+		{ id: 1, name: "Antoine Langlois", role: "Admin" },
+		{ id: 2, name: "Camille Roux", role: "Member" },
+		{ id: 3, name: "Hugo Bernard", role: "Member" },
+	],
+	secret: { set: true, created_at: "2026-11-16T09:00:00Z" },
+	viewer: 1,
 	cacheCleared: false,
 	web: false,
 	tick: 0,
@@ -369,11 +434,11 @@ const hasRestart = (s: Section[]) => JSON.stringify(s).includes('"do":"restart"'
 const all = build();
 same(
 	all.map((s) => s.title),
-	["Overview", "Now playing", "Devices", "Transcoding", "Library"],
+	["Overview", "Now playing", "Devices", "Transcoding", "Library", "Engine", "Player access"],
 );
 same(
 	all.map((s) => s.group),
-	["", "Streaming", "Streaming", "Streaming", "Library"],
+	["", "Streaming", "Streaming", "Streaming", "Library", "System", "System"],
 );
 eq(section(all, "streams").count, 3);
 eq(section(all, "devices").badge, 1);
@@ -385,28 +450,45 @@ eq(tile("Streams").value, "3");
 eq(tile("Streams").sub, "1 transcoding · 29.9 Mbps out");
 eq(tile("Pairing").value, "1");
 eq(tile("Pairing").sub, "iPad mini");
-eq(tile("Health").value, "All good");
-eq(tile("Health").sub, "ffmpeg 7.1 · VAAPI ready");
+eq(tile("Library").value, "70");
+eq(tile("Library").sub, "42 movies · 28 shows · 3.5 TB");
+eq(tile("Library").go, "library");
+eq(tile("Engine").value, "Connected");
+eq(tile("Engine").sub, "ffmpeg 7.1 · VAAPI ready");
+eq(tile("Engine").tone, "ok");
+eq(tile("Engine").go, "engine");
 eq(tile("Transcode cache").value, "3.2 GB");
 eq(tile("Transcode cache").sub, "3 streams");
-eq(tile("Streamline URL").mono, true);
-eq(tile("Streamline URL").value, "https://streamline.home.arpa");
-eq(tile("Streamline URL").sub, "Served over HTTPS");
+eq(tile("Transcode cache").go, "transcoding");
+eq(tile("Engine address").mono, true);
+eq(tile("Engine address").value, "http://engine:8097");
+eq(tile("Engine address").sub, "Reachable · 0.4.2");
+eq(tile("Public address").value, "https://engine.example.net");
+eq(tile("Public address").sub, "Players stream from here");
 eq(
-	tiles.some((t) => ["Media storage", "Data directory", "Database"].includes(t.label)),
+	tiles.some((t) => ["Media storage", "Data directory", "Database", "Health"].includes(t.label)),
 	false,
 );
 
-const build_ = titled(section(all, "overview"), "Build & runtime").rows as Extract<
-	Row,
-	{ t: "kv" }
->[];
+const versions = titled(section(all, "overview"), "Versions").rows as Extract<Row, { t: "kv" }>[];
 same(
-	build_.map((r) => [r.label, r.value]),
+	versions.map((r) => [r.label, r.value, r.pill?.[0]]),
 	[
-		["Version", "Player extension 0.1.0"],
-		["Engine", "0.4.2 (API 1)"],
-		["ffmpeg", "7.1"],
+		["Player extension", "0.1.0", undefined],
+		["Engine", "0.4.2 · API 1", undefined],
+		["ffmpeg", "7.1", undefined],
+		["File analysis", "version 1", undefined],
+		["HDR tone mapping", "libplacebo", "Ready"],
+		["Dolby Vision profile 7", "dovi_tool", "Found"],
+	],
+);
+const kept = titled(section(all, "overview"), "Kept by Streamline");
+eq(kept.desc, "Managed in Streamline, at streamline.home.arpa.");
+same(
+	kinds(kept.rows, "item").map((r) => [r.title, r.buttons[0]?.act]),
+	[
+		["General settings", { do: "open", path: "/settings/general" }],
+		["Logs", { do: "open", path: "/settings/logs" }],
 	],
 );
 const noEngine = demo();
@@ -414,12 +496,13 @@ noEngine.overview.engine = { reachable: false };
 noEngine.overview.storage = {};
 const downOverview = section(build(noEngine), "overview");
 same(
-	(titled(downOverview, "Build & runtime").rows as Extract<Row, { t: "kv" }>[]).map((r) => r.label),
-	["Version"],
+	(titled(downOverview, "Versions").rows as Extract<Row, { t: "kv" }>[]).map((r) => r.label),
+	["Player extension"],
 );
 const downTiles = kinds(rows(downOverview), "tiles").flatMap((t) => t.tiles);
-const downHealth = must(downTiles.find((t) => t.label === "Health"));
-same([downHealth.value, downHealth.tone], ["Engine unreachable", "err"]);
+const downEngine = must(downTiles.find((t) => t.label === "Engine"));
+same([downEngine.value, downEngine.tone], ["Engine unreachable", "err"]);
+eq(must(downTiles.find((t) => t.label === "Engine address")).sub, "Engine unreachable");
 eq(
 	downTiles.some((t) => t.label === "Transcode cache"),
 	false,
@@ -440,17 +523,19 @@ eq(
 	).value,
 	"Empty",
 );
-eq(must(tiles.find((t) => t.label === "Streamline URL")).tone, "ok");
-const plainHttp = demo();
-plainHttp.overview.streamline_url = "http://10.0.0.2:8080";
-eq(
-	must(
-		kinds(rows(section(build(plainHttp), "overview")), "tiles")
-			.flatMap((t) => t.tiles)
-			.find((t) => t.label === "Streamline URL"),
-	).sub,
-	"Served over HTTP",
+const noSecret = demo();
+noSecret.secret = { set: false };
+const noSecretTiles = kinds(rows(section(build(noSecret), "overview")), "tiles").flatMap(
+	(t) => t.tiles,
 );
+same(
+	[
+		must(noSecretTiles.find((t) => t.label === "Engine")).value,
+		must(noSecretTiles.find((t) => t.label === "Engine")).tone,
+	],
+	["No secret", "warn"],
+);
+eq(must(noSecretTiles.find((t) => t.label === "Engine address")).sub, "Waiting for a secret");
 
 const stream = (s: Section[], id: string) =>
 	must(kinds(rows(section(s, "streams")), "stream").find((r) => r.id === id));
@@ -506,11 +591,48 @@ const devices = section(all, "devices");
 eq(must(devices.blocks[0]).title, "Waiting for approval");
 eq(must(devices.blocks[0]).desc, EN.blk_waiting_desc);
 same(must(devices.blocks[0]).rows, [
-	{ t: "pair", code: "R4W-X9P", device: "iPad mini", icon: "tablet", sub: "iPadOS · 2 min ago" },
+	{
+		t: "pair",
+		code: "R4W-X9P",
+		device: "iPad mini",
+		icon: "tablet",
+		sub: "iPadOS · 2 min ago",
+		users: [
+			{ id: 1, label: "Antoine (you)", on: true },
+			{ id: 2, label: "Camille", on: false },
+			{ id: 3, label: "Hugo", on: false },
+		],
+	},
 ]);
+const picked = demo();
+picked.pairFor = { "R4W-X9P": 3 };
+same(
+	(kinds(rows(section(build(picked), "devices")), "pair")[0]?.users ?? []).map((u) => u.on),
+	[false, false, true],
+);
+eq(pairUser(picked, "R4W-X9P")?.name, "Hugo Bernard");
+eq(pairUser(demo(), "R4W-X9P")?.name, "Antoine Langlois");
+const stranger = demo();
+stranger.viewer = 99;
+eq(pairUser(stranger, "R4W-X9P")?.id, 1);
+eq(pairUser({ ...demo(), users: [] }, "R4W-X9P"), undefined);
+const twins = demo();
+twins.users = [
+	{ id: 2, name: "Alex Martin", role: "Member" },
+	{ id: 5, name: "Alex Martin", role: "Admin" },
+	{ id: 6, name: "Camille Roux", role: "Member" },
+	{ id: 7, name: "Camille Martin", role: "Member" },
+	{ id: 8, name: "Hugo Bernard", role: "Member" },
+];
+twins.viewer = 5;
+eq(pairUser(twins, "R4W-X9P")?.id, 5);
+same(
+	(kinds(rows(section(build(twins), "devices")), "pair")[0]?.users ?? []).map((u) => u.label),
+	["Alex Martin", "Alex Martin (you)", "Camille Roux", "Camille Martin", "Hugo"],
+);
 const noPair = demo();
 noPair.pairings = [];
-eq(must(section(build(noPair), "devices").blocks[0]).title, "Paired apps");
+eq(must(section(build(noPair), "devices").blocks[0]).title, "Apps and TVs");
 eq(section(build(noPair), "devices").badge, undefined);
 eq(
 	must(
@@ -521,7 +643,7 @@ eq(
 	"No requests waiting",
 );
 
-const apps = titled(devices, "Paired apps");
+const apps = titled(devices, "Apps and TVs");
 eq(apps.desc, "3 devices, each with its own key in the device’s secure storage.");
 const item = (b: { rows: Row[] }, title: string) =>
 	must(kinds(b.rows, "item").find((r) => r.title === title));
@@ -535,7 +657,7 @@ same(pixel.buttons, [
 const bare = demo();
 delete must(bare.devices[2]).key_store;
 eq(
-	item(titled(section(build(bare), "devices"), "Paired apps"), "Pixel 9").meta,
+	item(titled(section(build(bare), "devices"), "Apps and TVs"), "Pixel 9").meta,
 	"Android · Camille Roux",
 );
 const shield = item(apps, "Living room · SHIELD");
@@ -548,11 +670,11 @@ same(self.buttons, []);
 const web = demo();
 web.web = true;
 must(web.devices[0]).kind = "browser";
-const webSessions = titled(section(build(web), "devices"), "Browser sessions");
+const webSessions = titled(section(build(web), "devices"), "Browsers");
 same(item(webSessions, "Desktop · app").pills, [["This browser", "accent"]]);
 
-const sessions = titled(devices, "Browser sessions");
-eq(sessions.desc, "Signed in from a web browser.");
+const sessions = titled(devices, "Browsers");
+eq(sessions.desc, "Signed in through Streamline from a web browser.");
 const safari = item(sessions, "Safari on macOS");
 eq(safari.meta, "Hugo Bernard · expires in 2 days");
 eq(safari.aside, "5 days ago");
@@ -564,10 +686,10 @@ same(safari.buttons, [
 const empty = demo();
 empty.devices = [];
 const emptyDevices = section(build(empty), "devices");
-same(titled(emptyDevices, "Paired apps").rows, [
+same(titled(emptyDevices, "Apps and TVs").rows, [
 	{ t: "note", tone: "muted", text: "No apps are paired." },
 ]);
-same(titled(emptyDevices, "Browser sessions").rows, [
+same(titled(emptyDevices, "Browsers").rows, [
 	{ t: "note", tone: "muted", text: "No browser sessions." },
 ]);
 
@@ -604,7 +726,7 @@ eq(
 	must(
 		kinds(rows(section(softAll, "overview")), "tiles")
 			.flatMap((t) => t.tiles)
-			.find((t) => t.label === "Health"),
+			.find((t) => t.label === "Engine"),
 	).sub,
 	"ffmpeg 7.1 · software encoding",
 );
@@ -615,7 +737,7 @@ for (const patch of [{ ready: false }, { mode: "software" as const }]) {
 		must(
 			kinds(rows(section(build(d), "overview")), "tiles")
 				.flatMap((t) => t.tiles)
-				.find((t) => t.label === "Health"),
+				.find((t) => t.label === "Engine"),
 		).sub,
 		"ffmpeg 7.1 · software encoding",
 	);
@@ -665,6 +787,73 @@ eq(scanned.aside, "50% · 0:08 left");
 eq(scanned.progress, 0.5);
 eq(item(titled(section(build(scanning), "library"), "Folders"), "Series").progress, undefined);
 
+eq(titled(lib, "Folders").desc, EN.blk_folders_desc);
+const ready = titled(lib, "Getting files ready");
+same(
+	kinds(ready.rows, "item").map((r) => [r.title, r.buttons[0]?.act]),
+	[["Import settings", { do: "open", path: "/settings/library" }]],
+);
+
+const engineSec = section(all, "engine");
+const connection = titled(engineSec, "Connection");
+const engineUrl = setting(all, "engine.url");
+eq(engineUrl.t === "text" && engineUrl.wide, true);
+eq(setting(all, "engine.public_url").t, "text");
+same(connection.rows[2], {
+	t: "kv",
+	label: "Status",
+	value: "Reachable · 0.4.2",
+	pill: ["Connected", "ok"],
+});
+const secretBlock = titled(engineSec, "Shared secret");
+same(secretBlock.rows[0], {
+	t: "kv",
+	label: "Secret",
+	value: "Set 16 Nov 2026",
+	pill: ["Set", "ok"],
+	desc: EN.kv_secret_desc,
+});
+same(secretBlock.rows[1], {
+	t: "action",
+	label: "Rotate the secret",
+	desc: EN.act_rotate_desc,
+	button: "Rotate",
+	act: { do: "secret" },
+	tone: "danger",
+});
+const shown = demo();
+shown.secretShown = "ab12";
+same(titled(section(build(shown), "engine"), "Shared secret").rows, [
+	{ t: "secret", value: "ab12" },
+]);
+same(titled(section(build(noSecret), "engine"), "Shared secret").rows, [
+	{ t: "note", tone: "warn", text: "No secret yet.", button: ["Make a secret", { do: "secret" }] },
+]);
+same(titled(section(build(noEngine), "engine"), "Connection").rows[2], {
+	t: "kv",
+	label: "Status",
+	value: "Not connected",
+	pill: ["Engine unreachable", "err"],
+});
+
+const access = section(all, "access");
+const origins = setting(all, "player.origins");
+same(origins.t === "list" && origins.items, ["https://watch.example.net"]);
+eq(setting(all, "player.url").t, "text");
+same(
+	access.blocks.map((b) => b.title),
+	["Web player", "Apps", "Home network"],
+);
+const homes = setting(all, "network.home");
+same(homes.t === "list" && homes.items, ["192.168.1.0/24", "fd00::/8"]);
+const readOnlyPlayer = demo();
+readOnlyPlayer.settings.read_only.player = true;
+eq(setting(build(readOnlyPlayer), "player.app_links").locked, true);
+const lacking = demo();
+delete lacking.settings.values["network.home"];
+const lackingHomes = setting(build(lacking), "network.home");
+same(lackingHomes.t === "list" && lackingHomes.items, []);
+
 for (const r of all.flatMap(rows)) if ("restart" in r) eq(r.restart, false);
 eq(hasRestart(all), true);
 const waiting = demo();
@@ -682,14 +871,6 @@ same(must(ov.blocks[1]).rows, [
 		button: ["Restart now", { do: "restart" }],
 	},
 ]);
-const waitHealth = must(
-	kinds(rows(ov), "tiles")
-		.flatMap((t) => t.tiles)
-		.find((t) => t.label === "Health"),
-);
-eq(waitHealth.value, "Restart needed");
-eq(waitHealth.sub, "2 changes waiting");
-eq(waitHealth.tone, "warn");
 same(status(waiting, false, words), { label: "Restart needed", tone: "warn" });
 same(status(waiting, true, words), { label: "Restarting…", tone: "warn" });
 same(status(demo(), false, words), { label: "All good", tone: "ok" });
