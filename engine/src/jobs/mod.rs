@@ -22,6 +22,8 @@ use crate::error::ApiError;
 use crate::hw::Hw;
 
 const DONE_FILE: &str = "done.json";
+/// Holds one request file per background job not yet finished, so the backlog outlives a restart.
+const BACKLOG_DIR: &str = "backlog";
 const QUEUE_FULL_RETRY_SECS: u64 = 30;
 const TTL_SWEEP_INTERVAL: Duration = Duration::from_secs(3600);
 
@@ -148,12 +150,6 @@ struct Queue {
     background: VecDeque<String>,
 }
 
-impl Queue {
-    fn queued(&self) -> usize {
-        self.interactive.len() + self.background.len()
-    }
-}
-
 struct Shared {
     cfg: Arc<Config>,
     hw: Arc<Hw>,
@@ -191,6 +187,17 @@ impl Shared {
         self.cfg.jobs_dir.join(id)
     }
 
+    fn backlog_file(&self, id: &str) -> PathBuf {
+        self.cfg
+            .jobs_dir
+            .join(BACKLOG_DIR)
+            .join(format!("{id}.json"))
+    }
+
+    fn forget(&self, id: &str) {
+        let _ = std::fs::remove_file(self.backlog_file(id));
+    }
+
     fn take(&self) -> Option<(String, JobSpec)> {
         let mut q = self.lock();
         loop {
@@ -207,6 +214,7 @@ impl Shared {
             }
             entry.state = JobState::Failed;
             entry.error = Some("cannot create the job directory".into());
+            self.forget(&id);
         }
     }
 
@@ -276,6 +284,7 @@ impl Shared {
             "error": entry.error,
         });
         let _ = std::fs::write(self.dir(&id).join(DONE_FILE), record.to_string());
+        self.forget(&id);
     }
 
     fn read_record(&self, id: &str) -> Option<JobStatus> {
@@ -418,14 +427,39 @@ impl Jobs {
         Jobs(shared)
     }
 
-    pub fn submit(&self, r: JobRequest) -> Result<(), ApiError> {
+    /// Queues one request as `POST /v1/jobs` received it. A background job is also written to
+    /// the backlog, which `sweep_boot` queues again after a restart.
+    pub fn submit(&self, v: Value) -> Result<(), ApiError> {
+        if let Some(t) = v.get("type").and_then(|t| t.as_str())
+            && !JobSpec::knows(t)
+        {
+            return Err(ApiError::invalid_request(
+                "job type not supported in this version",
+            ));
+        }
+        let r: JobRequest = serde_json::from_value(v.clone())
+            .map_err(|e| ApiError::invalid_request(e.to_string()))?;
+        self.enqueue(r, Some(&v))
+    }
+
+    fn enqueue(&self, r: JobRequest, keep: Option<&Value>) -> Result<(), ApiError> {
         check_id(&r.job_id)?;
         let mut q = self.0.lock();
         if q.jobs.contains_key(&r.job_id) || self.0.dir(&r.job_id).join(DONE_FILE).exists() {
             return Err(ApiError::job_exists());
         }
-        if q.queued() >= self.0.cfg.max_queued {
+        if r.priority == Priority::Interactive && q.interactive.len() >= self.0.cfg.max_queued {
             return Err(ApiError::queue_full(QUEUE_FULL_RETRY_SECS));
+        }
+        if let (Priority::Background, Some(v)) = (r.priority, keep) {
+            let file = self.0.backlog_file(&r.job_id);
+            let kept = file
+                .parent()
+                .map_or(Ok(()), std::fs::create_dir_all)
+                .and_then(|()| std::fs::write(&file, v.to_string()));
+            if let Err(e) = kept {
+                tracing::warn!(job = %r.job_id, error = %e, "cannot keep the job in the backlog; a restart loses it");
+            }
         }
         match r.priority {
             Priority::Interactive => q.interactive.push_back(r.job_id.clone()),
@@ -525,6 +559,7 @@ impl Jobs {
             None if dir.join(DONE_FILE).exists() => {}
             None => return Err(not_found()),
         }
+        self.0.forget(id);
         let _ = std::fs::remove_dir_all(dir);
         Ok(())
     }
@@ -546,6 +581,8 @@ impl Jobs {
         running.into_iter().chain(queued).collect()
     }
 
+    /// Drops what unfinished jobs left behind, then queues the background backlog again in the
+    /// order it was submitted: a job that was running when the engine stopped starts over.
     pub fn sweep_boot(&self) {
         let Ok(entries) = std::fs::read_dir(&self.0.cfg.jobs_dir) else {
             return;
@@ -557,6 +594,29 @@ impl Jobs {
                 && !path.join(DONE_FILE).exists()
             {
                 let _ = std::fs::remove_dir_all(path);
+            }
+        }
+        let Ok(entries) = std::fs::read_dir(self.0.cfg.jobs_dir.join(BACKLOG_DIR)) else {
+            return;
+        };
+        let mut kept: Vec<(SystemTime, PathBuf)> = entries
+            .flatten()
+            .map(|e| {
+                let at = e
+                    .metadata()
+                    .and_then(|m| m.modified())
+                    .unwrap_or(SystemTime::UNIX_EPOCH);
+                (at, e.path())
+            })
+            .collect();
+        kept.sort();
+        for (_, path) in kept {
+            let restored = std::fs::read(&path)
+                .ok()
+                .and_then(|b| serde_json::from_slice::<JobRequest>(&b).ok())
+                .is_some_and(|r| self.enqueue(r, None).is_ok());
+            if !restored {
+                let _ = std::fs::remove_file(path);
             }
         }
     }
@@ -687,12 +747,8 @@ mod tests {
         format!("{n:032x}")
     }
 
-    fn analyze_req(n: u8, path: &str, priority: Priority) -> JobRequest {
-        JobRequest {
-            job_id: id(n),
-            priority,
-            spec: JobSpec::Analyze { path: path.into() },
-        }
+    fn analyze_req(n: u8, path: &str, priority: Priority) -> Value {
+        json!({ "job_id": id(n), "priority": priority, "type": "analyze", "path": path })
     }
 
     async fn until(mut cond: impl FnMut() -> bool) {
@@ -732,7 +788,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn queue_full_429() {
+    async fn queue_full_429_is_for_interactive_only() {
         let f = Fixture::new(|c| {
             c.max_jobs = 1;
             c.max_queued = 2;
@@ -741,17 +797,51 @@ mod tests {
         jobs.submit(analyze_req(1, "/m/blocker", Priority::Background))
             .unwrap();
         until(|| jobs.status(&id(1)).unwrap().state == JobState::Running).await;
-        jobs.submit(analyze_req(2, "/m/a", Priority::Background))
+        jobs.submit(analyze_req(2, "/m/a", Priority::Interactive))
             .unwrap();
-        jobs.submit(analyze_req(3, "/m/b", Priority::Background))
+        jobs.submit(analyze_req(3, "/m/b", Priority::Interactive))
             .unwrap();
         let err = jobs
-            .submit(analyze_req(4, "/m/c", Priority::Background))
+            .submit(analyze_req(4, "/m/c", Priority::Interactive))
             .unwrap_err();
         assert_eq!(err.status, axum::http::StatusCode::TOO_MANY_REQUESTS);
         assert_eq!(err.code, "queue_full");
         assert_eq!(err.retry_after, Some(30));
+        for n in 5..10 {
+            jobs.submit(analyze_req(n, "/m/d", Priority::Background))
+                .unwrap();
+        }
         f.release();
+    }
+
+    #[tokio::test]
+    async fn background_backlog_survives_restart() {
+        let f = Fixture::new(|c| c.max_jobs = 1);
+        let jobs = f.jobs();
+        jobs.submit(analyze_req(1, "/m/blocker", Priority::Background))
+            .unwrap();
+        until(|| f.started() == ["/m/blocker"]).await;
+        jobs.submit(analyze_req(2, "/m/b", Priority::Background))
+            .unwrap();
+        jobs.submit(analyze_req(3, "/m/cancelled", Priority::Background))
+            .unwrap();
+        jobs.submit(analyze_req(4, "/m/i", Priority::Interactive))
+            .unwrap();
+        jobs.cancel(&id(3)).unwrap();
+        jobs.shutdown();
+
+        let fresh = f.jobs();
+        fresh.sweep_boot();
+        f.release();
+        assert_eq!(finished(&fresh, 1).await.state, JobState::Done);
+        assert_eq!(finished(&fresh, 2).await.state, JobState::Done);
+        assert_eq!(fresh.status(&id(3)).unwrap_err().code, "not_found");
+        assert_eq!(fresh.status(&id(4)).unwrap_err().code, "not_found");
+        until(|| {
+            std::fs::read_dir(f.cfg.jobs_dir.join(BACKLOG_DIR))
+                .is_ok_and(|mut d| d.next().is_none())
+        })
+        .await;
     }
 
     #[tokio::test]

@@ -11,9 +11,9 @@ use tower_http::services::ServeFile;
 use crate::AppState;
 use crate::analysis::ANALYSIS_VERSION;
 use crate::decision::EncoderSet;
-use crate::error::ApiError;
+use crate::error::{ApiError, ErrorBody};
 use crate::http::Params;
-use crate::jobs::{JobRequest, JobSpec, JobState, JobStatus, Priority};
+use crate::jobs::{JobState, JobStatus, Priority};
 use crate::session::{
     DecisionsRequest, DecisionsResponse, PatchRequest, SessionInfo, SessionResponse, StartRequest,
 };
@@ -104,19 +104,29 @@ pub async fn list_sessions(State(s): State<AppState>) -> Json<SessionList> {
     })
 }
 
-pub async fn submit_job(State(s): State<AppState>, body: Bytes) -> Result<StatusCode, ApiError> {
-    let v: serde_json::Value = parse(&body)?;
-    if let Some(t) = v.get("type").and_then(|t| t.as_str())
-        && !JobSpec::knows(t)
-    {
-        return Err(ApiError::invalid_request(
-            "job type not supported in this version",
-        ));
+/// One job, or a list of them answered one result each, in order: a list never fails as a whole.
+pub async fn submit_job(State(s): State<AppState>, body: Bytes) -> Result<Response, ApiError> {
+    match parse::<serde_json::Value>(&body)? {
+        serde_json::Value::Array(items) => {
+            let results: Vec<_> = items
+                .into_iter()
+                .map(|v| {
+                    let job_id = v.get("job_id").cloned().unwrap_or_default();
+                    let error = s.jobs.submit(v).err().map(ErrorBody::from);
+                    serde_json::json!({ "job_id": job_id, "error": error })
+                })
+                .collect();
+            Ok((
+                StatusCode::ACCEPTED,
+                Json(serde_json::json!({ "results": results })),
+            )
+                .into_response())
+        }
+        v => {
+            s.jobs.submit(v)?;
+            Ok(StatusCode::ACCEPTED.into_response())
+        }
     }
-    let req: JobRequest =
-        serde_json::from_value(v).map_err(|e| ApiError::invalid_request(e.to_string()))?;
-    s.jobs.submit(req)?;
-    Ok(StatusCode::ACCEPTED)
 }
 
 pub async fn job_status(

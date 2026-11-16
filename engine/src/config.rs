@@ -75,6 +75,7 @@ pub struct Config {
     /// Off sends HDR to an SDR screen unconverted, which costs less and looks washed out.
     pub tonemap: bool,
     pub max_jobs: usize,
+    /// Interactive jobs that may wait at once. The background backlog has no limit.
     pub max_queued: usize,
     #[serde(with = "humantime_serde")]
     pub orphan_timeout: Duration,

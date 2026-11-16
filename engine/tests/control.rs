@@ -152,6 +152,31 @@ async fn job_lifecycle() {
     assert_eq!(v["code"], "not_found");
 }
 
+#[cfg(unix)]
+#[tokio::test]
+async fn job_batch_answers_each_in_order() {
+    let e = env();
+    let (status, _) = e
+        .api("POST", "/v1/jobs", Some(job_body(1, "analyze")))
+        .await;
+    assert_eq!(status, StatusCode::ACCEPTED);
+    let batch = json!([
+        job_body(2, "analyze"),
+        job_body(1, "analyze"),
+        {"job_id": id(3), "type": "nonsense"},
+        job_body(4, "analyze"),
+    ]);
+    let (status, v) = e.api("POST", "/v1/jobs", Some(batch)).await;
+    assert_eq!(status, StatusCode::ACCEPTED);
+    let r = &v["results"];
+    assert_eq!(r[0], json!({"job_id": id(2), "error": null}));
+    assert_eq!(r[1]["job_id"], id(1));
+    assert_eq!(r[1]["error"]["code"], "job_exists");
+    assert_eq!(r[2]["error"]["code"], "invalid_request");
+    assert_eq!(r[3], json!({"job_id": id(4), "error": null}));
+    assert_eq!(wait_done(&e, 4).await["state"], "done");
+}
+
 #[tokio::test]
 async fn unsupported_type_400() {
     let e = env();
