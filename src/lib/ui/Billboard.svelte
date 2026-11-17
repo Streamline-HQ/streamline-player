@@ -244,6 +244,11 @@ p {
 	line-height: 1.55;
 	color: var(--player-ink-muted);
 	text-wrap: pretty;
+	display: -webkit-box;
+	-webkit-line-clamp: 3;
+	line-clamp: 3;
+	-webkit-box-orient: vertical;
+	overflow: hidden;
 }
 
 .actions {
