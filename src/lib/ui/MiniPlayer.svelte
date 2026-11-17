@@ -1,5 +1,6 @@
 <script lang="ts">
 import Art from "#lib/ui/Art.svelte";
+import Tip from "#lib/ui/Tip.svelte";
 import { Maximize, Pause, Play, X } from "@lucide/svelte";
 
 let {
@@ -50,6 +51,7 @@ const hole = $derived(live && ready);
 				aria-label={playing ? labels.pause : labels.play}
 				onclick={ontoggle}
 			>
+				<Tip text={playing ? labels.pause : labels.play} key="Space" />
 				{#if playing}
 					<Pause size={18} fill="currentColor" strokeWidth={0} />
 				{:else}
@@ -57,6 +59,7 @@ const hole = $derived(live && ready);
 				{/if}
 			</button>
 			<button type="button" class="btn" aria-label={labels.expand} onclick={onexpand}>
+				<Tip text={labels.expand} key="F" />
 				<Maximize size={18} />
 			</button>
 		</div>

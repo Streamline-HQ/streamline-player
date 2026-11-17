@@ -488,6 +488,8 @@ onMount(() => {
 			() => {},
 		);
 	document.addEventListener("fullscreenchange", sync);
+	// The mini player's F opens this screen already in fullscreen.
+	sync();
 	return () => {
 		clearInterval(hide);
 		clearTimeout(osdTimer);

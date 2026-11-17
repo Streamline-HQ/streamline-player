@@ -65,6 +65,7 @@ import {
 	myPicture,
 	playbackPort,
 	reachable,
+	setFullscreen,
 	signOut,
 	syncOffline,
 	title as fetchTitle,
@@ -356,14 +357,20 @@ function onKey(e: KeyboardEvent) {
 		gAt = Date.now();
 		return;
 	}
-	// On a focused control Space is that control's own key.
-	const onControl = (e.target as Element | null)?.closest?.(
-		"button, a, input, textarea, select, [role='button']",
-	);
-	if (e.key === " " && showMini && !onControl && !e.ctrlKey && !e.metaKey && !e.altKey) {
-		e.preventDefault();
-		nowPlaying.pb?.togglePlay();
-		return;
+	// The mini player keeps the player's two keys wherever the focus was left, a field aside.
+	const typing = (e.target as Element | null)?.closest?.("input, textarea, select");
+	if (showMini && !typing && !e.ctrlKey && !e.metaKey && !e.altKey) {
+		const full = e.key.toLowerCase() === "f";
+		if (e.key === " " || full) {
+			e.preventDefault();
+			// A focused button would also click on the key's release.
+			if (e.target instanceof HTMLButtonElement) e.target.blur();
+			if (full) {
+				expand();
+				setFullscreen(true).catch(() => {});
+			} else nowPlaying.pb?.togglePlay();
+			return;
+		}
 	}
 	if ((dlAsking.pick || dlAsking.popover) && act === "close") {
 		e.preventDefault();
