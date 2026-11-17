@@ -575,6 +575,20 @@ impl Jobs {
             callback::check(url)?;
         }
         let mut q = self.0.lock();
+        // Someone is now waiting on a job a scan queued in the background: it moves to the
+        // interactive queue, where the worker kept for those takes it at once.
+        if r.priority == Priority::Interactive
+            && let Some(entry) = q.jobs.get_mut(&r.job_id)
+            && entry.state == JobState::Queued
+            && entry.priority == Priority::Background
+        {
+            entry.priority = Priority::Interactive;
+            q.background.retain(|id| *id != r.job_id);
+            q.interactive.push_back(r.job_id);
+            drop(q);
+            self.0.wake.notify_waiters();
+            return Err(ApiError::job_exists());
+        }
         if q.jobs.contains_key(&r.job_id) || self.0.dir(&r.job_id).join(DONE_FILE).exists() {
             return Err(ApiError::job_exists());
         }
@@ -1002,6 +1016,26 @@ mod tests {
         f.release();
         finished(&jobs, 2).await;
         assert_eq!(f.started()[..3], ["/m/blocker", "/m/a", "/m/s"]);
+    }
+
+    #[tokio::test]
+    async fn asking_interactively_for_a_queued_background_job_moves_it_up() {
+        let f = Fixture::new(|c| c.max_jobs = 1);
+        let jobs = f.jobs();
+        jobs.submit(analyze_req(1, "/m/blocker", Priority::Background))
+            .unwrap();
+        until(|| jobs.status(&id(1)).unwrap().state == JobState::Running).await;
+        jobs.submit(analyze_req(2, "/m/first", Priority::Background))
+            .unwrap();
+        jobs.submit(analyze_req(3, "/m/wanted", Priority::Background))
+            .unwrap();
+        let again = jobs.submit(analyze_req(3, "/m/wanted", Priority::Interactive));
+        assert_eq!(again.unwrap_err().code, "job_exists");
+        // The worker kept for interactive jobs runs it while the blocker still holds the other.
+        assert_eq!(finished(&jobs, 3).await.state, JobState::Done);
+        assert_eq!(jobs.status(&id(2)).unwrap().state, JobState::Queued);
+        f.release();
+        finished(&jobs, 2).await;
     }
 
     #[tokio::test]
