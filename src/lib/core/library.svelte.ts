@@ -1,3 +1,4 @@
+import { equal, reconcile } from "#lib/core/reconcile.ts";
 import type { HomeFeed, Kind, Title, Watch } from "#lib/core/types.ts";
 
 export type LibraryPort = {
@@ -49,16 +50,20 @@ async function fetchAll(port: LibraryPort) {
 			)
 		).filter((e) => e !== null),
 	);
-	lib.movies = movies;
 	const seen = new Map(lib.shows.filter((s) => s.seasons).map((s) => [s.id, s]));
-	lib.shows = shows.map((s) => details.get(s.id) ?? seen.get(s.id) ?? s);
-	lib.watch = watch;
-	lib.feed = feed;
+	lib.movies = reconcile(lib.movies, movies, (t) => t.id);
+	lib.shows = reconcile(
+		lib.shows,
+		shows.map((s) => details.get(s.id) ?? seen.get(s.id) ?? s),
+		(t) => t.id,
+	);
+	lib.watch = reconcile(lib.watch, watch, (w) => w.media_id);
+	if (!equal(lib.feed, feed)) lib.feed = feed;
 	lib.loaded = true;
 	lib.error = null;
 }
 
-/** Concurrent callers share one request set. A loaded library is kept as it is unless `force`: screens then show it at once and a refresh replaces it in place. */
+/** Concurrent callers share one request set. A loaded library is kept as it is unless `force`: screens then show it at once and a refresh replaces only what changed. */
 export function loadLibrary(port: LibraryPort, force = false): Promise<void> {
 	if (inflight) return inflight;
 	if (lib.loaded && !force) return Promise.resolve();
