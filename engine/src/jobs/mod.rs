@@ -106,25 +106,25 @@ pub enum JobError {
     Json(#[from] serde_json::Error),
 }
 
-/// Call before setting stdio or `kill_on_drop`: on unix the command is rebuilt around `nice`, which keeps only the program, arguments, working directory and environment.
+/// Runs the command at nice 10, so background jobs yield the CPU to live playback. The child sets
+/// its own priority between fork and exec: a `nice` program would have to be on PATH, and the
+/// engine's image ships none.
 pub fn lower_priority(cmd: &mut Command) {
     #[cfg(unix)]
-    {
-        let std = cmd.as_std();
-        let program = std.get_program().to_owned();
-        let args: Vec<std::ffi::OsString> = std.get_args().map(ToOwned::to_owned).collect();
-        let mut nice = Command::new("nice");
-        nice.args(["-n", "10"]).arg(program).args(args);
-        if let Some(dir) = std.get_current_dir() {
-            nice.current_dir(dir);
-        }
-        for (k, v) in std.get_envs() {
-            match v {
-                Some(v) => nice.env(k, v),
-                None => nice.env_remove(k),
-            };
-        }
-        *cmd = nice;
+    // SAFETY: setpriority is async-signal-safe, and the closure allocates nothing.
+    unsafe {
+        cmd.pre_exec(|| {
+            if libc::setpriority(libc::PRIO_PROCESS as _, 0, 10) == 0 {
+                return Ok(());
+            }
+            let err = std::io::Error::last_os_error();
+            // EACCES: the engine already runs below that priority, and an unprivileged process
+            // may not raise it back. The job is low enough as it is.
+            if err.raw_os_error() == Some(libc::EACCES) {
+                return Ok(());
+            }
+            Err(err)
+        });
     }
     #[cfg(windows)]
     {
@@ -678,6 +678,33 @@ mod tests {
     use super::*;
 
     static COUNTER: AtomicUsize = AtomicUsize::new(0);
+
+    #[cfg(target_os = "linux")]
+    #[tokio::test]
+    async fn lower_priority_runs_with_no_program_on_path() {
+        let mut cmd = Command::new("/bin/sh");
+        cmd.args(["-c", "read -r stat < /proc/self/stat; echo \"$stat\""])
+            .env_clear();
+        lower_priority(&mut cmd);
+        let out = cmd.output().await.unwrap();
+        assert!(
+            out.status.success(),
+            "{}",
+            String::from_utf8_lossy(&out.stderr)
+        );
+        let stat = String::from_utf8(out.stdout).unwrap();
+        // Field 19 of /proc/<pid>/stat, counted after the parenthesised command name (field 2).
+        let nice: i32 = stat
+            .rsplit_once(')')
+            .unwrap()
+            .1
+            .split_whitespace()
+            .nth(16)
+            .unwrap()
+            .parse()
+            .unwrap();
+        assert!(nice >= 10, "nice {nice} in {stat}");
+    }
 
     struct Fixture {
         root: PathBuf,
