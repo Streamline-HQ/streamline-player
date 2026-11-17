@@ -26,11 +26,26 @@ media: []
 #    existingClaim: media
 #    mountPath: /srv
 
-# Live segments and job output (trickplay sheets, prepared downloads). An
-# emptyDir loses the job output with the pod, and Streamline asks for it again.
-data:
+# Live HLS segments, written while a stream plays and dropped when it ends.
+# Always an emptyDir.
+live:
+  sizeLimit: "" # e.g. 20Gi
+
+# Job output. Trickplay sheets and subtitles stay until their source file
+# changes or goes; analysis results and prepared downloads expire unread after
+# `config.job_output_ttl`, and downloads are most of the size. The background
+# backlog waits here too. An emptyDir loses it all with the pod: the backlog is
+# gone, and each file's trickplay sheets and subtitles are made again the next
+# time it plays.
+jobs:
+  # A claim you made. The Deployment's Recreate strategy suits a ReadWriteOnce
+  # claim.
   existingClaim: ""
-  sizeLimit: "" # of the emptyDir, e.g. 20Gi
+  # Without existingClaim, the chart creates a ReadWriteOnce claim this size.
+  size: "" # e.g. 50Gi
+  storageClass: "" # the cluster default when empty
+  # With neither, an emptyDir of at most this size.
+  sizeLimit: ""
 
 service:
   type: ClusterIP
@@ -50,6 +65,10 @@ resources: {}
 
 podSecurityContext:
   runAsNonRoot: true
+  # The image's gid, so the engine can write to a fresh claim. OnRootMismatch
+  # spares a full chown of every kept sheet on each start.
+  fsGroup: 1000
+  fsGroupChangePolicy: OnRootMismatch
   seccompProfile:
     type: RuntimeDefault
   # The render node is usually root:render 0660: add the node's `render` gid.

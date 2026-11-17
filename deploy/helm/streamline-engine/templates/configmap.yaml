@@ -14,8 +14,8 @@ data:
   config.yaml: |
     listen: 0.0.0.0:8097
     secret_file: /etc/engine-secret/{{ .Values.secret.key }}
-    tmp_dir: /var/lib/engine/live
-    jobs_dir: /var/lib/engine/jobs
+    tmp_dir: /var/cache/streamline-engine/live
+    jobs_dir: /var/lib/streamline-engine/jobs
     {{- with .Values.config }}
     {{- toYaml . | nindent 4 }}
     {{- end }}

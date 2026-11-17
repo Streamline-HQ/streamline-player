@@ -1,0 +1,17 @@
+{{- if and .Values.jobs.size (not .Values.jobs.existingClaim) }}
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: {{ include "engine.fullname" . }}-jobs
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "engine.labels" . | nindent 4 }}
+spec:
+  accessModes: [ReadWriteOnce]
+  {{- with .Values.jobs.storageClass }}
+  storageClassName: {{ . }}
+  {{- end }}
+  resources:
+    requests:
+      storage: {{ .Values.jobs.size }}
+{{- end }}

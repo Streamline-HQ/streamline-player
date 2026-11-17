@@ -1,3 +1,6 @@
+{{- if hasKey .Values "data" }}
+{{- fail "data is now live (segments) and jobs (job output): see the chart's values.yaml" }}
+{{- end }}
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -7,7 +10,8 @@ metadata:
     {{- include "engine.labels" . | nindent 4 }}
 spec:
   # One engine: sessions live in its memory and the GPU is handed to one pod, so
-  # a second replica, even for the length of a rollout, has neither.
+  # a second replica, even for the length of a rollout, has neither. Recreate
+  # also frees a ReadWriteOnce jobs claim before the new pod mounts it.
   replicas: 1
   strategy:
     type: Recreate
@@ -54,8 +58,10 @@ spec:
             - name: secret
               mountPath: /etc/engine-secret
               readOnly: true
-            - name: data
-              mountPath: /var/lib/engine
+            - name: live
+              mountPath: /var/cache/streamline-engine/live
+            - name: jobs
+              mountPath: /var/lib/streamline-engine/jobs
             {{- range .Values.media }}
             - name: media-{{ .name }}
               mountPath: {{ .mountPath }}
@@ -68,15 +74,14 @@ spec:
         - name: secret
           secret:
             secretName: {{ required "secret.existingSecret is required" .Values.secret.existingSecret }}
-        - name: data
-          {{- if .Values.data.existingClaim }}
+        - name: live
+          emptyDir: {{ with .Values.live.sizeLimit }}{ sizeLimit: {{ . }} }{{ else }}{}{{ end }}
+        - name: jobs
+          {{- if or .Values.jobs.existingClaim .Values.jobs.size }}
           persistentVolumeClaim:
-            claimName: {{ .Values.data.existingClaim }}
+            claimName: {{ .Values.jobs.existingClaim | default (printf "%s-jobs" (include "engine.fullname" .)) }}
           {{- else }}
-          emptyDir:
-            {{- with .Values.data.sizeLimit }}
-            sizeLimit: {{ . }}
-            {{- end }}
+          emptyDir: {{ with .Values.jobs.sizeLimit }}{ sizeLimit: {{ . }} }{{ else }}{}{{ end }}
           {{- end }}
         {{- range .Values.media }}
         - name: media-{{ .name }}

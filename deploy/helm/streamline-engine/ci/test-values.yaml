@@ -5,4 +5,6 @@ media: [{ name: media, existingClaim: media, mountPath: /srv }]
 gateway: { enabled: true, parentRefs: [{ name: gw }], hostnames: [engine.example.com] }
 resources: { limits: { devic.es/dri: 1 } }
 podSecurityContext: { runAsNonRoot: true, seccompProfile: { type: RuntimeDefault }, supplementalGroups: [303] }
+live: { sizeLimit: 20Gi }
+jobs: { size: 50Gi, storageClass: local-path }
 nodeSelector: { kubernetes.io/hostname: valinor }
