@@ -45,7 +45,7 @@ tasks:
     interactive: true
 
   web:
-    desc: Run the web build in a browser (Vite on :1430); Streamline must list http://localhost:1430 in server.cors_origins
+    desc: Run the web build in a browser (Vite on :1430); http://localhost:1430 must be in Streamline's server.cors_origins and the extension's player.origins
     cmd: pnpm dev --port 1430
     interactive: true
 
