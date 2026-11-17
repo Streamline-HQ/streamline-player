@@ -13,9 +13,14 @@ tasks:
     cmd: cargo tauri build --bundles deb,rpm
 
   desktop:appimage:
-    # Tauri downloads and runs a generic-Linux linuxdeploy, which NixOS cannot
-    # execute without nix-ld or an FHS env. It works on other distributions.
-    desc: Bundle the desktop app as an AppImage (fails on NixOS by design)
+    desc: Bundle the desktop app as an AppImage (not on NixOS)
+    platforms: [linux]
+    preconditions:
+      # Tauri's linuxdeploy plugins are scripts starting `#! /bin/bash`, and an
+      # AppImage only runs where glibc is at least the build host's; NixOS has
+      # no /bin/bash and its glibc is newer than other distributions'.
+      - sh: test ! -e /etc/NIXOS
+        msg: NixOS cannot build a usable AppImage; build it on another Linux distribution
     cmd: cargo tauri build --bundles appimage
 
   desktop:windows:

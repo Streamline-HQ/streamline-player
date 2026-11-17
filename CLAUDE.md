@@ -62,7 +62,7 @@ devshell (direnv), or `nix develop .#android` for the Android ones.
   engine (:8097), the mock Streamline (:8081), the TV emulator
 - `task build:<target>` — `engine`, `desktop:linux`, `desktop:windows`,
   `android`, `web`, `image:engine`, `image:web`, `images` (both, with Docker),
-  … (`desktop:appimage` fails on NixOS by design)
+  … (`desktop:appimage` refuses to run on NixOS)
 - `task check` — everything CI runs: `fmt:check`, `lint` (clippy `-D warnings`,
   biome with warnings as errors, ruff, statix and deadnix, svelte-check), `test`; `task fmt` writes the formatting (treefmt, configured in `flake.nix`)
 - `nix flake check` — the same checks plus package builds, the NixOS VM test
