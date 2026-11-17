@@ -8,6 +8,7 @@ pub mod error;
 pub mod http;
 pub mod hw;
 pub mod jobs;
+pub mod mkv;
 pub mod playlist;
 pub mod session;
 pub mod settings;

@@ -446,25 +446,104 @@ pub async fn run_analyze_with(
         prepare,
     )
     .await?;
-    let packets = ffprobe(
+    let probe: Value = serde_json::from_str(&probe)?;
+    let packets = match indexed_packets(ffprobe_bin, path, &probe, prepare).await {
+        Some(packets) => packets,
+        None => packets(ffprobe_bin, path, None, prepare).await?,
+    };
+    parse(&probe, &serde_json::from_str(&frame)?, &packets)
+}
+
+/// The video packets as `pts,dts,flags` rows: all of them, which reads the whole file, or those
+/// ffprobe reads in `interval`.
+async fn packets(
+    ffprobe_bin: &Path,
+    path: &Path,
+    interval: Option<&str>,
+    prepare: Prepare<'_>,
+) -> Result<String, AnalysisError> {
+    let mut args = vec!["-select_streams", "v:0"];
+    if let Some(interval) = interval {
+        args.extend(["-read_intervals", interval]);
+    }
+    args.extend([
+        "-show_entries",
+        "packet=pts_time,dts_time,flags",
+        "-of",
+        "csv=p=0",
+    ]);
+    ffprobe(ffprobe_bin, &args, path, prepare).await
+}
+
+/// How much of the file's start and end is read to check its index against.
+const INDEX_CHECK_SECS: f64 = 10.0;
+/// A cue and the packet it names carry one timestamp, printed with different rounding.
+const SAME_KEYFRAME_SECS: f64 = 0.0005;
+
+/// The rows `parse` needs, from a Matroska file's own index instead of every packet: one per
+/// keyframe, and the last packets for where the video ends. The index of some files skips
+/// keyframes, which would number the segments of a copied stream wrongly, so it is held to the
+/// keyframes actually found in the first and the last seconds. `None` sends the caller the long
+/// way.
+async fn indexed_packets(
+    ffprobe_bin: &Path,
+    path: &Path,
+    probe: &Value,
+    prepare: Prepare<'_>,
+) -> Option<String> {
+    let format = &probe["format"];
+    if container(format["format_name"].as_str()?) != "mkv" {
+        return None;
+    }
+    let end = num(&format["start_time"]).unwrap_or(0.0) + num(&format["duration"])?;
+    let file = path.to_owned();
+    let cues = tokio::task::spawn_blocking(move || crate::mkv::cue_keyframes(&file))
+        .await
+        .ok()??;
+
+    let head = packets(
         ffprobe_bin,
-        &[
-            "-select_streams",
-            "v:0",
-            "-show_entries",
-            "packet=pts_time,dts_time,flags",
-            "-of",
-            "csv=p=0",
-        ],
         path,
+        Some(&format!("%+{INDEX_CHECK_SECS}")),
         prepare,
     )
-    .await?;
-    parse(
-        &serde_json::from_str(&probe)?,
-        &serde_json::from_str(&frame)?,
-        &packets,
-    )
+    .await
+    .ok()?;
+    let tail_from = (end - INDEX_CHECK_SECS).max(0.0);
+    let tail = packets(ffprobe_bin, path, Some(&format!("{tail_from}%")), prepare)
+        .await
+        .ok()?;
+
+    let (head_keys, _) = keyframes(&head);
+    let first = *head_keys.first()?;
+    // The interval's last second is left out: where ffprobe stops reading is not exact.
+    let head_until = first + INDEX_CHECK_SECS - 1.0;
+    let (tail_keys, _) = keyframes(&tail);
+    let same = |found: &[f64], from: f64, until: f64| {
+        let inside = |t: &&f64| **t >= from && **t < until;
+        let found: Vec<&f64> = found.iter().filter(inside).collect();
+        let listed: Vec<&f64> = cues.iter().filter(inside).collect();
+        found.len() == listed.len()
+            && found
+                .iter()
+                .zip(&listed)
+                .all(|(a, b)| (**a - **b).abs() < SAME_KEYFRAME_SECS)
+    };
+    if (cues[0] - first).abs() >= SAME_KEYFRAME_SECS
+        || !same(&head_keys, first, head_until)
+        || !same(&tail_keys, tail_from.max(head_until), f64::INFINITY)
+    {
+        tracing::info!(path = %path.display(), "the file's index skips keyframes; reading every packet");
+        return None;
+    }
+    // Only the cues name keyframes; of the packets read, where the video ends is all that is kept.
+    let last = last_pts(&tail)?;
+    let mut rows: String = cues
+        .iter()
+        .map(|k| format!("{k:.6},{k:.6},K__\n"))
+        .collect();
+    rows.push_str(&format!("{last:.6},{last:.6},___\n"));
+    Some(rows)
 }
 
 /// A file as it was analysed: its path, size and modification time.
@@ -586,6 +665,58 @@ mod tests {
         let ran = std::fs::read_to_string(&runs).unwrap().lines().count();
         std::fs::remove_dir_all(&dir).unwrap();
         assert_eq!(ran, 6);
+    }
+
+    /// Needs a real ffmpeg, like the engine's end-to-end tests.
+    #[tokio::test]
+    async fn a_matroska_index_gives_what_every_packet_gives() {
+        let ffmpeg = |args: &[&str]| {
+            std::process::Command::new("ffmpeg")
+                .args(["-nostdin", "-y", "-v", "error"])
+                .args(args)
+                .output()
+                .is_ok_and(|o| o.status.success())
+        };
+        let dir = std::env::temp_dir().join(format!("engine-index-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let clip = dir.join("in.mkv");
+        let (clip_arg, probe_bin) = (clip.to_str().unwrap(), Path::new("ffprobe"));
+        if !ffmpeg(&[
+            "-f",
+            "lavfi",
+            "-i",
+            "testsrc2=size=320x180:rate=24:duration=40",
+            "-c:v",
+            "libx264",
+            "-g",
+            "36",
+            "-bf",
+            "2",
+            clip_arg,
+        ]) {
+            let _ = std::fs::remove_dir_all(&dir);
+            return;
+        }
+        let probe: Value = serde_json::from_str(
+            &ffprobe(
+                probe_bin,
+                &["-print_format", "json", "-show_format"],
+                &clip,
+                &|_| {},
+            )
+            .await
+            .unwrap(),
+        )
+        .unwrap();
+        let every = packets(probe_bin, &clip, None, &|_| {}).await.unwrap();
+        let indexed = indexed_packets(probe_bin, &clip, &probe, &|_| {}).await;
+        let _ = std::fs::remove_dir_all(&dir);
+
+        let indexed = indexed.expect("the index of a file ffmpeg wrote is complete");
+        assert!(indexed.lines().count() < every.lines().count() / 4);
+        assert_eq!(keyframes(&indexed).0, keyframes(&every).0);
+        assert!(keyframes(&every).0.len() > 20);
+        assert_eq!(last_pts(&indexed), last_pts(&every));
     }
 
     fn fixture(name: &str) -> Analysis {
