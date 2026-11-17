@@ -881,6 +881,8 @@ const heroHeight = $derived(
 					title={series ? i18n.detail_cast_season({ n: season }) : i18n.detail_cast()}
 					count={castShown.length}
 					{members}
+					prevLabel={i18n.home_scroll_left()}
+					nextLabel={i18n.home_scroll_right()}
 					padX={PAD_X}
 					onopen={(person) => goto(`/person/${person}`)}
 				/>

@@ -151,7 +151,8 @@ h2 {
 
 .known {
 	display: grid;
-	grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
+	/* The design draws 250px, which leaves a long title a column one word wide. */
+	grid-template-columns: repeat(auto-fill, minmax(340px, 1fr));
 	gap: 10px;
 }
 
@@ -204,6 +205,11 @@ button.known-item {
 .t {
 	font-size: 14px;
 	font-weight: 600;
+	display: -webkit-box;
+	-webkit-line-clamp: 2;
+	line-clamp: 2;
+	-webkit-box-orient: vertical;
+	overflow: hidden;
 }
 
 .out .t {
@@ -214,6 +220,9 @@ button.known-item {
 .s {
 	font: 400 11.5px var(--font-mono);
 	color: var(--fg-subtle);
+	white-space: nowrap;
+	overflow: hidden;
+	text-overflow: ellipsis;
 }
 
 .st {
