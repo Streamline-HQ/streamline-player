@@ -716,20 +716,26 @@ impl Jobs {
     }
 
     /// Drops what unfinished jobs left behind, then queues the background backlog again in the
-    /// order it was submitted: a job that was running when the engine stopped starts over.
-    pub fn sweep_boot(&self) {
-        let Ok(entries) = std::fs::read_dir(&self.0.cfg.jobs_dir) else {
-            return;
-        };
-        for entry in entries.flatten() {
-            let path = entry.path();
-            if entry.file_name().to_str().is_some_and(valid_id)
-                && path.is_dir()
-                && !path.join(DONE_FILE).exists()
-            {
-                let _ = std::fs::remove_dir_all(path);
+    /// order it was submitted: a job that was running when the engine stopped starts over. The
+    /// backlog is read off the caller's path, since a library scan leaves tens of thousands of
+    /// files and the engine must answer before they are all read.
+    pub fn sweep_boot(&self) -> JoinHandle<()> {
+        if let Ok(entries) = std::fs::read_dir(&self.0.cfg.jobs_dir) {
+            for entry in entries.flatten() {
+                let path = entry.path();
+                if entry.file_name().to_str().is_some_and(valid_id)
+                    && path.is_dir()
+                    && !path.join(DONE_FILE).exists()
+                {
+                    let _ = std::fs::remove_dir_all(path);
+                }
             }
         }
+        let jobs = self.clone();
+        tokio::task::spawn_blocking(move || jobs.restore_backlog())
+    }
+
+    fn restore_backlog(&self) {
         let Ok(entries) = std::fs::read_dir(self.0.cfg.jobs_dir.join(BACKLOG_DIR)) else {
             return;
         };
@@ -744,14 +750,21 @@ impl Jobs {
             })
             .collect();
         kept.sort();
+        let count = kept.len();
         for (_, path) in kept {
-            let restored = std::fs::read(&path)
+            let request = std::fs::read(&path)
                 .ok()
-                .and_then(|b| serde_json::from_slice::<JobRequest>(&b).ok())
-                .is_some_and(|r| self.enqueue(r, None).is_ok());
+                .and_then(|b| serde_json::from_slice::<JobRequest>(&b).ok());
+            let restored = request.is_some_and(|r| {
+                // Submitted again while the backlog was being read: its file is the live one.
+                self.0.lock().jobs.contains_key(&r.job_id) || self.enqueue(r, None).is_ok()
+            });
             if !restored {
                 let _ = std::fs::remove_file(path);
             }
+        }
+        if count > 0 {
+            tracing::info!(jobs = count, "backlog read");
         }
     }
 
@@ -1049,7 +1062,7 @@ mod tests {
         jobs.shutdown();
 
         let fresh = f.jobs();
-        fresh.sweep_boot();
+        fresh.sweep_boot().await.unwrap();
         f.release();
         assert_eq!(finished(&fresh, 1).await.state, JobState::Done);
         assert_eq!(finished(&fresh, 2).await.state, JobState::Done);
