@@ -45,7 +45,7 @@ tasks:
     interactive: true
 
   web:
-    desc: Run the web build in a browser (Vite on :1430). Against dev:stack the page is cross-origin and Streamline sends no CORS headers, so the browser blocks its calls; the deployed web is served from Streamline's own origin
+    desc: Run the web build in a browser (Vite on :1430); Streamline must list http://localhost:1430 in server.cors_origins
     cmd: pnpm dev --port 1430
     interactive: true
 
@@ -65,6 +65,7 @@ tasks:
 
   android:
     desc: Boot the streamline-tv emulator and run the app on it
+    platforms: [linux, darwin]
     preconditions:
       - sh: test -n "$ANDROID_HOME"
         msg: "{{.ANDROID_SHELL}}"

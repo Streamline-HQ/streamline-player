@@ -10,6 +10,7 @@ tasks:
 
   desktop:linux:
     desc: Bundle the desktop app as .deb and .rpm
+    platforms: [linux]
     cmd: cargo tauri build --bundles deb,rpm
 
   desktop:appimage:
@@ -24,8 +25,13 @@ tasks:
     cmd: cargo tauri build --bundles appimage
 
   desktop:windows:
-    desc: Cross-build the Windows desktop app from Linux
-    cmd: cargo tauri build --target x86_64-pc-windows-gnu --no-bundle
+    desc: Build the Windows desktop app (bundled on Windows, cross-built without a bundle on Linux)
+    platforms: [windows, linux]
+    cmds:
+      - cmd: cargo tauri build
+        platforms: [windows]
+      - cmd: cargo tauri build --target x86_64-pc-windows-gnu --no-bundle
+        platforms: [linux]
 
   desktop:macos:
     desc: Bundle the macOS desktop app
@@ -42,6 +48,7 @@ tasks:
 
   android:
     desc: Build the Android APK and AAB (phones and Android TV)
+    platforms: [linux, darwin]
     preconditions:
       - sh: test -n "$ANDROID_HOME"
         msg: "{{.ANDROID_SHELL}}"
