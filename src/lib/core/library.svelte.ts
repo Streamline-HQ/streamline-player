@@ -67,6 +67,8 @@ async function fetchAll(port: LibraryPort) {
 export function loadLibrary(port: LibraryPort, force = false): Promise<void> {
 	if (inflight) return inflight;
 	if (lib.loaded && !force) return Promise.resolve();
+	// An earlier failure may be from before the sign-in: it says nothing about this attempt.
+	lib.error = null;
 	inflight = fetchAll(port)
 		.catch((e) => {
 			if (!lib.loaded) lib.error = String(e);

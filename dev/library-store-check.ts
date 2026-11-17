@@ -32,7 +32,17 @@ const port = {
 	},
 };
 
-await loadLibrary(port);
+await loadLibrary({
+	...port,
+	async library() {
+		throw new Error("unauthorized");
+	},
+});
+ok(lib.error?.includes("unauthorized"));
+const retry = loadLibrary(port);
+eq(lib.error, null);
+await retry;
+
 const [movies, watch, feed] = [lib.movies, lib.watch, lib.feed];
 const [first, second] = [lib.movies[0], lib.movies[1]];
 
