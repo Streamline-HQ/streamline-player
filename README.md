@@ -25,6 +25,16 @@ The engine's image is `ghcr.io/streamline-hq/streamline-player/engine`: a push t
 
 The engine needs read access to the library at the paths Streamline sends (or a `path_map`), and the secret the player extension hands out once from Server settings. Then set its address in Server settings; the [player extension's README](https://github.com/Streamline-HQ/streamline-player-ext#bootstrap-order) has the full bootstrap order.
 
+Without Nix, build the image with `docker build -f deploy/engine.Dockerfile .` (ffmpeg 9 from Debian sid).
+
+### The web player
+
+The browser build, served by static-web-server: `ghcr.io/streamline-hq/streamline-player/web`, built with `docker build -f deploy/web.Dockerfile .`. Mount `/web/config.json` with `{ "streamline": "https://streamline.example.com" }` to point it at Streamline, and add the player's origin to the player extension's web player origins. The Helm chart is in [`deploy/helm/streamline-player-web`](deploy/helm/streamline-player-web).
+
+### NixOS and home-manager
+
+The flake's `nixosModules.default` and `homeModules.default` hold the engine (`services.streamline-engine`), the web player (`services.streamline-player-web`, with `streamlineUrl`) and the desktop app (`programs.streamline-player`).
+
 ## Documentation
 
 - [Player API contract](docs/contract/player.openapi.yaml): the API the apps call, served by the player extension

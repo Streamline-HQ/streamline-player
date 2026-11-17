@@ -1,0 +1,47 @@
+image:
+  repository: ghcr.io/streamline-hq/streamline-player/web
+  tag: "" # required
+  pullPolicy: IfNotPresent
+
+# The Streamline the player signs in to and calls, e.g. https://streamline.example.com.
+# Empty: Streamline on the player's own origin, behind the same proxy. Otherwise
+# add the player's origin to the player extension's web player origins.
+streamlineUrl: ""
+
+# Static files and no state: any number of replicas works.
+replicaCount: 1
+
+service:
+  type: ClusterIP
+  port: 8080
+
+# The same hostname can carry the engine's data routes (its chart's own
+# HTTPRoute): those prefixes never collide with the player's routes.
+gateway:
+  enabled: false
+  parentRefs: [] # [{ name: my-gateway, namespace: gateway-system }]
+  hostnames: []
+
+resources:
+  requests:
+    cpu: 10m
+    memory: 16Mi
+  limits:
+    memory: 64Mi
+
+podSecurityContext:
+  runAsNonRoot: true
+  runAsUser: 1000
+  runAsGroup: 1000
+  seccompProfile:
+    type: RuntimeDefault
+
+securityContext:
+  allowPrivilegeEscalation: false
+  readOnlyRootFilesystem: true
+  capabilities:
+    drop: ["ALL"]
+
+nodeSelector: {}
+tolerations: []
+podAnnotations: {}

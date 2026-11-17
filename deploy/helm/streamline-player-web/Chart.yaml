@@ -1,0 +1,14 @@
+apiVersion: v2
+name: streamline-player-web
+description: Streamline's web player, the browser build of the player app served as static files.
+type: application
+# The chart versions on its own. There is no appVersion: `image.tag` is required,
+# so the chart never picks a player version for you (as in the engine's chart).
+version: 0.1.0
+kubeVersion: ">=1.27.0-0"
+home: https://github.com/Streamline-HQ/streamline-player
+sources:
+  - https://github.com/Streamline-HQ/streamline-player
+maintainers:
+  - name: DataHearth
+    url: https://github.com/DataHearth

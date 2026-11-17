@@ -1,0 +1,3 @@
+image: { tag: 0.1.0 }
+streamlineUrl: https://streamline.example.com
+gateway: { enabled: true, parentRefs: [{ name: gw }], hostnames: [player.example.com] }

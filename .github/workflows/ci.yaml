@@ -187,17 +187,20 @@ jobs:
         uses: azure/setup-helm@9bc31f4ebc9c6b171d7bfbaa5d006ae7abdb4310 # v5.0.1
         with:
           version: v4.3.1
-      - name: Lint and render the engine chart
+      - name: Lint and render the charts
         run: |
           set -euo pipefail
-          chart=deploy/helm/streamline-engine
-          helm lint "$chart" -f "$chart/ci/test-values.yaml"
-          helm template engine "$chart" -f "$chart/ci/test-values.yaml" > /dev/null
-          # The chart must refuse to render without a tag and a secret.
-          if helm template engine "$chart" > /dev/null 2>&1; then
-            echo "::error::the chart rendered without image.tag and secret.existingSecret"
-            exit 1
-          fi
+          for chart in deploy/helm/*/; do
+            chart=${chart%/}
+            helm lint "$chart" -f "$chart/ci/test-values.yaml"
+            helm template release "$chart" -f "$chart/ci/test-values.yaml" > /dev/null
+            # Each chart must refuse to render without its required values
+            # (image.tag, and the engine's secret.existingSecret).
+            if helm template release "$chart" > /dev/null 2>&1; then
+              echo "::error::$chart rendered without its required values"
+              exit 1
+            fi
+          done
 
   build-engine:
     needs: changes

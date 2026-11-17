@@ -1,0 +1,11 @@
+{{- if .Values.streamlineUrl }}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "web.fullname" . }}
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "web.labels" . | nindent 4 }}
+data:
+  config.json: {{ dict "streamline" .Values.streamlineUrl | toJson | quote }}
+{{- end }}
