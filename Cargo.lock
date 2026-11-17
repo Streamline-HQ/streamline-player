@@ -1190,6 +1190,7 @@ dependencies = [
  "anyhow",
  "axum",
  "clap",
+ "dirs",
  "filetime",
  "hex",
  "hmac",

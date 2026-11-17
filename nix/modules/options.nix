@@ -116,12 +116,17 @@ in
           };
           jobs_dir = lib.mkOption {
             type = lib.types.str;
-            description = "Directory for background job output (analysis, downloads).";
+            description = ''
+              Directory for background job output: trickplay sheets and
+              subtitles, kept for as long as their source file, and analysis
+              results and prepared downloads, which expire unread after
+              `job_output_ttl`. Keep it on persistent storage.
+            '';
           };
           job_output_ttl = lib.mkOption {
             type = lib.types.str;
             default = "168h";
-            description = "How long a job's output may go unread before the sweep removes it. Reading a file resets the clock. `0s` turns the sweep off.";
+            description = "How long a job's output may go unread before the sweep removes it. Reading a file resets the clock. Trickplay sheets and subtitles are exempt: they go when their source file changes, or this long after it went missing. `0s` turns the sweep off.";
           };
         };
       };

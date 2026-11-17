@@ -42,6 +42,11 @@ RUN apt-get update && \
     rm -rf /var/lib/apt/lists/*
 
 COPY --from=build /out/bin/ /usr/local/bin/
+# The default jobs_dir is $XDG_STATE_HOME/streamline-engine/jobs. Trickplay
+# sheets and subtitles stay there for as long as their source file does.
+ENV XDG_STATE_HOME=/var/lib
+RUN install -d -o 1000 -g 1000 /var/lib/streamline-engine
+VOLUME /var/lib/streamline-engine
 LABEL org.opencontainers.image.source=https://github.com/Streamline-HQ/streamline-player \
       org.opencontainers.image.description="Streamline's streaming engine"
 

@@ -67,6 +67,8 @@ pub struct Config {
     pub secret: Option<String>,
     pub secret_file: Option<PathBuf>,
     pub tmp_dir: PathBuf,
+    /// Trickplay sheets and subtitles stay here as long as their source file does, so it wants
+    /// storage that outlives the engine. The default is the user's state directory.
     pub jobs_dir: PathBuf,
     pub ffmpeg_dir: PathBuf,
     pub hw_accel: HwAccel,
@@ -97,7 +99,11 @@ impl Default for Config {
             secret: None,
             secret_file: None,
             tmp_dir: temp.join("streamline-engine").join("live"),
-            jobs_dir: temp.join("streamline-engine").join("jobs"),
+            jobs_dir: dirs::state_dir()
+                .or_else(dirs::data_local_dir)
+                .unwrap_or_else(|| temp.clone())
+                .join("streamline-engine")
+                .join("jobs"),
             ffmpeg_dir: PathBuf::new(),
             hw_accel: HwAccel::Auto,
             hw_device: String::new(),
@@ -203,7 +209,10 @@ mod tests {
         assert_eq!(c.hw_accel, HwAccel::Auto);
         assert_eq!(c.listen, "0.0.0.0:8097".parse().unwrap());
         assert!(c.tmp_dir.starts_with(std::env::temp_dir()));
-        assert!(c.jobs_dir.starts_with(std::env::temp_dir()));
+        assert!(
+            c.jobs_dir
+                .ends_with(Path::new("streamline-engine").join("jobs"))
+        );
     }
 
     #[test]
