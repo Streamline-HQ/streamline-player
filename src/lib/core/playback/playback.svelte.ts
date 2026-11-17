@@ -472,17 +472,22 @@ export class Playback {
 		try {
 			if (!t || !info || wantsBurn) {
 				await this.#cmd("subtitle", {});
-			} else if (info.kind === "text" || (info.kind === "styled" && !this.#port.drawsStyled)) {
-				// A styled track on a player that cannot draw it is shown as its plain text, in
-				// the viewer's own subtitle style: the engine writes that copy beside the original.
+			} else if (info.kind === "text") {
 				await this.#cmd("subtitle", {});
 				this.#cues = parseCues(await this.#port.mediaText(t.files.vtt as string));
 			} else if (info.kind === "styled") {
-				await this.#cmd("subtitle", {
-					kind: "ass",
-					url: t.files.ass,
-					fonts: this.tracks?.fonts ?? [],
-				});
+				try {
+					await this.#cmd("subtitle", {
+						kind: "ass",
+						url: t.files.ass,
+						fonts: this.tracks?.fonts ?? [],
+					});
+				} catch {
+					// A player that cannot draw the track shows its plain text, in the viewer's
+					// own subtitle style: the engine writes that copy beside the original.
+					await this.#cmd("subtitle", {});
+					this.#cues = parseCues(await this.#port.mediaText(t.files.vtt as string));
+				}
 			} else {
 				await this.#cmd("subtitle", { kind: "pgs", url: t.files.sup });
 			}

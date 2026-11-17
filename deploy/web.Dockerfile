@@ -18,7 +18,7 @@ WORKDIR /app
 ARG PNPM_VERSION=12.9.0
 RUN npm install -g --allow-scripts=pnpm pnpm@${PNPM_VERSION}
 
-COPY package.json pnpm-lock.yaml ./
+COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
 RUN --mount=type=cache,id=pnpm,target=/root/.local/share/pnpm/store \
     pnpm install --frozen-lockfile
 

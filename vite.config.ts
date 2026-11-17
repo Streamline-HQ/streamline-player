@@ -17,7 +17,9 @@ const csp: NonNullable<Parameters<typeof sveltekit>[0]>["csp"] = !native
 			mode: "hash",
 			directives: {
 				"default-src": ["self"],
-				"script-src": ["self"],
+				// libass, which draws styled subtitles, is WebAssembly.
+				"script-src": ["self", "wasm-unsafe-eval"],
+				"worker-src": ["self"],
 				"style-src": ["self", "unsafe-inline"],
 				"img-src": ["self", "https:", "http:", "data:", "blob:"],
 				"media-src": ["self", "https:", "http:", "blob:"],

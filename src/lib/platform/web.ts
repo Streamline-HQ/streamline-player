@@ -399,7 +399,6 @@ export const onPlayer = <T = undefined>(
 
 export const playbackPort: PlaybackPort = {
 	playerName: PLAYER_NAME,
-	drawsStyled: false,
 	command: shaka.command,
 	on: shaka.on,
 	capabilities: playerCapabilities,

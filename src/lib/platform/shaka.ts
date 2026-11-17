@@ -16,6 +16,10 @@ let rect: Rect = { full: true };
 let generation = 0;
 let errored = false;
 let lastBandwidth = 0;
+let styled: { destroy(): Promise<void>; timeOffset: number } | null = null;
+let styledCanvas: HTMLCanvasElement | null = null;
+let styledGeneration = 0;
+let subtitleOffset = 0;
 
 function emit(event: PlayerEvent, payload: unknown) {
 	for (const cb of [...(listeners.get(event) ?? [])]) (cb as (p: unknown) => void)(payload);
@@ -107,6 +111,47 @@ function tick() {
 	if (bitrate > 0 && Math.abs(bitrate - lastBandwidth) > lastBandwidth * BANDWIDTH_STEP) {
 		lastBandwidth = bitrate;
 		emit("bandwidth", { bitrate, source: "meter" });
+	}
+}
+
+async function dropStyled() {
+	styledGeneration++;
+	const old = styled;
+	styled = null;
+	styledCanvas?.remove();
+	styledCanvas = null;
+	await old?.destroy().catch(() => {});
+}
+
+/** Draws an ASS track over the picture with libass, as the file's author styled it. */
+async function drawStyled(url: string, fonts: string[]) {
+	await dropStyled();
+	const run = styledGeneration;
+	const { default: JASSUB } = await import("jassub");
+	if (run !== styledGeneration) return;
+	const el = element();
+	const canvas = document.createElement("canvas");
+	canvas.style.position = "absolute";
+	canvas.style.pointerEvents = "none";
+	canvas.style.zIndex = el.style.zIndex;
+	el.insertAdjacentElement("afterend", canvas);
+	const drawn = new JASSUB({
+		video: el,
+		canvas,
+		subUrl: url,
+		fonts,
+		timeOffset: -subtitleOffset,
+		// The file's own fonts only: asking the browser for the viewer's installed fonts
+		// prompts for a permission, and looking them up online tells a third party what plays.
+		queryFonts: false,
+	});
+	styled = drawn;
+	styledCanvas = canvas;
+	try {
+		await drawn.ready;
+	} catch (e) {
+		if (run === styledGeneration) await dropStyled();
+		throw e;
 	}
 }
 
@@ -256,6 +301,13 @@ export async function command(
 		case "viewport":
 			rect = args as Rect;
 			place();
+			return null;
+		case "subtitle":
+			if (args.kind !== "ass") return dropStyled();
+			return drawStyled(String(args.url), (args.fonts as string[] | undefined) ?? []);
+		case "timing":
+			subtitleOffset = Number(args.subtitleOffset ?? 0);
+			if (styled) styled.timeOffset = -subtitleOffset;
 			return null;
 		default:
 			return null;

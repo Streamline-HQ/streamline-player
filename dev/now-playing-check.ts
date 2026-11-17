@@ -36,7 +36,6 @@ let commands: { cmd: string; args?: Record<string, unknown> }[] = [];
 let sessions = 0;
 const port = {
 	playerName: "mpv",
-	drawsStyled: true,
 	command: async (cmd: string, args?: Record<string, unknown>) => {
 		commands.push({ cmd, args });
 		log.push(cmd);

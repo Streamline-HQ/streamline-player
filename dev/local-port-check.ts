@@ -39,7 +39,6 @@ const refuse = (name: string) => async () => {
 };
 const base: PlaybackPort = {
 	playerName: "mpv",
-	drawsStyled: true,
 	command: async (cmd, args) => {
 		commands.push({ cmd, args });
 		return cmd === "stats" ? {} : null;

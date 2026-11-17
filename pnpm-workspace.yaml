@@ -1,0 +1,3 @@
+allowBuilds:
+  # Its install script downloads a font list for local-font lookups, which the player turns off.
+  lfa-ponyfill: false
