@@ -284,6 +284,8 @@ fn finished_job(e: &Env, n: u8) -> String {
     let dir = e.root.join("jobs").join(&jid);
     std::fs::create_dir_all(dir.join("sub")).unwrap();
     std::fs::write(dir.join("done.json"), r#"{"state":"done"}"#).unwrap();
+    std::fs::write(dir.join("source.json"), "{}").unwrap();
+    std::fs::write(dir.join("source-gone"), "").unwrap();
     std::fs::write(dir.join("2.vtt"), b"WEBVTT\n\n").unwrap();
     std::fs::write(dir.join("sub/a.ttf"), b"font-bytes").unwrap();
     jid

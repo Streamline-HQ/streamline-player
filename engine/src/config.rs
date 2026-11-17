@@ -80,6 +80,8 @@ pub struct Config {
     #[serde(with = "humantime_serde")]
     pub orphan_timeout: Duration,
     /// How long a job's output may go unread before the sweep removes it; zero turns the sweep off.
+    /// Trickplay sheets and subtitles are exempt while their source file stays as the job read
+    /// it: they go when it changes, or this long after it went missing.
     #[serde(with = "humantime_serde")]
     pub job_output_ttl: Duration,
     pub path_map: PathMap,

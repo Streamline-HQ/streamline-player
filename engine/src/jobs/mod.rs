@@ -6,7 +6,7 @@ pub mod trickplay;
 use std::collections::{HashMap, VecDeque};
 use std::path::{Component, Path, PathBuf};
 use std::sync::{Arc, Mutex, MutexGuard, PoisonError};
-use std::time::{Duration, SystemTime};
+use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 use opentelemetry::KeyValue;
 use serde::{Deserialize, Serialize};
@@ -22,6 +22,10 @@ use crate::error::ApiError;
 use crate::hw::Hw;
 
 const DONE_FILE: &str = "done.json";
+/// The source file of output kept past the TTL, as the job read it.
+const SOURCE_FILE: &str = "source.json";
+/// Written by the sweep that first finds the source missing: its mtime dates the absence.
+const SOURCE_GONE_FILE: &str = "source-gone";
 /// Holds one request file per background job not yet finished, so the backlog outlives a restart.
 const BACKLOG_DIR: &str = "backlog";
 const QUEUE_FULL_RETRY_SECS: u64 = 30;
@@ -55,11 +59,44 @@ impl JobSpec {
         }
     }
 
+    /// The file whose trickplay sheets or subtitles the player keeps fetching. Their output lives
+    /// as long as the file does, not for `job_output_ttl`.
+    fn kept_source(&self) -> Option<&str> {
+        match self {
+            Self::Subtitles { path } | Self::Trickplay { path } => Some(path),
+            Self::Analyze { .. } | Self::Intro { .. } | Self::Download(_) => None,
+        }
+    }
+
     pub fn knows(kind: &str) -> bool {
         matches!(
             kind,
             "analyze" | "subtitles" | "intro" | "trickplay" | "download"
         )
+    }
+}
+
+#[derive(Debug, PartialEq, Serialize, Deserialize)]
+struct Source {
+    /// As the job named it: the sweep rewrites it through the `path_map` of the day.
+    path: String,
+    size: u64,
+    mtime_ns: Option<u64>,
+}
+
+impl Source {
+    fn stat(cfg: &Config, path: &str) -> std::io::Result<Source> {
+        let meta = std::fs::metadata(cfg.path_map.rewrite(path))?;
+        let mtime_ns = meta
+            .modified()
+            .ok()
+            .and_then(|t| t.duration_since(UNIX_EPOCH).ok())
+            .and_then(|d| u64::try_from(d.as_nanos()).ok());
+        Ok(Source {
+            path: path.to_owned(),
+            size: meta.len(),
+            mtime_ns,
+        })
     }
 }
 
@@ -230,6 +267,10 @@ impl Shared {
         let hw = self.hw.clone();
         let dir = self.dir(&id);
         let kind = spec.kind();
+        // Taken before the job reads the file, so a change made while it runs counts as one.
+        let source = spec
+            .kept_source()
+            .and_then(|p| Source::stat(&self.cfg, p).ok());
         let span = tracing::info_span!("engine.job", job = %id, r#type = kind);
         let started = std::time::Instant::now();
         let task: JoinHandle<Result<Value, JobError>> = tokio::spawn(
@@ -278,6 +319,17 @@ impl Shared {
                 entry.error = Some(msg);
             }
         }
+        if entry.state == JobState::Done
+            && let Some(source) = &source
+        {
+            // Before done.json: a job dir with done.json and no source.json is swept on the TTL.
+            let kept = serde_json::to_vec(source)
+                .map_err(std::io::Error::other)
+                .and_then(|b| std::fs::write(self.dir(&id).join(SOURCE_FILE), b));
+            if let Err(e) = kept {
+                tracing::warn!(job = %id, error = %e, "cannot record the source; the output expires like any other");
+            }
+        }
         let record = json!({
             "state": if entry.state == JobState::Done { "done" } else { "failed" },
             "result": entry.result,
@@ -303,6 +355,7 @@ impl Shared {
         })
     }
 
+    /// Removes output past `job_output_ttl` unread and kept output whose source no longer holds.
     fn sweep_ttl(&self) -> u64 {
         let mut freed = 0;
         if self.cfg.job_output_ttl.is_zero() {
@@ -313,14 +366,15 @@ impl Shared {
         };
         let now = SystemTime::now();
         for entry in entries.flatten() {
-            let done = entry.path().join(DONE_FILE);
-            let Ok(age) = std::fs::metadata(&done)
-                .and_then(|m| m.modified())
-                .map(|t| now.duration_since(t).unwrap_or_default())
-            else {
+            let dir = entry.path();
+            let Ok(done) = std::fs::metadata(dir.join(DONE_FILE)).and_then(|m| m.modified()) else {
                 continue;
             };
-            if age > self.cfg.job_output_ttl {
+            let expired = match self.source_holds(&dir, now) {
+                Some(holds) => !holds,
+                None => now.duration_since(done).unwrap_or_default() > self.cfg.job_output_ttl,
+            };
+            if expired {
                 let Some(id) = entry.file_name().to_str().map(ToOwned::to_owned) else {
                     continue;
                 };
@@ -330,11 +384,38 @@ impl Shared {
                     .is_none_or(|e| matches!(e.state, JobState::Done | JobState::Failed))
                 {
                     q.jobs.remove(&id);
-                    freed += crate::disk::remove_counted(&entry.path());
+                    freed += crate::disk::remove_counted(&dir);
                 }
             }
         }
         freed
+    }
+
+    /// `None` for output the TTL governs. Kept output goes at once when its source changed, and
+    /// only `job_output_ttl` after it went missing: a library unmounted for an afternoon must not
+    /// cost every sheet.
+    fn source_holds(&self, dir: &Path, now: SystemTime) -> Option<bool> {
+        let recorded: Source =
+            serde_json::from_slice(&std::fs::read(dir.join(SOURCE_FILE)).ok()?).ok()?;
+        let gone = dir.join(SOURCE_GONE_FILE);
+        Some(match Source::stat(&self.cfg, &recorded.path) {
+            Ok(current) => {
+                let _ = std::fs::remove_file(&gone);
+                current == recorded
+            }
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => {
+                match std::fs::metadata(&gone).and_then(|m| m.modified()) {
+                    Ok(since) => {
+                        now.duration_since(since).unwrap_or_default() <= self.cfg.job_output_ttl
+                    }
+                    Err(_) => {
+                        let _ = std::fs::write(&gone, "");
+                        true
+                    }
+                }
+            }
+            Err(_) => true,
+        })
     }
 }
 
@@ -502,7 +583,10 @@ impl Jobs {
     }
 
     pub fn file(&self, id: &str, name: &str) -> Result<PathBuf, ApiError> {
-        if self.status(id)?.state != JobState::Done || !name_ok(name) || name == DONE_FILE {
+        if self.status(id)?.state != JobState::Done
+            || !name_ok(name)
+            || matches!(name, DONE_FILE | SOURCE_FILE | SOURCE_GONE_FILE)
+        {
             return Err(ApiError::not_found("no such file"));
         }
         let dir = self.0.dir(id);
@@ -965,16 +1049,20 @@ mod tests {
         assert!(fresh.exists());
     }
 
+    fn age(path: &Path) {
+        let eight_days = Duration::from_secs(8 * 24 * 3600);
+        filetime::set_file_mtime(
+            path,
+            filetime::FileTime::from_system_time(SystemTime::now() - eight_days),
+        )
+        .unwrap();
+    }
+
     fn aged_done_job(f: &Fixture, n: u8) -> PathBuf {
         let dir = f.cfg.jobs_dir.join(id(n));
         std::fs::create_dir_all(&dir).unwrap();
         std::fs::write(dir.join(DONE_FILE), r#"{"state":"done"}"#).unwrap();
-        let eight_days = Duration::from_secs(8 * 24 * 3600);
-        filetime::set_file_mtime(
-            dir.join(DONE_FILE),
-            filetime::FileTime::from_system_time(SystemTime::now() - eight_days),
-        )
-        .unwrap();
+        age(&dir.join(DONE_FILE));
         dir
     }
 
@@ -995,6 +1083,105 @@ mod tests {
         let old = aged_done_job(&f, 1);
         f.jobs().sweep_ttl_once();
         assert!(old.exists());
+    }
+
+    /// A finished, long unread subtitles job over a source file of its own. The fake ffprobe
+    /// reports no stream, so the job extracts nothing and succeeds.
+    async fn kept_job(f: &Fixture, jobs: &Jobs, n: u8) -> (PathBuf, PathBuf) {
+        let source = f.root.join(format!("source-{n}.mkv"));
+        std::fs::write(&source, "matroska").unwrap();
+        jobs.submit(json!({
+            "job_id": id(n),
+            "priority": "background",
+            "type": "subtitles",
+            "path": source,
+        }))
+        .unwrap();
+        assert_eq!(finished(jobs, n).await.state, JobState::Done);
+        let dir = f.cfg.jobs_dir.join(id(n));
+        age(&dir.join(DONE_FILE));
+        (dir, source)
+    }
+
+    #[test]
+    fn only_trickplay_and_subtitles_are_kept() {
+        let path = String::from("/m/a.mkv");
+        assert!(
+            JobSpec::Trickplay { path: path.clone() }
+                .kept_source()
+                .is_some()
+        );
+        assert!(
+            JobSpec::Subtitles { path: path.clone() }
+                .kept_source()
+                .is_some()
+        );
+        assert!(
+            JobSpec::Analyze { path: path.clone() }
+                .kept_source()
+                .is_none()
+        );
+        assert!(JobSpec::Intro { paths: vec![path] }.kept_source().is_none());
+    }
+
+    #[tokio::test]
+    async fn kept_output_outlives_the_ttl() {
+        let f = Fixture::new(|_| {});
+        let jobs = f.jobs();
+        let (kept, _) = kept_job(&f, &jobs, 1).await;
+        jobs.submit(analyze_req(2, "/m/a", Priority::Background))
+            .unwrap();
+        finished(&jobs, 2).await;
+        let analysis = f.cfg.jobs_dir.join(id(2));
+        age(&analysis.join(DONE_FILE));
+
+        assert!(kept.join(SOURCE_FILE).is_file());
+        assert!(!analysis.join(SOURCE_FILE).exists());
+        jobs.sweep_ttl_once();
+        assert!(kept.exists());
+        assert!(!analysis.exists());
+        assert_eq!(
+            jobs.file(&id(1), SOURCE_FILE).unwrap_err().code,
+            "not_found"
+        );
+    }
+
+    #[tokio::test]
+    async fn kept_output_goes_with_a_changed_source() {
+        let f = Fixture::new(|_| {});
+        let jobs = f.jobs();
+        let (resized, resized_src) = kept_job(&f, &jobs, 1).await;
+        let (retouched, retouched_src) = kept_job(&f, &jobs, 2).await;
+        std::fs::write(&resized_src, "a longer matroska").unwrap();
+        age(&retouched_src);
+        jobs.sweep_ttl_once();
+        assert!(!resized.exists());
+        assert!(!retouched.exists());
+    }
+
+    #[tokio::test]
+    async fn kept_output_outlasts_a_missing_source_for_the_ttl() {
+        let f = Fixture::new(|_| {});
+        let jobs = f.jobs();
+        let (lost, lost_src) = kept_job(&f, &jobs, 1).await;
+        let (back, back_src) = kept_job(&f, &jobs, 2).await;
+        let back_bytes = std::fs::read(&back_src).unwrap();
+        let back_mtime = std::fs::metadata(&back_src).unwrap().modified().unwrap();
+        std::fs::remove_file(&lost_src).unwrap();
+        std::fs::rename(&back_src, f.root.join("unmounted")).unwrap();
+
+        jobs.sweep_ttl_once();
+        assert!(lost.join(SOURCE_GONE_FILE).is_file());
+        assert!(back.join(SOURCE_GONE_FILE).is_file());
+
+        std::fs::write(&back_src, back_bytes).unwrap();
+        filetime::set_file_mtime(&back_src, filetime::FileTime::from_system_time(back_mtime))
+            .unwrap();
+        age(&lost.join(SOURCE_GONE_FILE));
+        jobs.sweep_ttl_once();
+        assert!(!lost.exists());
+        assert!(back.exists());
+        assert!(!back.join(SOURCE_GONE_FILE).exists());
     }
 
     #[tokio::test]
