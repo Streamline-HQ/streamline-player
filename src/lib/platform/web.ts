@@ -479,9 +479,17 @@ export const windowControls = {
 	close: () => Promise.resolve(),
 };
 
+// A browser leaves fullscreen on Escape before the page sees the key, so an open menu would stay
+// and the picture shrink. Holding the key (Chromium only) hands Escape to the player's own rule:
+// the menu first, then fullscreen. The lock ends by itself with fullscreen.
+const holdEscape = () =>
+	(navigator as { keyboard?: { lock?: (keys: string[]) => Promise<void> } }).keyboard
+		?.lock?.(["Escape"])
+		.catch(() => {});
+
 export const setFullscreen = (on: boolean): Promise<unknown> =>
 	on
-		? document.documentElement.requestFullscreen()
+		? document.documentElement.requestFullscreen().then(holdEscape)
 		: document.fullscreenElement
 			? document.exitFullscreen()
 			: Promise.resolve();

@@ -881,6 +881,7 @@ const labels = {
 			tabindex="-1"
 			aria-label={pb.playing ? labels.pause : labels.play}
 			onclick={togglePlay}
+			ondblclick={() => toggleFullscreen()}
 		></button>
 		{#if !pb.picture && !pb.ended && !pb.halt}
 			<div
