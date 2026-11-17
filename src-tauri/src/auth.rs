@@ -134,6 +134,24 @@ pub async fn auth_state(api: tauri::State<'_, Api>) -> Result<Value, String> {
     }))
 }
 
+/// Asks the address for the sign-in card's extras, which only the player extension answers.
+/// `/health` is no proof: the web player's own host answers it too, and so does a Streamline
+/// without the extension.
+async fn answers_as_player(http: &reqwest::Client, url: &str) -> Result<(), &'static str> {
+    let resp = http
+        .get(format!("{url}/extensions/player/auth/methods"))
+        .timeout(HEALTH_TIMEOUT)
+        .send()
+        .await
+        .map_err(|_| "unreachable")?;
+    let known = resp.status().is_success()
+        && resp
+            .json::<Value>()
+            .await
+            .is_ok_and(|v| v.get("register_url").is_some());
+    if known { Ok(()) } else { Err("not_streamline") }
+}
+
 /// Checks the address answers as Streamline before keeping it. Returns the round trip in ms,
 /// or an error code the page words: `unreachable`, `not_streamline`.
 #[tauri::command]
@@ -144,16 +162,7 @@ pub async fn connect(
 ) -> Result<u64, String> {
     let url = normalize(&url);
     let started = Instant::now();
-    let resp = api
-        .http
-        .get(format!("{url}/health"))
-        .timeout(HEALTH_TIMEOUT)
-        .send()
-        .await
-        .map_err(|_| "unreachable")?;
-    if !resp.status().is_success() {
-        return Err("not_streamline".into());
-    }
+    answers_as_player(&api.http, &url).await?;
     let ms = started.elapsed().as_millis() as u64;
     if api.conn().await.server.as_deref() != Some(url.as_str()) {
         write_data(&app, "server", &url);
@@ -500,6 +509,26 @@ mod tests {
         (target, buf[end..end + len].to_vec())
     }
 
+    #[tokio::test]
+    async fn only_the_player_extension_passes_for_a_server() {
+        let (url, _) = fake_streamline(Answer::Code).await;
+        let http = reqwest::Client::new();
+        assert_eq!(super::answers_as_player(&http, &url).await, Ok(()));
+        // The web player's host: every path answers 200 with the app's page.
+        assert_eq!(
+            super::answers_as_player(&http, &format!("{url}/web")).await,
+            Err("not_streamline")
+        );
+        assert_eq!(
+            super::answers_as_player(&http, &format!("{url}/nothing")).await,
+            Err("not_streamline")
+        );
+        assert_eq!(
+            super::answers_as_player(&http, "http://127.0.0.1:1").await,
+            Err("unreachable")
+        );
+    }
+
     /// Streamline's two sign-in endpoints as the mock answers them: authorize sends the browser
     /// back with a code or the denial, the exchange checks the code, the redirect and PKCE.
     /// Returns the server's address and the last exchange body it received.
@@ -527,6 +556,15 @@ mod tests {
                     format!(
                         "HTTP/1.1 302 Found\r\nLocation: {back}\r\nContent-Length: 0\r\nConnection: close\r\n\r\n"
                     )
+                } else if target == "/extensions/player/auth/methods" {
+                    let body = json!({ "register_url": null }).to_string();
+                    format!(
+                        "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{body}",
+                        body.len()
+                    )
+                } else if target.starts_with("/web/") {
+                    "HTTP/1.1 200 OK\r\nContent-Type: text/html\r\nContent-Length: 6\r\nConnection: close\r\n\r\n<html>"
+                        .to_owned()
                 } else if target == "/extensions/player/auth/token" {
                     let b: Value = serde_json::from_slice(&body).unwrap();
                     let (challenge, redirect) = pending.take().unwrap_or_default();
