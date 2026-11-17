@@ -1,0 +1,11 @@
+*
+!package.json
+!pnpm-lock.yaml
+!vite.config.ts
+!tsconfig.json
+!src-tauri/tauri.conf.json
+!project.inlang/settings.json
+!messages/
+!static/
+!src/
+src/lib/paraglide/
