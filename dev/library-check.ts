@@ -3,7 +3,7 @@ import { deepStrictEqual as eq } from "node:assert";
 import {
 	DEFAULT_VIEW,
 	genres,
-	cycleWatch,
+	setWatch,
 	toggleFlag,
 	type View,
 	viewFromQuery,
@@ -53,10 +53,10 @@ const v: View = { flags: ["uhd", "hdr"], genre: "Drama", sort: "title", layout: 
 eq(toggleFlag(["unwatched"], "progress"), ["progress"]);
 eq(toggleFlag(["uhd"], "uhd"), []);
 eq(toggleFlag(["progress", "uhd"], "watched"), ["uhd", "watched"]);
-eq(cycleWatch(["uhd"]), ["uhd", "unwatched"]);
-eq(cycleWatch(["uhd", "unwatched"]), ["uhd", "progress"]);
-eq(cycleWatch(["progress"]), ["watched"]);
-eq(cycleWatch(["watched", "hdr"]), ["hdr"]);
+eq(setWatch(["uhd"], "unwatched"), ["uhd", "unwatched"]);
+eq(setWatch(["uhd", "unwatched"], "progress"), ["uhd", "progress"]);
+eq(setWatch(["progress"], "watched"), ["watched"]);
+eq(setWatch(["watched", "hdr"], null), ["hdr"]);
 eq(
 	visible(movies, "movies", watch, { ...DEFAULT_VIEW, flags: ["unwatched"] }).map((t) => t.id),
 	[3, 2],

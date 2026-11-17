@@ -7,7 +7,7 @@ import { bulkState, buttonState } from "#lib/core/downloads-view.ts";
 import { dl, entry } from "#lib/core/downloads.svelte.ts";
 import { lib, loadLibrary, loadSeasons, applyWatch } from "#lib/core/library.svelte.ts";
 import {
-	cycleWatch,
+	setWatch,
 	FLAGS,
 	genres,
 	episodeFor,
@@ -439,13 +439,18 @@ const heads: { label: () => string; sort?: Sort; end?: boolean }[] = [
 							</div>
 						{/if}
 					</div>
+					<SortMenu
+						label={i18n.library_watch_state()}
+						icon="eye"
+						title={watchPick ? undefined : i18n.library_watch_state()}
+						value={watchPick ?? ALL}
+						options={[
+							{ value: ALL, label: i18n.library_all() },
+							...WATCH_FLAGS.map((f) => ({ value: f, label: flagLabel[f] })),
+						]}
+						onchange={(v) => set({ flags: setWatch(view.flags, v === ALL ? null : (v as Flag)) })}
+					/>
 					<fieldset class="flags" aria-label={i18n.library_show_only()}>
-						<Chip
-							pressed={watchPick !== null}
-							onclick={() => set({ flags: cycleWatch(view.flags) })}
-						>
-							{watchPick ? flagLabel[watchPick] : i18n.library_watch_state()}
-						</Chip>
 						{#each FLAGS.filter((f) => !WATCH_FLAGS.includes(f)) as f (f)}
 							<Chip
 								pressed={view.flags.includes(f)}

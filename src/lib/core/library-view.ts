@@ -21,12 +21,10 @@ export function toggleFlag(flags: Flag[], f: Flag): Flag[] {
 /** The watch state asked for, if any. */
 export const watchFlag = (flags: Flag[]) => flags.find((f) => WATCH_FLAGS.includes(f)) ?? null;
 
-/** One button walks the watch states: none, unwatched, in progress, watched, none. */
-export function cycleWatch(flags: Flag[]): Flag[] {
-	const now = watchFlag(flags);
-	const next = now === null ? WATCH_FLAGS[0] : WATCH_FLAGS[WATCH_FLAGS.indexOf(now) + 1];
+/** The flags with the watch state asked for replaced by `state`, or dropped for null. */
+export function setWatch(flags: Flag[], state: Flag | null): Flag[] {
 	const rest = flags.filter((f) => !WATCH_FLAGS.includes(f));
-	return next ? [...rest, next] : rest;
+	return state ? [...rest, state] : rest;
 }
 
 /** Percent watched of the unfinished play, 0 when there is none. */

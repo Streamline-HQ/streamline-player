@@ -1,17 +1,22 @@
 <script lang="ts" generics="V extends string">
 import { dismiss } from "#lib/ui/dismiss.ts";
-import Icon from "#lib/ui/Icon.svelte";
+import Icon, { type IconName } from "#lib/ui/Icon.svelte";
 import { presence } from "#lib/ui/presence.svelte.ts";
 
 let {
 	options,
 	value,
 	label,
+	icon = "arrow-up-down",
+	title,
 	onchange,
 }: {
 	options: { value: V; label: string }[];
 	value: V;
 	label: string;
+	icon?: IconName;
+	/** What the button reads in place of the chosen option, for a choice that means "no filter". */
+	title?: string;
 	onchange: (value: V) => void;
 } = $props();
 
@@ -28,7 +33,7 @@ const current = $derived(options.find((o) => o.value === value)?.label ?? "");
 		aria-expanded={open}
 		onclick={() => (open = !open)}
 	>
-		<Icon name="arrow-up-down" size={15} stroke={1.75} />{current}
+		<Icon name={icon} size={15} stroke={1.75} />{title ?? current}
 		<span class="chev" class:open><Icon name="chevron-down" size={14} stroke={2} /></span>
 	</button>
 	{#if panel.mounted}
