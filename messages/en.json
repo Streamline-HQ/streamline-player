@@ -235,6 +235,8 @@
 	"dl_watch": "Watch a download",
 	"dl_watched": "watched",
 	"dl_watched_to": "Watched to {time} offline · syncs when you’re back online",
+	"error_failed": "This page couldn’t be shown.",
+	"error_not_found": "This page doesn’t exist.",
 	"halt_admin_just_now": "Admin · just now",
 	"halt_alts_title": "Or start now, without a conversion",
 	"halt_busy_body": "All conversions on {host} are in use, and this stream needs one.",

@@ -235,6 +235,8 @@
 	"dl_watch": "Regarder un téléchargement",
 	"dl_watched": "vu",
 	"dl_watched_to": "Regardé jusqu’à {time} hors ligne · se synchronise au retour de la connexion",
+	"error_failed": "Cette page n’a pas pu s’afficher.",
+	"error_not_found": "Cette page n’existe pas.",
 	"halt_admin_just_now": "Admin · à l’instant",
 	"halt_alts_title": "Ou lancez la lecture maintenant, sans conversion",
 	"halt_busy_body": "Toutes les conversions sur {host} sont en cours d’utilisation, et cette diffusion en nécessite une.",
