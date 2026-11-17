@@ -6,6 +6,8 @@
 }:
 let
   cfg = config.services.streamline-engine;
+  app = config.programs.streamline-player;
+  web = config.services.streamline-player-web;
   common = import ./common.nix {
     inherit pkgs cfg;
     # LoadCredential's fixed location for a system unit; the YAML cannot use
@@ -50,66 +52,115 @@ in
     };
   };
 
-  config = lib.mkIf cfg.enable {
-    services.streamline-engine.settings = {
-      jobs_dir = lib.mkDefault "/var/lib/streamline-engine/jobs";
-      # Not under /run: live segments for several transcodes would fill that
-      # small RAM-backed tmpfs.
-      tmp_dir = lib.mkDefault "/var/cache/streamline-engine/live";
-    };
-
-    users.users = lib.mkIf (cfg.user == "streamline-engine") {
-      streamline-engine = {
-        isSystemUser = true;
-        inherit (cfg) group;
-      };
-    };
-    users.groups = lib.mkIf (cfg.group == "streamline-engine") { streamline-engine = { }; };
-
-    networking.firewall.allowedTCPPorts = lib.mkIf cfg.openFirewall [ port ];
-    warnings =
-      lib.optional
-        (cfg.openFirewall && (lib.hasPrefix "127." host || host == "[::1]" || host == "localhost"))
-        "services.streamline-engine.openFirewall opens port ${toString port}, but the engine listens on loopback (${cfg.settings.listen}): set settings.listen to an address other hosts reach.";
-
-    systemd.services.streamline-engine = {
-      description = "Streamline streaming engine";
-      wantedBy = [ "multi-user.target" ];
-      after = [ "network.target" ];
-      unitConfig.RequiresMountsFor = map quote cfg.mediaDirs;
-
-      serviceConfig = common.serviceConfig // {
-        ExecStart = "${lib.getExe cfg.package} --config ${common.configFile}";
-        User = cfg.user;
-        Group = cfg.group;
-        LoadCredential = "secret:${cfg.secretFile}";
-        StateDirectory = "streamline-engine";
-        CacheDirectory = "streamline-engine";
-
-        ProtectSystem = "strict";
-        # `tmpfs`, not `true`: `true` makes /home inaccessible, so even a bind
-        # mount beneath it cannot be reached; an empty tmpfs hides the same
-        # contents and lets the mediaDirs binds below show through.
-        ProtectHome = "tmpfs";
-        # ProtectSystem leaves the rest of the tree readable; these are where
-        # libraries live outside /home, emptied the same way.
-        TemporaryFileSystem = [
-          "/mnt:ro"
-          "/media:ro"
-          "/srv:ro"
-        ];
-        BindReadOnlyPaths = map quote cfg.mediaDirs;
-
-        SupplementaryGroups = lib.optionals cfg.hardwareAcceleration.enable [
-          "render"
-          "video"
-        ];
-        # A device class, not /dev/dri: systemd only accepts device nodes or
-        # classes, and silently drops a directory, which leaves the render node
-        # denied by the allow-list. char-drm covers card* and renderD*.
-        DeviceAllow = lib.optionals cfg.hardwareAcceleration.enable [ "char-drm rw" ];
-        PrivateDevices = !cfg.hardwareAcceleration.enable;
-      };
-    };
+  options.services.streamline-player-web.openFirewall = lib.mkOption {
+    type = lib.types.bool;
+    default = false;
+    description = "Open {option}`services.streamline-player-web.port` in the firewall.";
   };
+
+  config = lib.mkMerge [
+    (lib.mkIf app.enable { environment.systemPackages = [ app.package ]; })
+
+    (lib.mkIf web.enable {
+      networking.firewall.allowedTCPPorts = lib.mkIf web.openFirewall [ web.port ];
+
+      systemd.services.streamline-player-web = {
+        description = "Streamline web player";
+        wantedBy = [ "multi-user.target" ];
+        after = [ "network.target" ];
+        serviceConfig = {
+          ExecStart = web.execStart;
+          Restart = "always";
+          RestartSec = 5;
+          DynamicUser = true;
+          CapabilityBoundingSet = "";
+          LockPersonality = true;
+          MemoryDenyWriteExecute = true;
+          PrivateDevices = true;
+          ProtectClock = true;
+          ProtectControlGroups = true;
+          ProtectHome = true;
+          ProtectHostname = true;
+          ProtectKernelLogs = true;
+          ProtectKernelModules = true;
+          ProtectKernelTunables = true;
+          ProtectProc = "invisible";
+          RestrictAddressFamilies = [
+            "AF_INET"
+            "AF_INET6"
+          ];
+          RestrictNamespaces = true;
+          RestrictRealtime = true;
+          SystemCallArchitectures = "native";
+          SystemCallFilter = [
+            "@system-service"
+            "~@privileged"
+          ];
+        };
+      };
+    })
+
+    (lib.mkIf cfg.enable {
+      services.streamline-engine.settings = {
+        jobs_dir = lib.mkDefault "/var/lib/streamline-engine/jobs";
+        # Not under /run: live segments for several transcodes would fill that
+        # small RAM-backed tmpfs.
+        tmp_dir = lib.mkDefault "/var/cache/streamline-engine/live";
+      };
+
+      users.users = lib.mkIf (cfg.user == "streamline-engine") {
+        streamline-engine = {
+          isSystemUser = true;
+          inherit (cfg) group;
+        };
+      };
+      users.groups = lib.mkIf (cfg.group == "streamline-engine") { streamline-engine = { }; };
+
+      networking.firewall.allowedTCPPorts = lib.mkIf cfg.openFirewall [ port ];
+      warnings =
+        lib.optional
+          (cfg.openFirewall && (lib.hasPrefix "127." host || host == "[::1]" || host == "localhost"))
+          "services.streamline-engine.openFirewall opens port ${toString port}, but the engine listens on loopback (${cfg.settings.listen}): set settings.listen to an address other hosts reach.";
+
+      systemd.services.streamline-engine = {
+        description = "Streamline streaming engine";
+        wantedBy = [ "multi-user.target" ];
+        after = [ "network.target" ];
+        unitConfig.RequiresMountsFor = map quote cfg.mediaDirs;
+
+        serviceConfig = common.serviceConfig // {
+          ExecStart = "${lib.getExe cfg.package} --config ${common.configFile}";
+          User = cfg.user;
+          Group = cfg.group;
+          LoadCredential = "secret:${cfg.secretFile}";
+          StateDirectory = "streamline-engine";
+          CacheDirectory = "streamline-engine";
+
+          ProtectSystem = "strict";
+          # `tmpfs`, not `true`: `true` makes /home inaccessible, so even a bind
+          # mount beneath it cannot be reached; an empty tmpfs hides the same
+          # contents and lets the mediaDirs binds below show through.
+          ProtectHome = "tmpfs";
+          # ProtectSystem leaves the rest of the tree readable; these are where
+          # libraries live outside /home, emptied the same way.
+          TemporaryFileSystem = [
+            "/mnt:ro"
+            "/media:ro"
+            "/srv:ro"
+          ];
+          BindReadOnlyPaths = map quote cfg.mediaDirs;
+
+          SupplementaryGroups = lib.optionals cfg.hardwareAcceleration.enable [
+            "render"
+            "video"
+          ];
+          # A device class, not /dev/dri: systemd only accepts device nodes or
+          # classes, and silently drops a directory, which leaves the render node
+          # denied by the allow-list. char-drm covers card* and renderD*.
+          DeviceAllow = lib.optionals cfg.hardwareAcceleration.enable [ "char-drm rw" ];
+          PrivateDevices = !cfg.hardwareAcceleration.enable;
+        };
+      };
+    })
+  ];
 }

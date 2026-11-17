@@ -66,6 +66,12 @@ in
         hardwareAcceleration.enable = true;
       };
 
+      services.streamline-player-web = {
+        enable = true;
+        streamlineUrl = "https://streamline.example.com";
+      };
+      programs.streamline-player.enable = true;
+
       # Copies outside mediaDirs, in /home and in /srv: the sandbox hides both.
       systemd.services.make-clip = {
         wantedBy = [ "multi-user.target" ];
@@ -124,5 +130,16 @@ in
         for name in ["outside", "srv"]:
             out = decide(name)
             assert out["code"] == "file_not_found", (name, out)
+
+    with subtest("the web player serves its build, its config and every SPA route"):
+        machine.wait_for_unit("streamline-player-web.service")
+        machine.wait_for_open_port(8098)
+        config = json.loads(machine.succeed("curl -sf http://127.0.0.1:8098/config.json"))
+        assert config == {"streamline": "https://streamline.example.com"}, config
+        page = machine.succeed("curl -sf http://127.0.0.1:8098/library/movies")
+        assert "<html" in page, page
+
+    with subtest("the desktop app is installed"):
+        machine.succeed("command -v streamline-player")
   '';
 }

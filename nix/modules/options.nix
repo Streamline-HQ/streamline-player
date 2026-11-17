@@ -1,6 +1,8 @@
 # Option declarations shared by the NixOS and home-manager modules: both put
-# the engine under `services.streamline-engine`, so the tree is identical and
-# only the unit around it differs.
+# the engine under `services.streamline-engine`, the web player under
+# `services.streamline-player-web` and the desktop app under
+# `programs.streamline-player`, so the tree is identical and only the unit
+# around it differs.
 {
   config,
   lib,
@@ -9,9 +11,78 @@
 }:
 let
   cfg = config.services.streamline-engine;
+  web = config.services.streamline-player-web;
   format = pkgs.formats.yaml { };
+  # Copied, not a symlinkJoin: static-web-server refuses symlinks that lead out
+  # of its root, so every store link would fall through to index.html.
+  webRoot =
+    pkgs.runCommandLocal "streamline-player-web-root"
+      {
+        config = lib.optionalString (web.streamlineUrl != null) (
+          builtins.toJSON { streamline = web.streamlineUrl; }
+        );
+      }
+      ''
+        cp -r --no-preserve=mode ${web.package} $out
+        if [ -n "$config" ]; then printf '%s' "$config" > $out/config.json; fi
+      '';
 in
 {
+  options.programs.streamline-player = {
+    enable = lib.mkEnableOption "the Streamline desktop player";
+    package = lib.mkPackageOption pkgs "streamline-player" { };
+  };
+
+  options.services.streamline-player-web = {
+    enable = lib.mkEnableOption "the Streamline web player";
+
+    package = lib.mkPackageOption pkgs "streamline-player-web" { };
+
+    streamlineUrl = lib.mkOption {
+      type = lib.types.nullOr lib.types.str;
+      default = null;
+      example = "https://streamline.example.com";
+      description = ''
+        Streamline the web player signs in to and calls. `null` expects
+        Streamline on the player's own origin, behind the same reverse proxy.
+        Otherwise add the player's origin to the player extension's web player
+        origins.
+      '';
+    };
+
+    host = lib.mkOption {
+      type = lib.types.str;
+      default = "127.0.0.1";
+      description = "Address the web player is served on.";
+    };
+
+    port = lib.mkOption {
+      type = lib.types.port;
+      default = 8098;
+      description = "Port the web player is served on.";
+    };
+
+    execStart = lib.mkOption {
+      type = lib.types.str;
+      internal = true;
+      readOnly = true;
+      default = lib.escapeShellArgs [
+        (lib.getExe pkgs.static-web-server)
+        "--host"
+        web.host
+        "--port"
+        (toString web.port)
+        "--root"
+        webRoot
+        # Every route of the SPA is index.html.
+        "--page-fallback"
+        "${webRoot}/index.html"
+        "--health"
+      ];
+      description = "The unit's command line, shared by the NixOS and home-manager modules.";
+    };
+  };
+
   options.services.streamline-engine = {
     enable = lib.mkEnableOption "the Streamline streaming engine";
 

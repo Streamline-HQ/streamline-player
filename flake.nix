@@ -34,11 +34,14 @@
       flake.nixosModules = {
         engine =
           { lib, pkgs, ... }:
+          let
+            own = inputs.self.packages.${pkgs.stdenv.hostPlatform.system};
+          in
           {
             imports = [ ./nix/modules/nixos.nix ];
-            services.streamline-engine.package =
-              lib.mkDefault
-                inputs.self.packages.${pkgs.stdenv.hostPlatform.system}.engine;
+            services.streamline-engine.package = lib.mkDefault own.engine;
+            services.streamline-player-web.package = lib.mkDefault own.web;
+            programs.streamline-player.package = lib.mkDefault own.streamline-player;
           };
         default = inputs.self.nixosModules.engine;
       };
@@ -52,6 +55,7 @@
           {
             imports = [ ./nix/modules/home-manager.nix ];
             services.streamline-engine.package = lib.mkDefault own.engine;
+            services.streamline-player-web.package = lib.mkDefault own.web;
             programs.streamline-player.package = lib.mkDefault own.streamline-player;
           };
         default = inputs.self.homeModules.engine;
@@ -62,6 +66,7 @@
       flake.overlays.default = final: _prev: {
         streamline-engine = inputs.self.packages.${final.stdenv.hostPlatform.system}.engine;
         streamline-player = inputs.self.packages.${final.stdenv.hostPlatform.system}.streamline-player;
+        streamline-player-web = inputs.self.packages.${final.stdenv.hostPlatform.system}.web;
       };
 
       systems = [
@@ -271,6 +276,7 @@
                       enable = true;
                       secretFile = "/home/viewer/.config/streamline-engine/secret";
                     };
+                    services.streamline-player-web.enable = true;
                     programs.streamline-player.enable = true;
                   }
                 ];

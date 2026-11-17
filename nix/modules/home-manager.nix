@@ -7,6 +7,7 @@
 let
   cfg = config.services.streamline-engine;
   app = config.programs.streamline-player;
+  web = config.services.streamline-player-web;
   # A user unit's credentials directory depends on the UID, so the YAML could
   # not name it; the engine reads the user's own file instead.
   common = import ./common.nix {
@@ -17,13 +18,27 @@ in
 {
   imports = [ ./options.nix ];
 
-  options.programs.streamline-player = {
-    enable = lib.mkEnableOption "the Streamline desktop player";
-    package = lib.mkPackageOption pkgs "streamline-player" { };
-  };
-
   config = lib.mkMerge [
     (lib.mkIf app.enable { home.packages = [ app.package ]; })
+
+    (lib.mkIf web.enable {
+      assertions = [
+        {
+          assertion = pkgs.stdenv.hostPlatform.isLinux;
+          message = "services.streamline-player-web uses a systemd user unit and is Linux-only.";
+        }
+      ];
+
+      systemd.user.services.streamline-player-web = {
+        Unit.Description = "Streamline web player";
+        Install.WantedBy = [ "default.target" ];
+        Service = {
+          ExecStart = web.execStart;
+          Restart = "always";
+          RestartSec = 5;
+        };
+      };
+    })
 
     (lib.mkIf cfg.enable {
       assertions = [
