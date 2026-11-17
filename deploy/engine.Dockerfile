@@ -38,7 +38,7 @@ RUN --mount=type=cache,target=/usr/local/cargo/registry \
 FROM debian:sid-slim@sha256:07a3205e8583fdff12d2b05bd030f50437e9fd340ee616df0c05dc77af75767b
 RUN apt-get update && \
     DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
-      ffmpeg mesa-va-drivers mesa-vulkan-drivers && \
+      ca-certificates ffmpeg mesa-va-drivers mesa-vulkan-drivers && \
     rm -rf /var/lib/apt/lists/*
 
 COPY --from=build /out/bin/ /usr/local/bin/

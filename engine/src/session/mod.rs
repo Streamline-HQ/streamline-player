@@ -125,6 +125,13 @@ pub struct AudioOut {
     pub channels: u32,
 }
 
+/// The codecs of the file's streams a session plays, before any conversion.
+#[derive(Debug, Clone, Default, PartialEq, Serialize)]
+pub struct SourceCodecs {
+    pub video: String,
+    pub audio: String,
+}
+
 #[derive(Debug, Clone, Serialize)]
 pub struct SessionResponse {
     pub mode: Mode,
@@ -145,8 +152,10 @@ pub struct SessionInfo {
     pub hw: String,
     pub video: VideoOut,
     pub audio: AudioOut,
+    pub source: SourceCodecs,
     pub speed: Option<f64>,
-    pub bitrate: Option<u64>,
+    /// What the stream sends: the encoder's target, or the file's own rate when the video is copied.
+    pub bitrate: u64,
     pub last_fetch: Option<u64>,
     pub bytes_served: u64,
 }
@@ -291,10 +300,14 @@ fn bandwidth(plan: &Plan, a: &Analysis) -> u64 {
     }
 }
 
-fn target_bitrate(plan: &Plan) -> Option<u64> {
-    match plan.video {
-        VideoAction::Transcode { bitrate, .. } => Some(bitrate),
-        VideoAction::Copy { .. } => None,
+fn source_codecs(plan: &Plan, a: &Analysis) -> SourceCodecs {
+    let video = a.video.iter().find(|v| v.index == plan.video_index);
+    let audio = plan
+        .audio_index
+        .and_then(|i| a.audio.iter().find(|s| s.index == i));
+    SourceCodecs {
+        video: video.map(|v| v.codec.clone()).unwrap_or_default(),
+        audio: audio.map(|s| s.codec.clone()).unwrap_or_default(),
     }
 }
 
@@ -304,7 +317,8 @@ fn live_for(plan: &Plan, a: &Analysis, hw: &Hw, speed: Option<Arc<AtomicU64>>) -
         hw: hw_name(plan, hw),
         video: video_out(plan, a),
         audio: audio_out(plan, a),
-        bitrate: target_bitrate(plan),
+        source: source_codecs(plan, a),
+        bitrate: bandwidth(plan, a),
         speed,
     }
 }
@@ -431,7 +445,7 @@ impl Sessions {
         }
         let analysis = match given.filter(analysis::is_current) {
             Some(a) => a,
-            None => analysis::run_analyze(&cfg.ffprobe(), &input)
+            None => analysis::analyze_shared(&cfg.ffprobe(), &input, &|_| {})
                 .await
                 .map_err(|e| match e {
                     analysis::AnalysisError::Spawn(m) => ApiError::ffmpeg_unavailable(m),
@@ -646,6 +660,7 @@ impl Sessions {
                     hw: live.hw.to_owned(),
                     video: live.video.clone(),
                     audio: live.audio.clone(),
+                    source: live.source.clone(),
                     speed: live.speed(),
                     bitrate: live.bitrate,
                     last_fetch: (last_fetch != 0).then_some(last_fetch),

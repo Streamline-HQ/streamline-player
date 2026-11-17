@@ -89,6 +89,7 @@ fn init_tracing() -> Option<Otel> {
 }
 
 async fn serve(cfg: Config, secret: Vec<u8>, config_path: PathBuf) -> anyhow::Result<()> {
+    let secret = Arc::new(secret);
     let settings = Arc::new(Settings::new(Some(config_path), &cfg));
     let cfg = Arc::new(cfg);
     let ffmpeg_version = hw::ffmpeg_version(&cfg.ffmpeg()).await;
@@ -118,16 +119,17 @@ async fn serve(cfg: Config, secret: Vec<u8>, config_path: PathBuf) -> anyhow::Re
 
     let hw = Arc::new(hw);
     let sessions = Sessions::new(cfg.clone(), hw.clone());
-    let jobs = Jobs::new(cfg.clone(), hw.clone());
+    let jobs = Jobs::new(cfg.clone(), hw.clone(), secret.clone());
     sessions.sweep_tmp();
     jobs.sweep_boot();
     sessions.spawn_reaper();
     jobs.spawn_ttl_sweeper();
+    jobs.spawn_callbacks();
     telemetry::observe_sessions(&sessions);
 
     let state = AppState {
         cfg: cfg.clone(),
-        secret: Arc::new(secret),
+        secret,
         hw,
         ffmpeg_version,
         sessions: sessions.clone(),

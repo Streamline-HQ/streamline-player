@@ -1,4 +1,7 @@
-use std::path::Path;
+use std::collections::HashMap;
+use std::path::{Path, PathBuf};
+use std::sync::{Arc, LazyLock, Mutex, PoisonError};
+use std::time::SystemTime;
 
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
@@ -464,9 +467,74 @@ pub async fn run_analyze_with(
     )
 }
 
+/// A file as it was analysed: its path, size and modification time.
+type FileKey = (PathBuf, u64, Option<SystemTime>);
+
+static RECENT: LazyLock<Mutex<HashMap<FileKey, Arc<tokio::sync::OnceCell<Analysis>>>>> =
+    LazyLock::new(Mutex::default);
+const RECENT_MAX: usize = 64;
+
+/// The analysis of `path` as it is now, run once however many ask and remembered. Playing a file
+/// not analysed yet asks three times in a row (its tracks, the decisions, the session), and a
+/// run reads the whole file. The run outlives a caller that gave up waiting, so asking again
+/// finds it done.
+pub async fn analyze_shared(
+    ffprobe_bin: &Path,
+    path: &Path,
+    prepare: Prepare<'static>,
+) -> Result<Analysis, AnalysisError> {
+    let Ok(meta) = tokio::fs::metadata(path).await else {
+        return run_analyze_with(ffprobe_bin, path, prepare).await;
+    };
+    let key = (path.to_owned(), meta.len(), meta.modified().ok());
+    let cell = {
+        let mut recent = RECENT.lock().unwrap_or_else(PoisonError::into_inner);
+        // ponytail: forgets everything when full; an LRU if 64 files in play at once ever matters.
+        if recent.len() >= RECENT_MAX && !recent.contains_key(&key) {
+            recent.clear();
+        }
+        recent.entry(key).or_default().clone()
+    };
+    let (bin, path) = (ffprobe_bin.to_owned(), path.to_owned());
+    tokio::spawn(async move {
+        cell.get_or_try_init(|| run_analyze_with(&bin, &path, prepare))
+            .await
+            .cloned()
+    })
+    .await
+    .unwrap_or_else(|e| Err(AnalysisError::Spawn(e.to_string())))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[cfg(unix)]
+    #[tokio::test]
+    async fn shared_analysis_runs_once_for_a_file() {
+        let dir = std::env::temp_dir().join(format!("engine-shared-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let (bin, file, runs) = (dir.join("ffprobe"), dir.join("a.mkv"), dir.join("runs"));
+        std::fs::write(&file, "x").unwrap();
+        crate::jobs::write_executable(
+            &bin,
+            &format!(
+                "#!/bin/sh\necho run >> {}\ncase \"$*\" in *csv=p=0*) ;; *) echo '{}' ;; esac\n",
+                runs.display(),
+                r#"{"format":{"duration":"1","start_time":"0","format_name":"matroska"},"streams":[]}"#,
+            ),
+        );
+        let (a, b) = tokio::join!(
+            analyze_shared(&bin, &file, &|_| {}),
+            analyze_shared(&bin, &file, &|_| {}),
+        );
+        assert_eq!(a.unwrap().duration, b.unwrap().duration);
+        analyze_shared(&bin, &file, &|_| {}).await.unwrap();
+        // One analysis is three ffprobe runs.
+        let ran = std::fs::read_to_string(&runs).unwrap().lines().count();
+        std::fs::remove_dir_all(&dir).unwrap();
+        assert_eq!(ran, 3);
+    }
 
     fn fixture(name: &str) -> Analysis {
         let dir = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/ffprobe");

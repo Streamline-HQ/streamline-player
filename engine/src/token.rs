@@ -28,6 +28,13 @@ pub fn sign(secret: &[u8], scope: Scope, id: &str, exp: u64) -> String {
     hex::encode(mac(secret, scope, id, exp).finalize().into_bytes())
 }
 
+/// The signature a callback carries: the receiver holds the same secret and checks the body.
+pub fn sign_body(secret: &[u8], body: &[u8]) -> String {
+    let mut mac = Hmac::<Sha256>::new_from_slice(secret).expect("HMAC accepts any key length");
+    mac.update(body);
+    hex::encode(mac.finalize().into_bytes())
+}
+
 pub fn verify(secret: &[u8], scope: Scope, id: &str, exp: u64, sig_hex: &str, now: u64) -> bool {
     if now > exp {
         return false;

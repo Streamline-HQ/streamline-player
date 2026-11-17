@@ -133,7 +133,11 @@ fn build_env(hw: Hw, yaml: Option<&str>) -> Env {
     });
     let hw = Arc::new(hw);
     let sessions = Sessions::new(cfg.clone(), hw.clone());
-    let jobs = Jobs::new(cfg.clone(), hw.clone());
+    let jobs = Jobs::new(
+        cfg.clone(),
+        hw.clone(),
+        Arc::new(SECRET.as_bytes().to_vec()),
+    );
     let router = app(AppState {
         cfg,
         secret: Arc::new(SECRET.as_bytes().to_vec()),

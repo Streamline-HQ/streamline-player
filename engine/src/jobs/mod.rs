@@ -1,3 +1,4 @@
+pub mod callback;
 pub mod download;
 pub mod intro;
 pub mod subtitles;
@@ -16,7 +17,7 @@ use tokio::sync::Notify;
 use tokio::task::{AbortHandle, JoinHandle};
 use tracing::Instrument;
 
-use crate::analysis::{Analysis, run_analyze_with};
+use crate::analysis::{Analysis, analyze_shared};
 use crate::config::Config;
 use crate::error::ApiError;
 use crate::hw::Hw;
@@ -104,6 +105,9 @@ impl Source {
 pub struct JobRequest {
     pub job_id: String,
     pub priority: Priority,
+    /// Where the finished job's result is posted, signed with the secret.
+    #[serde(default)]
+    pub callback: Option<String>,
     #[serde(flatten)]
     pub spec: JobSpec,
 }
@@ -173,6 +177,7 @@ pub fn lower_priority(cmd: &mut Command) {
 struct Entry {
     priority: Priority,
     spec: JobSpec,
+    callback: Option<String>,
     state: JobState,
     result: Option<Value>,
     error: Option<String>,
@@ -190,8 +195,11 @@ struct Queue {
 struct Shared {
     cfg: Arc<Config>,
     hw: Arc<Hw>,
+    secret: Arc<Vec<u8>>,
     queue: Mutex<Queue>,
     wake: Notify,
+    /// Wakes the callback delivery when a job with one finishes.
+    finished: Notify,
 }
 
 #[derive(Clone)]
@@ -235,13 +243,14 @@ impl Shared {
         let _ = std::fs::remove_file(self.backlog_file(id));
     }
 
-    fn take(&self) -> Option<(String, JobSpec)> {
+    fn take(&self, interactive_only: bool) -> Option<(String, JobSpec)> {
         let mut q = self.lock();
         loop {
-            let id = q
-                .interactive
-                .pop_front()
-                .or_else(|| q.background.pop_front())?;
+            let id = match q.interactive.pop_front() {
+                Some(id) => id,
+                None if interactive_only => return None,
+                None => q.background.pop_front()?,
+            };
             let dir = self.dir(&id);
             let _ = std::fs::remove_dir_all(&dir);
             let entry = q.jobs.get_mut(&id)?;
@@ -336,6 +345,10 @@ impl Shared {
             "error": entry.error,
         });
         let _ = std::fs::write(self.dir(&id).join(DONE_FILE), record.to_string());
+        if let Some(url) = &entry.callback {
+            self.keep_callback(&id, url);
+            self.finished.notify_one();
+        }
         self.forget(&id);
     }
 
@@ -421,7 +434,7 @@ impl Shared {
 
 async fn analyze(cfg: &Config, path: &str) -> Result<Analysis, JobError> {
     let input = cfg.path_map.rewrite(path);
-    Ok(run_analyze_with(&cfg.ffprobe(), &input, &lower_priority).await?)
+    Ok(analyze_shared(&cfg.ffprobe(), &input, &lower_priority).await?)
 }
 
 async fn execute(
@@ -479,11 +492,15 @@ async fn execute(
     }
 }
 
-async fn worker(shared: Arc<Shared>) {
+async fn worker(shared: Arc<Shared>, interactive_only: bool) {
     loop {
-        match shared.take() {
+        // Enabled before the queue is read: a job queued in between must still wake this worker.
+        let woken = shared.wake.notified();
+        tokio::pin!(woken);
+        woken.as_mut().enable();
+        match shared.take(interactive_only) {
             Some((id, spec)) => shared.run(id, spec).await,
-            None => shared.wake.notified().await,
+            None => woken.await,
         }
     }
 }
@@ -497,16 +514,21 @@ fn name_ok(name: &str) -> bool {
 }
 
 impl Jobs {
-    pub fn new(cfg: Arc<Config>, hw: Arc<Hw>) -> Jobs {
+    pub fn new(cfg: Arc<Config>, hw: Arc<Hw>, secret: Arc<Vec<u8>>) -> Jobs {
         let shared = Arc::new(Shared {
             cfg,
             hw,
+            secret,
             queue: Mutex::new(Queue::default()),
             wake: Notify::new(),
+            finished: Notify::new(),
         });
         for _ in 0..shared.cfg.max_jobs.max(1) {
-            tokio::spawn(worker(shared.clone()));
+            tokio::spawn(worker(shared.clone(), false));
         }
+        // Someone is waiting on an interactive job: it must not sit behind a background job that
+        // runs for minutes, so one worker takes nothing else.
+        tokio::spawn(worker(shared.clone(), true));
         Jobs(shared)
     }
 
@@ -527,6 +549,9 @@ impl Jobs {
 
     fn enqueue(&self, r: JobRequest, keep: Option<&Value>) -> Result<(), ApiError> {
         check_id(&r.job_id)?;
+        if let Some(url) = &r.callback {
+            callback::check(url)?;
+        }
         let mut q = self.0.lock();
         if q.jobs.contains_key(&r.job_id) || self.0.dir(&r.job_id).join(DONE_FILE).exists() {
             return Err(ApiError::job_exists());
@@ -553,6 +578,7 @@ impl Jobs {
             Entry {
                 priority: r.priority,
                 spec: r.spec,
+                callback: r.callback,
                 state: JobState::Queued,
                 result: None,
                 error: None,
@@ -561,7 +587,7 @@ impl Jobs {
             },
         );
         drop(q);
-        self.0.wake.notify_one();
+        self.0.wake.notify_waiters();
         Ok(())
     }
 
@@ -724,6 +750,12 @@ impl Jobs {
         }
     }
 
+    /// Delivers the results whose job named a callback, those a restart left undelivered first.
+    pub fn spawn_callbacks(&self) -> JoinHandle<()> {
+        let shared = self.0.clone();
+        tokio::spawn(async move { shared.deliver_forever().await })
+    }
+
     pub fn spawn_ttl_sweeper(&self) -> JoinHandle<()> {
         let shared = self.0.clone();
         tokio::spawn(async move {
@@ -762,6 +794,7 @@ mod tests {
     use super::*;
 
     static COUNTER: AtomicUsize = AtomicUsize::new(0);
+    const SECRET: &[u8] = b"test-secret-0123456789";
 
     #[cfg(target_os = "linux")]
     #[tokio::test]
@@ -822,7 +855,11 @@ mod tests {
         }
 
         fn jobs(&self) -> Jobs {
-            Jobs::new(Arc::new(self.cfg.clone()), Arc::new(test_hw()))
+            Jobs::new(
+                Arc::new(self.cfg.clone()),
+                Arc::new(test_hw()),
+                Arc::new(SECRET.to_vec()),
+            )
         }
 
         fn bin(&self) -> &Path {
@@ -899,6 +936,20 @@ mod tests {
         finished(&jobs, 2).await;
         finished(&jobs, 3).await;
         assert_eq!(f.started(), ["/m/blocker", "/m/i", "/m/b"]);
+    }
+
+    #[tokio::test]
+    async fn interactive_does_not_wait_on_a_running_background_job() {
+        let f = Fixture::new(|c| c.max_jobs = 1);
+        let jobs = f.jobs();
+        jobs.submit(analyze_req(1, "/m/blocker", Priority::Background))
+            .unwrap();
+        until(|| jobs.status(&id(1)).unwrap().state == JobState::Running).await;
+        jobs.submit(analyze_req(2, "/m/i", Priority::Interactive))
+            .unwrap();
+        assert_eq!(finished(&jobs, 2).await.state, JobState::Done);
+        assert_eq!(jobs.status(&id(1)).unwrap().state, JobState::Running);
+        f.release();
     }
 
     #[tokio::test]
@@ -1229,6 +1280,66 @@ mod tests {
         tokio::time::sleep(Duration::from_millis(300)).await;
         assert_eq!(jobs.status(&id(1)).unwrap().state, JobState::Running);
         assert_eq!(f.started(), ["/m/blocker"]);
+    }
+
+    /// Answers each callback with the next status of `answers`, then 204, and keeps the signature
+    /// and body of every one.
+    async fn receiver(answers: Vec<u16>) -> (String, Arc<Mutex<Vec<(String, String)>>>) {
+        let got = Arc::new(Mutex::new(Vec::new()));
+        let seen = got.clone();
+        let app = axum::Router::new().route(
+            "/cb",
+            axum::routing::post(move |headers: axum::http::HeaderMap, body: String| {
+                let sig = headers
+                    .get(callback::SIGNATURE_HEADER)
+                    .and_then(|v| v.to_str().ok())
+                    .unwrap_or_default()
+                    .to_owned();
+                let mut seen = seen.lock().unwrap();
+                seen.push((sig, body));
+                let status = answers.get(seen.len() - 1).copied().unwrap_or(204);
+                std::future::ready(axum::http::StatusCode::from_u16(status).unwrap())
+            }),
+        );
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let url = format!("http://{}/cb", listener.local_addr().unwrap());
+        tokio::spawn(async move { axum::serve(listener, app).await.unwrap() });
+        (url, got)
+    }
+
+    #[tokio::test]
+    async fn callback_delivers_the_signed_result_until_it_is_taken() {
+        let f = Fixture::new(|_| {});
+        let jobs = f.jobs();
+        let (url, got) = receiver(vec![503]).await;
+        let mut req = analyze_req(1, "/m/a", Priority::Background);
+        req["callback"] = json!(url);
+        jobs.submit(req).unwrap();
+        assert_eq!(finished(&jobs, 1).await.state, JobState::Done);
+        let pending = f.cfg.jobs_dir.join("callbacks").join(id(1));
+        let client = callback::client();
+
+        jobs.0.deliver_pending(&client).await;
+        assert!(pending.exists(), "a 503 keeps the result for the next pass");
+        jobs.0.deliver_pending(&client).await;
+        assert!(!pending.exists());
+
+        let got = got.lock().unwrap();
+        assert_eq!(got.len(), 2);
+        let (sig, body) = &got[1];
+        assert_eq!(*sig, crate::token::sign_body(SECRET, body.as_bytes()));
+        let body: Value = serde_json::from_str(body).unwrap();
+        assert_eq!(body["job_id"], id(1));
+        assert_eq!(body["state"], "done");
+        assert!(body["result"].is_object());
+    }
+
+    #[tokio::test]
+    async fn callback_must_be_an_http_url() {
+        let f = Fixture::new(|_| {});
+        let mut req = analyze_req(1, "/m/a", Priority::Background);
+        req["callback"] = json!("file:///etc/passwd");
+        assert!(f.jobs().submit(req).is_err());
     }
 
     #[test]

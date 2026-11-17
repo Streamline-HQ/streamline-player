@@ -764,7 +764,7 @@ async fn patch_keeps_and_clears_max_bitrate() {
     let mut req = transcode_req(&e, &sid);
     req.max_bitrate = Some(1_000_000);
     e.sessions.start(req).await.unwrap();
-    let capped = e.info().bitrate.unwrap();
+    let capped = e.info().bitrate;
 
     e.sessions
         .patch(
@@ -776,7 +776,7 @@ async fn patch_keeps_and_clears_max_bitrate() {
         )
         .await
         .unwrap();
-    assert_eq!(e.info().bitrate, Some(capped));
+    assert_eq!(e.info().bitrate, capped);
 
     e.sessions
         .patch(
@@ -788,7 +788,7 @@ async fn patch_keeps_and_clears_max_bitrate() {
         )
         .await
         .unwrap();
-    assert!(e.info().bitrate.unwrap() > capped);
+    assert!(e.info().bitrate > capped);
 }
 
 #[tokio::test]

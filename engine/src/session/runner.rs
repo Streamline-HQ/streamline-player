@@ -14,8 +14,8 @@ use tokio::time::{self, Instant};
 use tracing::Instrument;
 
 use super::{
-    AudioOut, KEEP_BEHIND_SECS, RESUME_MARGIN_SECS, RUN_AHEAD_SECS, SEGMENT_WAIT, Served, VideoOut,
-    bandwidth, hw_name, live_for, unix_now,
+    AudioOut, KEEP_BEHIND_SECS, RESUME_MARGIN_SECS, RUN_AHEAD_SECS, SEGMENT_WAIT, Served,
+    SourceCodecs, VideoOut, bandwidth, hw_name, live_for, unix_now,
 };
 use crate::analysis::Analysis;
 use crate::args::{DOVI_TOOL_ARGS, RunSpec, dv_source_args, has_dv_pipeline, live_args};
@@ -35,7 +35,8 @@ pub(super) struct Live {
     pub hw: &'static str,
     pub video: VideoOut,
     pub audio: AudioOut,
-    pub bitrate: Option<u64>,
+    pub source: SourceCodecs,
+    pub bitrate: u64,
     pub speed: Option<Arc<AtomicU64>>,
 }
 
@@ -330,6 +331,7 @@ impl Session {
             let mut live = self.live.lock().unwrap();
             live.video = fresh.video;
             live.audio = fresh.audio;
+            live.source = fresh.source;
             live.bitrate = fresh.bitrate;
         }
         st.plan = plan;

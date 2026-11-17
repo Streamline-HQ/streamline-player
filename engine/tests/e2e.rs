@@ -202,13 +202,14 @@ async fn env() -> Env {
         ..Config::default()
     });
     let hw = Arc::new(hw::probe(&cfg).await);
+    let secret = Arc::new(common::SECRET.as_bytes().to_vec());
     let router = app(AppState {
         cfg: cfg.clone(),
-        secret: Arc::new(common::SECRET.as_bytes().to_vec()),
+        secret: secret.clone(),
         hw: hw.clone(),
         ffmpeg_version: None,
         sessions: Sessions::new(cfg.clone(), hw.clone()),
-        jobs: Jobs::new(cfg.clone(), hw.clone()),
+        jobs: Jobs::new(cfg.clone(), hw.clone(), secret),
         settings: Arc::new(Settings::new(None, &cfg)),
     });
     Env { root, router }
