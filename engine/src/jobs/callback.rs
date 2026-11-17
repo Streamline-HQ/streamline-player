@@ -11,7 +11,7 @@ use super::Shared;
 use crate::error::ApiError;
 
 /// Holds one file per finished job whose result is not delivered yet: its content is the URL.
-const DIR: &str = "callbacks";
+pub(super) const DIR: &str = "callbacks";
 const RETRY_INTERVAL: Duration = Duration::from_secs(60);
 pub(super) const TIMEOUT: Duration = Duration::from_secs(30);
 /// A receiver may refuse a result it will take a moment later: the caller records the jobs it

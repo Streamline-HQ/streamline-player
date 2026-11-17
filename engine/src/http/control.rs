@@ -36,6 +36,9 @@ pub struct Health {
     dovi_tool: bool,
     encoders: Vec<&'static str>,
     decoders: Vec<&'static str>,
+    /// Absent while a restart's backlog is still being read.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    jobs_owed: Option<usize>,
 }
 
 fn encoder_names(set: &EncoderSet) -> Vec<&'static str> {
@@ -58,6 +61,7 @@ pub async fn health(State(s): State<AppState>) -> Json<Health> {
         dovi_tool: s.hw.encoders.dovi_tool,
         encoders: encoder_names(&s.hw.encoders),
         decoders: s.hw.decoders(),
+        jobs_owed: s.jobs.owed(),
     })
 }
 

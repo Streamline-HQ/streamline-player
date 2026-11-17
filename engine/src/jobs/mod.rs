@@ -6,6 +6,7 @@ pub mod trickplay;
 
 use std::collections::{HashMap, VecDeque};
 use std::path::{Component, Path, PathBuf};
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex, MutexGuard, PoisonError};
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
@@ -204,6 +205,9 @@ struct Shared {
     finished: Notify,
     /// Wakes the continuation calls when a caller asks for them.
     continuing: Notify,
+    /// Set once the backlog a restart left is queued again: until then the queue is short of
+    /// jobs the engine still owes.
+    restored: AtomicBool,
 }
 
 #[derive(Clone)]
@@ -544,6 +548,7 @@ impl Jobs {
             wake: Notify::new(),
             finished: Notify::new(),
             continuing: Notify::new(),
+            restored: AtomicBool::new(false),
         });
         for _ in 0..shared.cfg.max_jobs.max(1) {
             tokio::spawn(worker(shared.clone(), false));
@@ -590,6 +595,16 @@ impl Jobs {
             return Err(ApiError::job_exists());
         }
         if q.jobs.contains_key(&r.job_id) || self.0.dir(&r.job_id).join(DONE_FILE).exists() {
+            let unfinished = q
+                .jobs
+                .get(&r.job_id)
+                .is_some_and(|e| matches!(e.state, JobState::Queued | JobState::Running));
+            // Asked for again once finished: the caller does not have the result, so it is
+            // posted once more.
+            if let (false, Some(url)) = (unfinished, &r.callback) {
+                self.0.keep_callback(&r.job_id, url);
+                self.0.finished.notify_one();
+            }
             return Err(ApiError::job_exists());
         }
         if r.priority == Priority::Interactive && q.interactive.len() >= self.0.cfg.max_queued {
@@ -746,7 +761,30 @@ impl Jobs {
             }
         }
         let jobs = self.clone();
-        tokio::task::spawn_blocking(move || jobs.restore_backlog())
+        tokio::task::spawn_blocking(move || {
+            jobs.restore_backlog();
+            jobs.0.restored.store(true, Ordering::Release);
+        })
+    }
+
+    /// How many accepted jobs the engine has not finished or whose result it has not delivered
+    /// yet. `None` while a restart's backlog is still being read, when the number would be
+    /// short. A caller whose own count is higher at zero holds jobs the engine no longer has.
+    pub fn owed(&self) -> Option<usize> {
+        if !self.0.restored.load(Ordering::Acquire) {
+            return None;
+        }
+        // Under the lock: a job that finishes writes its callback before letting go of it, so
+        // it is never out of both counts.
+        let q = self.0.lock();
+        let undelivered =
+            std::fs::read_dir(self.0.cfg.jobs_dir.join(callback::DIR)).map_or(0, Iterator::count);
+        let unfinished = q
+            .jobs
+            .values()
+            .filter(|e| matches!(e.state, JobState::Queued | JobState::Running))
+            .count();
+        Some(unfinished + undelivered)
     }
 
     fn restore_backlog(&self) {
@@ -1096,10 +1134,13 @@ mod tests {
         jobs.shutdown();
 
         let fresh = f.jobs();
+        assert_eq!(fresh.owed(), None);
         fresh.sweep_boot().await.unwrap();
+        assert_eq!(fresh.owed(), Some(2));
         f.release();
         assert_eq!(finished(&fresh, 1).await.state, JobState::Done);
         assert_eq!(finished(&fresh, 2).await.state, JobState::Done);
+        assert_eq!(fresh.owed(), Some(0));
         assert_eq!(fresh.status(&id(3)).unwrap_err().code, "not_found");
         assert_eq!(fresh.status(&id(4)).unwrap_err().code, "not_found");
         until(|| {
@@ -1424,8 +1465,21 @@ mod tests {
         jobs.0.deliver_pending(&client).await;
         assert!(!pending.exists());
 
+        let again = jobs.submit({
+            let mut req = analyze_req(1, "/m/a", Priority::Background);
+            req["callback"] = json!(url);
+            req
+        });
+        assert_eq!(again.unwrap_err().code, "job_exists");
+        assert!(
+            pending.exists(),
+            "asked for again, a finished job posts once more"
+        );
+        jobs.0.deliver_pending(&client).await;
+        assert!(!pending.exists());
+
         let got = got.lock().unwrap();
-        assert_eq!(got.len(), 2);
+        assert_eq!(got.len(), 3);
         let (sig, body) = &got[1];
         assert_eq!(*sig, crate::token::sign_body(SECRET, body.as_bytes()));
         let body: Value = serde_json::from_str(body).unwrap();
