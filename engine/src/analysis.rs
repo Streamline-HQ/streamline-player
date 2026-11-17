@@ -474,19 +474,53 @@ static RECENT: LazyLock<Mutex<HashMap<FileKey, Arc<tokio::sync::OnceCell<Analysi
     LazyLock::new(Mutex::default);
 const RECENT_MAX: usize = 64;
 
+fn kept_name(key: &FileKey) -> String {
+    use sha2::Digest;
+    let mtime = key
+        .2
+        .and_then(|t| t.duration_since(SystemTime::UNIX_EPOCH).ok())
+        .map_or(0, |d| d.as_nanos());
+    let mut h = sha2::Sha256::new();
+    h.update(key.0.as_os_str().as_encoded_bytes());
+    h.update(format!("\0{}\0{mtime}", key.1));
+    hex::encode(&h.finalize()[..16])
+}
+
+fn read_kept(file: &Path) -> Option<Analysis> {
+    let a: Analysis = serde_json::from_slice(&std::fs::read(file).ok()?).ok()?;
+    is_current(&a).then_some(a)
+}
+
+fn write_kept(file: &Path, a: &Analysis) {
+    let written = file
+        .parent()
+        .map_or(Ok(()), std::fs::create_dir_all)
+        .and_then(|()| std::fs::write(file, serde_json::to_vec(a).unwrap_or_default()));
+    if let Err(e) = written {
+        tracing::warn!(file = %file.display(), error = %e, "cannot keep the analysis");
+    }
+}
+
 /// The analysis of `path` as it is now, run once however many ask and remembered. Playing a file
 /// not analysed yet asks three times in a row (its tracks, the decisions, the session), and a
 /// run reads the whole file. The run outlives a caller that gave up waiting, so asking again
 /// finds it done.
+///
+/// With `kept`, it is also written to that directory and read back from it, so it survives a
+/// restart and a job that runs days after the file's analysis does not read the file again.
 pub async fn analyze_shared(
     ffprobe_bin: &Path,
     path: &Path,
+    kept: Option<&Path>,
     prepare: Prepare<'static>,
 ) -> Result<Analysis, AnalysisError> {
     let Ok(meta) = tokio::fs::metadata(path).await else {
         return run_analyze_with(ffprobe_bin, path, prepare).await;
     };
     let key = (path.to_owned(), meta.len(), meta.modified().ok());
+    // ponytail: a file that changes or goes leaves its old entry behind (a few hundred KB);
+    // sweep them with the job outputs if the volume ever fills.
+    let kept = kept.map(|dir| dir.join(format!("{}.json", kept_name(&key))));
     let cell = {
         let mut recent = RECENT.lock().unwrap_or_else(PoisonError::into_inner);
         // ponytail: forgets everything when full; an LRU if 64 files in play at once ever matters.
@@ -497,9 +531,18 @@ pub async fn analyze_shared(
     };
     let (bin, path) = (ffprobe_bin.to_owned(), path.to_owned());
     tokio::spawn(async move {
-        cell.get_or_try_init(|| run_analyze_with(&bin, &path, prepare))
-            .await
-            .cloned()
+        cell.get_or_try_init(|| async {
+            if let Some(a) = kept.as_deref().and_then(read_kept) {
+                return Ok(a);
+            }
+            let a = run_analyze_with(&bin, &path, prepare).await?;
+            if let Some(file) = &kept {
+                write_kept(file, &a);
+            }
+            Ok(a)
+        })
+        .await
+        .cloned()
     })
     .await
     .unwrap_or_else(|e| Err(AnalysisError::Spawn(e.to_string())))
@@ -525,15 +568,24 @@ mod tests {
             ),
         );
         let (a, b) = tokio::join!(
-            analyze_shared(&bin, &file, &|_| {}),
-            analyze_shared(&bin, &file, &|_| {}),
+            analyze_shared(&bin, &file, None, &|_| {}),
+            analyze_shared(&bin, &file, None, &|_| {}),
         );
         assert_eq!(a.unwrap().duration, b.unwrap().duration);
-        analyze_shared(&bin, &file, &|_| {}).await.unwrap();
-        // One analysis is three ffprobe runs.
+        analyze_shared(&bin, &file, None, &|_| {}).await.unwrap();
+        let kept = dir.join("kept");
+        std::fs::write(&file, "xy").unwrap();
+        analyze_shared(&bin, &file, Some(&kept), &|_| {})
+            .await
+            .unwrap();
+        RECENT.lock().unwrap().clear();
+        analyze_shared(&bin, &file, Some(&kept), &|_| {})
+            .await
+            .unwrap();
+        // One analysis is three ffprobe runs, and the kept one is not run again.
         let ran = std::fs::read_to_string(&runs).unwrap().lines().count();
         std::fs::remove_dir_all(&dir).unwrap();
-        assert_eq!(ran, 3);
+        assert_eq!(ran, 6);
     }
 
     fn fixture(name: &str) -> Analysis {

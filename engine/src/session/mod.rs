@@ -445,12 +445,17 @@ impl Sessions {
         }
         let analysis = match given.filter(analysis::is_current) {
             Some(a) => a,
-            None => analysis::analyze_shared(&cfg.ffprobe(), &input, &|_| {})
-                .await
-                .map_err(|e| match e {
-                    analysis::AnalysisError::Spawn(m) => ApiError::ffmpeg_unavailable(m),
-                    e => ApiError::unreadable_file(e.to_string()),
-                })?,
+            None => analysis::analyze_shared(
+                &cfg.ffprobe(),
+                &input,
+                Some(&cfg.jobs_dir.join(crate::jobs::ANALYSIS_DIR)),
+                &|_| {},
+            )
+            .await
+            .map_err(|e| match e {
+                analysis::AnalysisError::Spawn(m) => ApiError::ffmpeg_unavailable(m),
+                e => ApiError::unreadable_file(e.to_string()),
+            })?,
         };
         Ok((input, analysis))
     }

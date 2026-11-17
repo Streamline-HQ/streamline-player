@@ -29,6 +29,8 @@ const SOURCE_FILE: &str = "source.json";
 const SOURCE_GONE_FILE: &str = "source-gone";
 /// Holds one request file per background job not yet finished, so the backlog outlives a restart.
 const BACKLOG_DIR: &str = "backlog";
+/// Holds the analysis of each file a job or a session read, so the file is read once.
+pub const ANALYSIS_DIR: &str = "analysis";
 const QUEUE_FULL_RETRY_SECS: u64 = 30;
 const TTL_SWEEP_INTERVAL: Duration = Duration::from_secs(3600);
 
@@ -251,7 +253,18 @@ impl Shared {
             let id = match q.interactive.pop_front() {
                 Some(id) => id,
                 None if interactive_only => return None,
-                None => q.background.pop_front()?,
+                // Playing a file needs its analysis and nothing else, so a library scan's
+                // analyses all run before its subtitles, intros and trickplay.
+                None => {
+                    let first = q
+                        .background
+                        .iter()
+                        .position(|id| {
+                            matches!(q.jobs.get(id), Some(e) if matches!(e.spec, JobSpec::Analyze { .. }))
+                        })
+                        .unwrap_or(0);
+                    q.background.remove(first)?
+                }
             };
             let dir = self.dir(&id);
             let _ = std::fs::remove_dir_all(&dir);
@@ -436,7 +449,13 @@ impl Shared {
 
 async fn analyze(cfg: &Config, path: &str) -> Result<Analysis, JobError> {
     let input = cfg.path_map.rewrite(path);
-    Ok(analyze_shared(&cfg.ffprobe(), &input, &lower_priority).await?)
+    Ok(analyze_shared(
+        &cfg.ffprobe(),
+        &input,
+        Some(&cfg.jobs_dir.join(ANALYSIS_DIR)),
+        &lower_priority,
+    )
+    .await?)
 }
 
 async fn execute(
@@ -952,6 +971,24 @@ mod tests {
         finished(&jobs, 2).await;
         finished(&jobs, 3).await;
         assert_eq!(f.started(), ["/m/blocker", "/m/i", "/m/b"]);
+    }
+
+    #[tokio::test]
+    async fn background_analyses_run_before_other_jobs() {
+        let f = Fixture::new(|c| c.max_jobs = 1);
+        let jobs = f.jobs();
+        jobs.submit(analyze_req(1, "/m/blocker", Priority::Background))
+            .unwrap();
+        until(|| jobs.status(&id(1)).unwrap().state == JobState::Running).await;
+        jobs.submit(json!({
+            "job_id": id(2), "priority": "background", "type": "subtitles", "path": "/m/s",
+        }))
+        .unwrap();
+        jobs.submit(analyze_req(3, "/m/a", Priority::Background))
+            .unwrap();
+        f.release();
+        finished(&jobs, 2).await;
+        assert_eq!(f.started()[..3], ["/m/blocker", "/m/a", "/m/s"]);
     }
 
     #[tokio::test]
