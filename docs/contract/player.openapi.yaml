@@ -746,7 +746,7 @@ paths:
   /auth/token:
     post:
       operationId: token
-      description: Sign-in. A browser exchanges a code or a refresh token for its tokens; every refresh rotates the refresh token, and replaying a rotated one revokes the browser. An app exchanges a code with its client_id for a device key, shown once; a known client_id loses its old key.
+      description: Sign-in. A browser exchanges a code or a refresh token for its tokens; every refresh rotates the refresh token. A rotated one is taken once more within 30 seconds, for a browser that never received the answer, and the tokens of the first answer are then withdrawn; replaying it later, or using withdrawn tokens, revokes the browser. An app exchanges a code with its client_id for a device key, shown once; a known client_id loses its old key.
       security: []
       requestBody:
         required: true
