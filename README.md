@@ -27,6 +27,15 @@ The engine needs read access to the library at the paths Streamline sends (or a 
 
 Without Nix, build the image with `docker build -f deploy/engine.Dockerfile .` (ffmpeg 9 from Debian sid).
 
+#### Storage
+
+The engine writes to two directories:
+
+- `tmp_dir` holds the live HLS segments, dropped when a stream ends. It can be anything with room for a few transcodes; it defaults to the system's temp directory.
+- `jobs_dir` holds the background jobs' output and their backlog. Trickplay sheets and extracted subtitles stay there until their source file changes, or for `job_output_ttl` (7 days) after it went missing. Analysis results and prepared downloads go once they have been unread for `job_output_ttl`. Losing the directory costs every file's trickplay sheets and subtitles, made again the next time it plays, so keep it on persistent storage. It defaults to `$XDG_STATE_HOME/streamline-engine/jobs` (`~/.local/state/…`).
+
+The images set `XDG_STATE_HOME=/var/lib` and declare `/var/lib/streamline-engine` a volume: mount one there (`docker run -v streamline-engine:/var/lib/streamline-engine …`). The Helm chart keeps the live segments in an emptyDir and gives `jobs_dir` the volume set under `jobs`: an existing claim, a claim of `jobs.size` the chart creates, or an emptyDir, which loses it all with the pod. The NixOS module puts `jobs_dir` in `/var/lib/streamline-engine` and the home-manager one in `$XDG_STATE_HOME`.
+
 ### The web player
 
 The browser build, served by static-web-server: `ghcr.io/streamline-hq/streamline-player/web`, built with `docker build -f deploy/web.Dockerfile .`. Mount `/web/config.json` with `{ "streamline": "https://streamline.example.com" }` to point it at Streamline, and add the player's origin to the player extension's web player origins. The Helm chart is in [`deploy/helm/streamline-player-web`](deploy/helm/streamline-player-web).
