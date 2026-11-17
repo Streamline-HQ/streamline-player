@@ -201,6 +201,7 @@ export const reachable = () => invoke<boolean>("reachable");
 
 export const playbackPort: PlaybackPort = {
 	playerName: PLAYER_NAME,
+	drawsStyled: true,
 	command: (cmd, args) => invoke(`plugin:player|${cmd}`, args),
 	on: onPlayer,
 	capabilities: playerCapabilities,

@@ -98,6 +98,8 @@ export type Cue = { start: number; end: number; text: string };
 /** Everything the controller needs from the platform: the native player and the Rust commands around it. */
 export type PlaybackPort = {
 	readonly playerName: string;
+	/** Whether the player draws styled (ASS) subtitles itself. One that cannot gets their plain text. */
+	readonly drawsStyled: boolean;
 	command(cmd: PlayerCommand, args?: Record<string, unknown>): Promise<unknown>;
 	on<T>(event: PlayerEvent, cb: (e: T) => void): Promise<() => void>;
 	capabilities(): Promise<unknown>;

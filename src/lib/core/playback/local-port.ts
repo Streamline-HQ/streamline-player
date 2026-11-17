@@ -57,6 +57,7 @@ export function localPort(
 	};
 	return {
 		playerName: base.playerName,
+		drawsStyled: base.drawsStyled,
 		command: (cmd, args) => base.command(cmd, args),
 		on: (event, cb) => base.on(event, cb),
 		capabilities: () => base.capabilities(),
