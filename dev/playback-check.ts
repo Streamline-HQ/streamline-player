@@ -95,6 +95,19 @@ eq(
 	})?.index,
 	0,
 );
+// A file whose only track in my language is flagged forced: the anime rule turns it on anyway.
+eq(
+	autoForcedSub({
+		...base,
+		anime: true,
+		animeRule: true,
+		myLanguage: "French",
+		subs: [sub(2, "fre", true)],
+		audio: { ...eng, language: "jpn" },
+		subsMode: "Auto",
+	})?.index,
+	2,
+);
 // The forced ones only, asked for on the title page, stay forced under a foreign audio.
 eq(
 	autoForcedSub({
