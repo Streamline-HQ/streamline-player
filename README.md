@@ -21,11 +21,9 @@ There is no app release yet: build it from source (see [Development](#developmen
 
 ### The engine
 
-The engine's image is `ghcr.io/streamline-hq/streamline-player/engine`: a push to `main` publishes `main` and `sha-<commit>`, a tag `vX.Y.Z` publishes `X.Y.Z`, `X.Y` and `latest`. The Helm chart is in [`deploy/helm/streamline-engine`](deploy/helm/streamline-engine); releases are tags `chart-vX.Y.Z`, pushed to `oci://ghcr.io/streamline-hq/charts`.
+The engine's image is `ghcr.io/streamline-hq/streamline-player/engine` (ffmpeg 9 from Debian sid), built from [`deploy/engine.Dockerfile`](deploy/engine.Dockerfile) (`task build:image:engine`). A push to `main` that changes the engine publishes `main` and `sha-<commit>`; a tag `vX.Y.Z` publishes `X.Y.Z`, `X.Y` and `latest`, for this image and the web player's. The Helm chart is in [`deploy/helm/streamline-engine`](deploy/helm/streamline-engine); releases are tags `chart-vX.Y.Z`, pushed to `oci://ghcr.io/streamline-hq/charts`.
 
 The engine needs read access to the library at the paths Streamline sends (or a `path_map`), and the secret the player extension hands out once from Server settings. Then set its address in Server settings; the [player extension's README](https://github.com/Streamline-HQ/streamline-player-ext#bootstrap-order) has the full bootstrap order.
-
-Without Nix, build the image with `docker build -f deploy/engine.Dockerfile .` (ffmpeg 9 from Debian sid).
 
 #### Storage
 
@@ -38,7 +36,7 @@ The images set `XDG_STATE_HOME=/var/lib` and declare `/var/lib/streamline-engine
 
 ### The web player
 
-The browser build, served by static-web-server: `ghcr.io/streamline-hq/streamline-player/web`, built with `docker build -f deploy/web.Dockerfile .`. Mount `/web/config.json` with `{ "streamline": "https://streamline.example.com" }` to point it at Streamline, and add the player's origin to the player extension's web player origins. The Helm chart is in [`deploy/helm/streamline-player-web`](deploy/helm/streamline-player-web).
+The browser build, served by static-web-server: `ghcr.io/streamline-hq/streamline-player/web`, built from [`deploy/web.Dockerfile`](deploy/web.Dockerfile) (`task build:image:web`) and published like the engine's. Mount `/web/config.json` with `{ "streamline": "https://streamline.example.com" }` to point it at Streamline, and add the player's origin to the player extension's web player origins. The Helm chart is in [`deploy/helm/streamline-player-web`](deploy/helm/streamline-player-web).
 
 ### NixOS and home-manager
 
@@ -59,7 +57,7 @@ task dev:web       # the web build (Vite on :1430)
 task dev:engine    # the engine on dev/engine.yaml (:8097)
 task dev:mock      # a mock Streamline on :8081
 task dev:stack     # Streamline, the player extension and the engine on the mock's library
-task build:<target>  # engine, desktop:linux, desktop:windows, android, web, image, …
+task build:<target>  # engine, desktop:linux, desktop:windows, android, web, image:engine, image:web, images, …
 task check         # everything CI runs: fmt:check, lint, test
 ```
 

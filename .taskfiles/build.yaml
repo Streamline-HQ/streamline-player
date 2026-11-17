@@ -47,7 +47,17 @@ tasks:
     platforms: [darwin]
     cmd: cargo tauri ios build
 
-  image:
-    # dockerTools is how the image is made, so this one task goes through Nix.
-    desc: Build the script that streams the engine's OCI image (./result | docker load)
-    cmd: nix build .#engine-image
+  image:engine:
+    desc: Build the engine's image as streamline-player/engine:local
+    cmd: docker build -f deploy/engine.Dockerfile -t streamline-player/engine:local .
+
+  image:web:
+    desc: Build the web player's image as streamline-player/web:local
+    cmd: docker build -f deploy/web.Dockerfile -t streamline-player/web:local .
+
+  images:
+    desc: Build the engine's and the web player's images
+    # In sequence, not as deps: parallel builds interleave their output.
+    cmds:
+      - task: image:engine
+      - task: image:web

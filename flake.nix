@@ -197,7 +197,6 @@
                 web
                 ;
             };
-            engine-image = pkgs.callPackage ./nix/packages/image.nix { inherit engine; };
             default = self'.packages.streamline-player;
           };
 
@@ -242,7 +241,6 @@
             build-engine = self'.packages.engine;
             build-web = self'.packages.web;
             build-streamline-player = self'.packages.streamline-player;
-            build-engine-image = self'.packages.engine-image;
 
             # The launcher must carry what the devshell computes by hand: without
             # these the webview finds no codecs and no TLS.

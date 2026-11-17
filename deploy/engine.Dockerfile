@@ -1,7 +1,7 @@
 # syntax=docker/dockerfile:1.29
 
-# The engine without Nix: `docker build -f deploy/engine.Dockerfile .` from the
-# repository root. `nix build .#engine-image` is the reference build.
+# The engine's image: `docker build -f deploy/engine.Dockerfile .` from the
+# repository root.
 #
 # Base images are pinned by digest. Refresh one with
 # `docker buildx imagetools inspect <image>:<tag> --format '{{.Manifest.Digest}}'`.
@@ -47,8 +47,10 @@ COPY --from=build /out/bin/ /usr/local/bin/
 ENV XDG_STATE_HOME=/var/lib
 RUN install -d -o 1000 -g 1000 /var/lib/streamline-engine
 VOLUME /var/lib/streamline-engine
+ARG VERSION=dev
 LABEL org.opencontainers.image.source=https://github.com/Streamline-HQ/streamline-player \
-      org.opencontainers.image.description="Streamline's streaming engine"
+      org.opencontainers.image.description="Streamline's streaming engine" \
+      org.opencontainers.image.version=${VERSION}
 
 # The render node is usually root:render 0660: give the container that gid at
 # run time (`--group-add`, Kubernetes supplementalGroups).

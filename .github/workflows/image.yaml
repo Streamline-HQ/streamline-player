@@ -1,22 +1,13 @@
 # yaml-language-server: $schema=https://json.schemastore.org/github-workflow.json
 name: Image
 
-# The engine's image. A push to main publishes `main` and `sha-<commit>`; a
-# tag v1.2.3 publishes `1.2.3`, `1.2` and `latest`.
+# The engine's and the web player's images. A push to main publishes `main` and
+# `sha-<commit>` for each image whose inputs it changed; a tag v1.2.3 publishes
+# `1.2.3`, `1.2` and `latest` for both.
 on:
   push:
     branches: [main]
     tags: ["v*.*.*"]
-    # Only what the image is built from. Tags are not filtered by path.
-    paths:
-      - "engine/**"
-      - "nix/**"
-      - "flake.nix"
-      - "flake.lock"
-      - "Cargo.toml"
-      - "Cargo.lock"
-      - ".github/workflows/image.yaml"
-      - ".github/actions/nix-builder/**"
 
 concurrency:
   group: image-${{ github.ref }}
@@ -26,43 +17,73 @@ permissions: {}
 
 env:
   REGISTRY: ghcr.io
-  IMAGE_NAME: streamline-hq/streamline-player/engine
 
 jobs:
+  # The images a push changed, as a JSON list of names. Each name is a
+  # deploy/<name>.Dockerfile and a ghcr.io/streamline-hq/streamline-player/<name>.
+  changes:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    outputs:
+      images: ${{ github.ref_type == 'tag' && '["engine","web"]' || steps.filter.outputs.changes }}
+    steps:
+      - name: Checkout
+        if: github.ref_type != 'tag'
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Detect changed images
+        id: filter
+        if: github.ref_type != 'tag'
+        uses: dorny/paths-filter@ceb8a2b8f2d89434be7ff52d3de7ec3738c5cc9d # v4.0.3
+        with:
+          # Each list is what its Dockerfile copies.
+          filters: |
+            engine:
+              - &workflow '.github/workflows/image.yaml'
+              - 'deploy/engine.Dockerfile'
+              - 'deploy/engine.Dockerfile.dockerignore'
+              # src-tauri/ and plugins/ are copied only because cargo wants every
+              # workspace member present; the engine is built from none of them.
+              - 'engine/**'
+              - 'Cargo.toml'
+              - 'Cargo.lock'
+            web:
+              - *workflow
+              - 'deploy/web.Dockerfile'
+              - 'deploy/web.Dockerfile.dockerignore'
+              - 'src/**'
+              - 'static/**'
+              - 'messages/**'
+              - 'project.inlang/settings.json'
+              - 'src-tauri/tauri.conf.json'
+              - 'package.json'
+              - 'pnpm-lock.yaml'
+              - 'vite.config.ts'
+              - 'tsconfig.json'
+
   publish:
-    # x86_64 only: the image carries Mesa's radeon drivers for one kind of host.
+    needs: changes
+    if: needs.changes.outputs.images != '[]'
     runs-on: ubuntu-latest
     permissions:
       contents: read
       packages: write
+    strategy:
+      fail-fast: false
+      matrix:
+        image: ${{ fromJSON(needs.changes.outputs.images) }}
+    env:
+      IMAGE_NAME: streamline-hq/streamline-player/${{ matrix.image }}
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
 
-      - name: Install Nix
-        uses: cachix/install-nix-action@75c75c31ebece974e48ebc36b4ad125bd97bd97b # 31.11.3
-        with:
-          # `nix copy --no-check-sigs` below needs the runner to be trusted.
-          extra_nix_config: trusted-users = root runner
-
-      - name: Remote builder
-        uses: ./.github/actions/nix-builder
-        with:
-          ssh-key: ${{ secrets.NIX_BUILDER_SSH_KEY }}
-          attic-token: ${{ secrets.ATTIC_PULL_TOKEN }}
-
-      # dockerTools builds a script that streams the image, so nothing the size
-      # of the image is written to the runner's disk.
-      - name: Build the image
-        run: |
-          set -euo pipefail
-          if [ -n "${NIX_BUILDER_STORE:-}" ]; then
-            nix build --no-link --print-build-logs --store "$NIX_BUILDER_STORE" --eval-store auto .#engine-image
-            nix copy --no-check-sigs --from "$NIX_BUILDER_STORE" .#engine-image
-          fi
-          nix build --print-build-logs .#engine-image
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
 
       - name: Log in to GHCR
         uses: docker/login-action@8aa5831fb8d48d8f76594c7ddde61ae58019f550 # v4.8.0
@@ -82,24 +103,27 @@ jobs:
             type=semver,pattern={{version}}
             type=semver,pattern={{major}}.{{minor}}
 
-      # The image goes up once; the other tags are copies inside the registry.
-      - name: Push
-        env:
-          TAGS: ${{ steps.meta.outputs.tags }}
-        run: |
-          set -euo pipefail
-          mapfile -t tags <<< "$TAGS"
-          ./result | skopeo copy docker-archive:/dev/stdin "docker://${tags[0]}"
-          for tag in "${tags[@]:1}"; do
-            skopeo copy "docker://${tags[0]}" "docker://$tag"
-          done
+      # The labels come from the Dockerfile: metadata-action's would replace
+      # each image's description with the repository's.
+      - name: Build and push
+        uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
+        with:
+          context: .
+          file: deploy/${{ matrix.image }}.Dockerfile
+          platforms: linux/amd64
+          tags: ${{ steps.meta.outputs.tags }}
+          build-args: VERSION=${{ steps.meta.outputs.version }}
+          cache-from: type=gha,scope=${{ matrix.image }}
+          cache-to: type=gha,mode=max,scope=${{ matrix.image }}
+          push: true
 
       - name: Summary
         if: always()
         env:
+          IMAGE: ${{ matrix.image }}
           TAGS: ${{ steps.meta.outputs.tags }}
         run: |
-          echo "### Engine image" >> "$GITHUB_STEP_SUMMARY"
+          echo "### The $IMAGE image" >> "$GITHUB_STEP_SUMMARY"
           if [ "${{ job.status }}" = "success" ]; then
             echo "✅ Pushed:" >> "$GITHUB_STEP_SUMMARY"
             while read -r tag; do echo "- \`$tag\`"; done <<< "$TAGS" >> "$GITHUB_STEP_SUMMARY"

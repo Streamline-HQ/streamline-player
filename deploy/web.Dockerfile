@@ -32,8 +32,10 @@ RUN pnpm build
 
 FROM joseluisq/static-web-server:2.44.1@sha256:94618e3d17802265a21926217e6f9e7832b311b6fbf5933684001739fafed06a
 COPY --from=build /app/build /web
+ARG VERSION=dev
 LABEL org.opencontainers.image.source=https://github.com/Streamline-HQ/streamline-player \
-      org.opencontainers.image.description="Streamline's web player"
+      org.opencontainers.image.description="Streamline's web player" \
+      org.opencontainers.image.version=${VERSION}
 ENV SERVER_PORT=8080 \
     SERVER_ROOT=/web \
     SERVER_FALLBACK_PAGE=/web/index.html \

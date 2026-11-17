@@ -306,7 +306,7 @@ jobs:
       - name: UI and contract checks
         run: task test:js
 
-  # The packages, the engine image, the modules and the NixOS VM test. The
+  # The packages, the modules and the NixOS VM test. The
   # flake's own lint and test checks are left to the jobs above.
   nix:
     needs: [changes, format, lint-rust, lint-js, lint-python, lint-nix, lint-helm, build-engine, build-web, build-desktop]
@@ -333,7 +333,7 @@ jobs:
       # The builder's `ci` account is not a trusted user: it can have the
       # daemon build what it sends (`--store`), not act as a remote builder.
       # The two packages are copied back so the VM test does not build them again.
-      - name: Packages, image and modules
+      - name: Packages and modules
         run: |
           set -euo pipefail
           mapfile -t checks < <(nix eval --raw .#checks.x86_64-linux --apply '
