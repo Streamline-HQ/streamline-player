@@ -51,6 +51,21 @@ $effect(() => {
 		transform 300ms var(--ease);
 }
 
+/* The stage's scrim is clear at this height, and a bright picture drowns the muted text: the
+   card brings its own shade, fading out past its edges. */
+.card::before {
+	content: "";
+	position: absolute;
+	inset: -56px -120px -56px -28px;
+	z-index: -1;
+	background: radial-gradient(
+		farthest-side at 38% 52%,
+		rgba(0, 0, 0, 0.72) 0%,
+		rgba(0, 0, 0, 0.52) 55%,
+		rgba(0, 0, 0, 0) 100%
+	);
+}
+
 .eyebrow {
 	font: 500 11px var(--font-mono);
 	letter-spacing: 0.14em;
