@@ -113,6 +113,8 @@ export class Playback {
 	buffered = $state(0);
 	playing = $state(false);
 	buffering = $state(true);
+	/** The picture is on screen: false from a start until its first frame plays. */
+	picture = $state(false);
 	ended = $state(false);
 	tracks = $state<Tracks | null>(null);
 	trickplay = $state<Trickplay | null>(null);
@@ -206,6 +208,7 @@ export class Playback {
 			this.#port.on<{ state: string }>("state", (e) => {
 				this.buffering = e.state === "buffering";
 				this.playing = e.state === "playing";
+				if (this.playing) this.picture = true;
 				if (!this.buffering) {
 					clearInterval(this.#stallTimer);
 					this.#stallTimer = undefined;
@@ -596,6 +599,7 @@ export class Playback {
 		clearInterval(this.#retryTimer);
 		this.#stop();
 		this.buffering = true;
+		this.picture = false;
 		try {
 			this.network ??= await this.#port.network();
 			this.measuredOnce ||= rememberedThroughput(this.network) !== null;

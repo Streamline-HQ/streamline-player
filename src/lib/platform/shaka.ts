@@ -41,6 +41,9 @@ function element(): HTMLVideoElement {
 	el.style.position = "fixed";
 	el.style.background = "black";
 	el.style.display = "none";
+	// The page is see-through for the picture under it, and the player's stage draws nothing of
+	// its own: until the picture shows, a browser would paint its white canvas there.
+	document.documentElement.style.background = "black";
 	document.documentElement.appendChild(el);
 	for (const name of ["playing", "pause", "waiting", "seeking", "seeked", "ended", "canplay"])
 		el.addEventListener(name, () => emitState(el));

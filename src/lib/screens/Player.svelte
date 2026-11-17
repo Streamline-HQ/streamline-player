@@ -882,6 +882,14 @@ const labels = {
 			aria-label={pb.playing ? labels.pause : labels.play}
 			onclick={togglePlay}
 		></button>
+		{#if !pb.picture && !pb.ended && !pb.halt}
+			<div
+				class="art"
+				style:background-image="url({JSON.stringify(view.still)}), url({JSON.stringify(
+					view.poster,
+				)})"
+			></div>
+		{/if}
 		<div class="scrim" class:off={!showBar} style:opacity={showBar ? 1 : 0}></div>
 
 		{#if pb.buffering && !pb.ended}
@@ -1135,6 +1143,11 @@ const labels = {
 			/>
 		{/if}
 	</div>
+{:else}
+	<!-- The title and what was watched are still being read: nothing to draw yet but the wait. -->
+	<div class="loading">
+		<BufferingSpinner label={i18n.player_buffering()} />
+	</div>
 {/if}
 
 <style>
@@ -1153,6 +1166,29 @@ const labels = {
 	display: grid;
 	place-items: center;
 	background: var(--bg-deep);
+}
+
+/* What stands in for the picture until its first frame: the title's backdrop, its poster when
+   there is none, dimmed so the spinner and the controls read on it. */
+.art {
+	position: absolute;
+	inset: 0;
+	pointer-events: none;
+	background: #000 center / cover no-repeat;
+}
+
+.art::after {
+	content: "";
+	position: absolute;
+	inset: 0;
+	background: rgba(0, 0, 0, 0.55);
+}
+
+.loading {
+	position: fixed;
+	inset: 0;
+	background: #000;
+	color: var(--player-ink);
 }
 
 .surface {
