@@ -7,6 +7,7 @@ import type { Kind, Title, Watch } from "#lib/core/types.ts";
 import { episodesOf, inProgress, pct } from "#lib/core/format.ts";
 import { artwork, library, title as fetchTitle, watchState } from "#platform";
 import { hideBroken } from "#lib/ui/img.ts";
+import { progressive } from "#lib/ui/progressive.svelte.ts";
 import { Check } from "@lucide/svelte";
 
 type Flag = "unwatched" | "progress" | "uhd" | "hdr";
@@ -66,8 +67,19 @@ async function markDoneShows(w: Watch[], id: number) {
 	);
 }
 
-const stateOf = (t: Title) =>
-	watch.filter((w) => (kind === "movies" ? w.movie_id === t.id : w.series_id === t.id));
+// Grouped once: filtering the whole watch state for each card is what made a large library slow.
+const watchByTitle = $derived.by(() => {
+	const by = new Map<number, Watch[]>();
+	for (const w of watch) {
+		const id = kind === "movies" ? w.movie_id : w.series_id;
+		if (id === undefined) continue;
+		const of = by.get(id);
+		if (of) of.push(w);
+		else by.set(id, [w]);
+	}
+	return by;
+});
+const stateOf = (t: Title) => watchByTitle.get(t.id) ?? [];
 const going = (t: Title) => stateOf(t).find(inProgress);
 const watched = (t: Title) =>
 	kind === "movies" ? stateOf(t).some((w) => w.watched) : doneShows.has(t.id);
@@ -79,6 +91,12 @@ const test: Record<Flag, (t: Title) => boolean> = {
 	hdr: (t) => !!t.file_summary?.hdr,
 };
 const items = $derived(titles.filter((t) => flags.every((f) => test[f](t))));
+const rows = progressive(
+	() => items,
+	() => kind,
+);
+const shown = $derived(items.slice(0, rows.drawn));
+const track = rows.track;
 
 function toggle(f: Flag) {
 	const other: Partial<Record<Flag, Flag>> = { unwatched: "progress", progress: "unwatched" };
@@ -123,8 +141,8 @@ function toggle(f: Flag) {
 						</button>
 					{/each}
 				</div>
-				<div class="grid">
-					{#each items as t (t.id)}
+				<div class="grid" use:track style:padding-bottom="{rows.after}px">
+					{#each shown as t (t.id)}
 						<div class="item">
 							<button
 								type="button"
@@ -134,12 +152,20 @@ function toggle(f: Flag) {
 								aria-label={t.title}
 								onclick={() => goto(`/detail/${kind}/${t.id}`)}
 							>
-								<img src={artwork(kind, t.id, "poster")} alt="" loading="lazy" onerror={hideBroken}>
-								{#if going(t)}
-									<span class="bar"><span style:width="{pct(going(t))}%"></span></span>
-								{/if}
-								{#if watched(t)}
-									<span class="done"><Check size={22} strokeWidth={3} /></span>
+								<!-- The card is focusable before its poster and badges are drawn: the remote can reach any title at once. -->
+								{#if rows.real(t.id)}
+									<img
+										src={artwork(kind, t.id, "poster")}
+										alt=""
+										loading="lazy"
+										onerror={hideBroken}
+									>
+									{#if going(t)}
+										<span class="bar"><span style:width="{pct(going(t))}%"></span></span>
+									{/if}
+									{#if watched(t)}
+										<span class="done"><Check size={22} strokeWidth={3} /></span>
+									{/if}
 								{/if}
 							</button>
 							<span class="name">{t.title}</span>
