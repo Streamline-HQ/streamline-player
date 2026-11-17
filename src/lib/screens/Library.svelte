@@ -50,11 +50,12 @@ import FilterMenu from "#lib/ui/FilterMenu.svelte";
 import LanguagePopover from "#lib/ui/LanguagePopover.svelte";
 import Icon from "#lib/ui/Icon.svelte";
 import { goto } from "#lib/ui/nav.ts";
-import PosterCard from "#lib/ui/PosterCard.svelte";
+import PosterCard, { skeleton as posterSkeleton } from "#lib/ui/PosterCard.svelte";
 import { presence } from "#lib/ui/presence.svelte.ts";
+import { progressive } from "#lib/ui/progressive.svelte.ts";
 import SegmentedControl from "#lib/ui/SegmentedControl.svelte";
 import SortMenu from "#lib/ui/SortMenu.svelte";
-import TitleRow from "#lib/ui/TitleRow.svelte";
+import TitleRow, { skeleton as rowSkeleton } from "#lib/ui/TitleRow.svelte";
 import {
 	artwork,
 	canDownload,
@@ -83,6 +84,12 @@ const base = $derived(kind === "movies" ? lib.movies : lib.shows);
 const items = $derived(visible(base, kind, lib.watch, view));
 const genreList = $derived(genres(base, kind, lib.watch, view.flags));
 const flaggedTotal = $derived(visible(base, kind, lib.watch, { ...view, genre: null }).length);
+const rows = progressive(
+	() => items,
+	() => `${kind}:${view.layout}`,
+);
+const shown = $derived(items.slice(0, rows.drawn));
+const track = rows.track;
 
 let genreMenu = $state(false);
 const genrePanel = presence(() => genreMenu, 170);
@@ -468,23 +475,27 @@ const heads: { label: () => string; sort?: Sort; end?: boolean }[] = [
 			</div>
 
 			{#if items.length && view.layout === "grid"}
-				<div class="grid" style:--min="{MIN_COL}px">
-					{#each items as t (t.id)}
-						{@const watched = watchedTitle(t, kind, lib.watch)}
-						<PosterCard
-							title={t.title}
-							sub={sub(t)}
-							src={artwork(kind, t.id, "poster")}
-							badge={isNew(t, now) ? i18n.home_new() : undefined}
-							{watched}
-							progress={progressOf(t, kind, lib.watch)}
-							playLabel={playLabel(t)}
-							mark={markFor(t, watched)}
-							lang={langFor(t)}
-							download={dlFor(t)}
-							onplay={() => play(t)}
-							onclick={() => open(t)}
-						/>
+				<div class="grid" style:--min="{MIN_COL}px" style:padding-bottom="{rows.after}px" use:track>
+					{#each shown as t (t.id)}
+						{#if rows.real(t.id)}
+							{@const watched = watchedTitle(t, kind, lib.watch)}
+							<PosterCard
+								title={t.title}
+								sub={sub(t)}
+								src={artwork(kind, t.id, "poster")}
+								badge={isNew(t, now) ? i18n.home_new() : undefined}
+								{watched}
+								progress={progressOf(t, kind, lib.watch)}
+								playLabel={playLabel(t)}
+								mark={markFor(t, watched)}
+								lang={langFor(t)}
+								download={dlFor(t)}
+								onplay={() => play(t)}
+								onclick={() => open(t)}
+							/>
+						{:else}
+							{@render posterSkeleton(t.title)}
+						{/if}
 					{/each}
 				</div>
 			{:else if items.length}
@@ -504,28 +515,34 @@ const heads: { label: () => string; sort?: Sort; end?: boolean }[] = [
 							</button>
 						{/each}
 					</div>
-					{#each items as t (t.id)}
-						{@const q = t.file_summary}
-						<TitleRow
-							title={t.title}
-							poster={artwork(kind, t.id, "poster")}
-							watched={watchedTitle(t, kind, lib.watch)}
-							progress={progressOf(t, kind, lib.watch)}
-							year={kind === "series" ? years(t) : String(t.year)}
-							res={q?.resolution ?? ""}
-							hdr={q?.hdr || "SDR"}
-							hdrOn={!!q?.hdr}
-							audio={[q?.audio, q?.channels].filter(Boolean).join(" ")}
-							size={sizeText(q?.size)}
-							added={addedText(t.added_at, now)}
-							playLabel={playLabel(t)}
-							mark={markFor(t, watchedTitle(t, kind, lib.watch))}
-							lang={langFor(t)}
-							download={dlFor(t)}
-							onplay={() => play(t)}
-							onclick={() => open(t)}
-						/>
-					{/each}
+					<div class="rows" style:padding-bottom="{rows.after}px" use:track>
+						{#each shown as t (t.id)}
+							{#if rows.real(t.id)}
+								{@const q = t.file_summary}
+								<TitleRow
+									title={t.title}
+									poster={artwork(kind, t.id, "poster")}
+									watched={watchedTitle(t, kind, lib.watch)}
+									progress={progressOf(t, kind, lib.watch)}
+									year={kind === "series" ? years(t) : String(t.year)}
+									res={q?.resolution ?? ""}
+									hdr={q?.hdr || "SDR"}
+									hdrOn={!!q?.hdr}
+									audio={[q?.audio, q?.channels].filter(Boolean).join(" ")}
+									size={sizeText(q?.size)}
+									added={addedText(t.added_at, now)}
+									playLabel={playLabel(t)}
+									mark={markFor(t, watchedTitle(t, kind, lib.watch))}
+									lang={langFor(t)}
+									download={dlFor(t)}
+									onplay={() => play(t)}
+									onclick={() => open(t)}
+								/>
+							{:else}
+								{@render rowSkeleton(t.title)}
+							{/if}
+						{/each}
+					</div>
 				</div>
 			{:else}
 				<EmptyState icon="list-filter" title={i18n.library_nothing_matches()}>

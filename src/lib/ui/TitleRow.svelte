@@ -1,3 +1,7 @@
+<script lang="ts" module>
+export { skeleton };
+</script>
+
 <script lang="ts">
 import Tip from "#lib/ui/Tip.svelte";
 import DownloadButton from "#lib/ui/DownloadButton.svelte";
@@ -44,6 +48,16 @@ let {
 
 let broken = $state(false);
 </script>
+
+<!-- A row's stand-in while a long list mounts: its size, from the same rules, and its title as text the browser's find can match. -->
+{#snippet skeleton(title: string)}
+	<div class="row skeleton">
+		<span class="thumb"></span>
+		<span class="main">
+			<span class="line"><span class="title">{title}</span></span>
+		</span>
+	</div>
+{/snippet}
 
 <div class="row">
 	<button type="button" class="hit" aria-label={title} {onclick}></button>
@@ -280,5 +294,15 @@ img {
 
 .end {
 	text-align: right;
+}
+
+.row.skeleton:hover {
+	background: transparent;
+}
+
+/* Transparent, not hidden: find-in-page skips text under visibility: hidden or display: none. */
+.skeleton .title {
+	color: transparent;
+	background: linear-gradient(var(--surface-2), var(--surface-2)) left center / 100% 9px no-repeat;
 }
 </style>

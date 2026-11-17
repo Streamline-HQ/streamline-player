@@ -1,3 +1,7 @@
+<script lang="ts" module>
+export { skeleton };
+</script>
+
 <script lang="ts">
 import Tip from "#lib/ui/Tip.svelte";
 import Art from "#lib/ui/Art.svelte";
@@ -54,6 +58,20 @@ let {
 	onclick: () => void;
 } = $props();
 </script>
+
+<!-- A card's stand-in while a long list mounts: its size, from the same rules, and its title as text the browser's find can match. -->
+{#snippet skeleton(title: string)}
+	<div class="poster skeleton">
+		<span class="art"></span>
+		<span class="text">
+			<span class="lines">
+				<span class="title">{title}</span>
+				<span class="sub">&nbsp;</span>
+			</span>
+			<span class="mark"></span>
+		</span>
+	</div>
+{/snippet}
 
 <div class="poster" style:width={width ? `${width}px` : undefined}>
 	<button type="button" class="hit" aria-label={title} {onclick}></button>
@@ -328,5 +346,26 @@ let {
 
 .lang:hover {
 	color: var(--fg);
+}
+
+.poster.skeleton:hover .art {
+	box-shadow: 0 0 0 1px var(--border);
+	transform: none;
+}
+
+/* Transparent, not hidden: find-in-page skips text under visibility: hidden or display: none. */
+.skeleton .title,
+.skeleton .sub {
+	color: transparent;
+	background: linear-gradient(var(--surface-2), var(--surface-2)) left center / 70% 9px no-repeat;
+}
+
+.skeleton .sub {
+	background-size: 40% 7px;
+}
+
+/* Holds the height of the card's buttons. */
+.skeleton .mark {
+	visibility: hidden;
 }
 </style>
