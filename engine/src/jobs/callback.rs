@@ -1,4 +1,6 @@
-//! Pushes a finished job's result to the URL its request named, so the caller need not poll.
+//! Calls back the engine's caller, which only runs while it answers a request: a finished job's
+//! result goes to the URL its request named, and a caller with unfinished work is called until
+//! it says it is done.
 
 use std::path::PathBuf;
 use std::time::{Duration, SystemTime};
@@ -11,12 +13,34 @@ use crate::error::ApiError;
 /// Holds one file per finished job whose result is not delivered yet: its content is the URL.
 const DIR: &str = "callbacks";
 const RETRY_INTERVAL: Duration = Duration::from_secs(60);
-const TIMEOUT: Duration = Duration::from_secs(30);
+pub(super) const TIMEOUT: Duration = Duration::from_secs(30);
 /// A receiver may refuse a result it will take a moment later: the caller records the jobs it
 /// queued only after the engine accepted them, and a short job finishes before that.
 const REFUSED_RETRY_FOR: Duration = Duration::from_secs(600);
 const REFUSED_RETRY_INTERVAL: Duration = Duration::from_secs(5);
 pub const SIGNATURE_HEADER: &str = "x-engine-signature";
+
+/// Holds one file per caller that asked to be called until its work is done: its content is the
+/// URL.
+const CONTINUATIONS_DIR: &str = "continuations";
+/// A continuation call does a slice of the caller's work, which may take most of the 30 s the
+/// caller's host allows it.
+const CONTINUATION_TIMEOUT: Duration = Duration::from_secs(45);
+const CONTINUATION_PAUSE: Duration = Duration::from_millis(100);
+
+pub(super) fn check_continuation_id(id: &str) -> Result<(), ApiError> {
+    let ok = (1..=64).contains(&id.len())
+        && id
+            .bytes()
+            .all(|b| b.is_ascii_lowercase() || b.is_ascii_digit() || b == b'-');
+    if ok {
+        Ok(())
+    } else {
+        Err(ApiError::invalid_request(
+            "id must be 1 to 64 lowercase letters, digits and dashes",
+        ))
+    }
+}
 
 pub(super) fn check(url: &str) -> Result<(), ApiError> {
     match reqwest::Url::parse(url) {
@@ -27,9 +51,9 @@ pub(super) fn check(url: &str) -> Result<(), ApiError> {
     }
 }
 
-pub(super) fn client() -> reqwest::Client {
+pub(super) fn client(timeout: Duration) -> reqwest::Client {
     reqwest::Client::builder()
-        .timeout(TIMEOUT)
+        .timeout(timeout)
         .build()
         .expect("the HTTP client builds from static settings")
 }
@@ -115,8 +139,75 @@ impl Shared {
         refused
     }
 
+    pub(super) fn keep_continuation(&self, id: &str, url: &str) -> std::io::Result<()> {
+        let dir = self.cfg.jobs_dir.join(CONTINUATIONS_DIR);
+        std::fs::create_dir_all(&dir)?;
+        std::fs::write(dir.join(id), url)?;
+        self.continuing.notify_one();
+        Ok(())
+    }
+
+    /// Calls every continuation once. `true` when one answered 202: its caller has more to do
+    /// and wants the next call at once. A continuation is dropped when its caller answers
+    /// anything else below 500, and kept while the caller is down.
+    pub(super) async fn continue_pending(&self, client: &reqwest::Client) -> bool {
+        let mut more = false;
+        let Ok(entries) = std::fs::read_dir(self.cfg.jobs_dir.join(CONTINUATIONS_DIR)) else {
+            return more;
+        };
+        for entry in entries.flatten() {
+            let file = entry.path();
+            let id = entry.file_name().to_string_lossy().into_owned();
+            let Ok(url) = std::fs::read_to_string(&file) else {
+                continue;
+            };
+            let body = json!({ "id": id }).to_string();
+            let sent = client
+                .post(&url)
+                .header(reqwest::header::CONTENT_TYPE, "application/json")
+                .header(
+                    SIGNATURE_HEADER,
+                    crate::token::sign_body(&self.secret, body.as_bytes()),
+                )
+                .body(body)
+                .send()
+                .await;
+            match sent.map(|r| r.status()) {
+                Ok(reqwest::StatusCode::ACCEPTED) => more = true,
+                Ok(s) if s.is_server_error() => {
+                    tracing::warn!(continuation = %id, status = %s, "the caller failed; trying again later");
+                }
+                Ok(s) => {
+                    if !s.is_success() {
+                        tracing::warn!(continuation = %id, status = %s, "the caller refused its continuation; dropped");
+                    }
+                    let _ = std::fs::remove_file(&file);
+                }
+                Err(e) => {
+                    tracing::warn!(continuation = %id, error = %e, "the caller did not answer; trying again later");
+                }
+            }
+        }
+        more
+    }
+
+    pub(super) async fn continue_forever(&self) {
+        let client = client(CONTINUATION_TIMEOUT);
+        loop {
+            let wait = if self.continue_pending(&client).await {
+                CONTINUATION_PAUSE
+            } else {
+                RETRY_INTERVAL
+            };
+            tokio::select! {
+                () = self.continuing.notified() => {}
+                () = tokio::time::sleep(wait) => {}
+            }
+        }
+    }
+
     pub(super) async fn deliver_forever(&self) {
-        let client = client();
+        let client = client(TIMEOUT);
         loop {
             let wait = if self.deliver_pending(&client).await {
                 REFUSED_RETRY_INTERVAL

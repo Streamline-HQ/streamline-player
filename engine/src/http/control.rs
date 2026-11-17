@@ -129,6 +129,22 @@ pub async fn submit_job(State(s): State<AppState>, body: Bytes) -> Result<Respon
     }
 }
 
+#[derive(serde::Deserialize)]
+struct Continuation {
+    url: String,
+}
+
+/// Asks the engine to call `url` until the caller says its work is done.
+pub async fn keep_calling(
+    State(s): State<AppState>,
+    Params(id): Params<String>,
+    body: Bytes,
+) -> Result<StatusCode, ApiError> {
+    let c: Continuation = parse(&body)?;
+    s.jobs.keep_calling(&id, &c.url)?;
+    Ok(StatusCode::ACCEPTED)
+}
+
 pub async fn job_status(
     State(s): State<AppState>,
     Params(id): Params<String>,

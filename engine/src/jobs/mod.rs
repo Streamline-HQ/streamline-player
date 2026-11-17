@@ -200,6 +200,8 @@ struct Shared {
     wake: Notify,
     /// Wakes the callback delivery when a job with one finishes.
     finished: Notify,
+    /// Wakes the continuation calls when a caller asks for them.
+    continuing: Notify,
 }
 
 #[derive(Clone)]
@@ -522,6 +524,7 @@ impl Jobs {
             queue: Mutex::new(Queue::default()),
             wake: Notify::new(),
             finished: Notify::new(),
+            continuing: Notify::new(),
         });
         for _ in 0..shared.cfg.max_jobs.max(1) {
             tokio::spawn(worker(shared.clone(), false));
@@ -750,10 +753,23 @@ impl Jobs {
         }
     }
 
-    /// Delivers the results whose job named a callback, those a restart left undelivered first.
+    /// Delivers the results whose job named a callback, those a restart left undelivered first,
+    /// and calls the callers that asked to be called until their work is done.
     pub fn spawn_callbacks(&self) -> JoinHandle<()> {
         let shared = self.0.clone();
+        let continuing = self.0.clone();
+        tokio::spawn(async move { continuing.continue_forever().await });
         tokio::spawn(async move { shared.deliver_forever().await })
+    }
+
+    /// Calls `url` until it answers something other than 202, across restarts. Asking again
+    /// under the same id replaces the URL.
+    pub fn keep_calling(&self, id: &str, url: &str) -> Result<(), ApiError> {
+        callback::check_continuation_id(id)?;
+        callback::check(url)?;
+        self.0
+            .keep_continuation(id, url)
+            .map_err(|e| ApiError::internal(format!("cannot keep the continuation: {e}")))
     }
 
     pub fn spawn_ttl_sweeper(&self) -> JoinHandle<()> {
@@ -1317,7 +1333,7 @@ mod tests {
         jobs.submit(req).unwrap();
         assert_eq!(finished(&jobs, 1).await.state, JobState::Done);
         let pending = f.cfg.jobs_dir.join("callbacks").join(id(1));
-        let client = callback::client();
+        let client = callback::client(callback::TIMEOUT);
 
         jobs.0.deliver_pending(&client).await;
         assert!(pending.exists(), "a 503 keeps the result for the next pass");
@@ -1332,6 +1348,28 @@ mod tests {
         assert_eq!(body["job_id"], id(1));
         assert_eq!(body["state"], "done");
         assert!(body["result"].is_object());
+    }
+
+    #[tokio::test]
+    async fn continuation_is_called_until_the_caller_is_done() {
+        let f = Fixture::new(|_| {});
+        let jobs = f.jobs();
+        let (url, got) = receiver(vec![202, 503, 204]).await;
+        jobs.keep_calling("scan", &url).unwrap();
+        let pending = f.cfg.jobs_dir.join("continuations").join("scan");
+        let client = callback::client(callback::TIMEOUT);
+
+        assert!(jobs.0.continue_pending(&client).await, "202 asks for more");
+        assert!(!jobs.0.continue_pending(&client).await);
+        assert!(pending.exists(), "a 503 keeps the continuation");
+        assert!(!jobs.0.continue_pending(&client).await);
+        assert!(!pending.exists(), "204 ends it");
+
+        let got = got.lock().unwrap();
+        assert_eq!(got.len(), 3);
+        let (sig, body) = &got[0];
+        assert_eq!(*sig, crate::token::sign_body(SECRET, body.as_bytes()));
+        assert!(jobs.keep_calling("../x", &url).is_err());
     }
 
     #[tokio::test]

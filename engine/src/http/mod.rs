@@ -8,7 +8,7 @@ use axum::http::request::Parts;
 use axum::http::{Method, header};
 use axum::middleware::{self, Next};
 use axum::response::Response;
-use axum::routing::{get, patch, post};
+use axum::routing::{get, patch, post, put};
 use serde::de::DeserializeOwned;
 use tower_http::cors::{Any, CorsLayer};
 
@@ -33,6 +33,7 @@ pub fn router(state: AppState) -> Router {
             get(control::job_status).delete(control::cancel_job),
         )
         .route("/jobs/{id}/files/{*name}", get(control::job_file))
+        .route("/continuations/{id}", put(control::keep_calling))
         .route(
             "/settings",
             get(control::get_settings).patch(control::patch_settings),
