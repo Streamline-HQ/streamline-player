@@ -8,6 +8,7 @@ let {
 	title,
 	note,
 	padX = 56,
+	arrows = true,
 	gap = 16,
 	prevLabel,
 	nextLabel,
@@ -17,6 +18,7 @@ let {
 	title: string;
 	note?: string;
 	padX?: number;
+	arrows?: boolean;
 	gap?: number;
 	prevLabel: string;
 	nextLabel: string;
@@ -61,24 +63,26 @@ $effect(() => {
 			{:else if note}
 				<span class="note">{note}</span>
 			{/if}
-			<button
-				type="button"
-				class="arrow"
-				aria-label={prevLabel}
-				disabled={atStart}
-				onclick={() => page(-1)}
-			>
-				<Icon name="chevron-left" size={15} stroke={2} />
-			</button>
-			<button
-				type="button"
-				class="arrow"
-				aria-label={nextLabel}
-				disabled={atEnd}
-				onclick={() => page(1)}
-			>
-				<Icon name="chevron-right" size={15} stroke={2} />
-			</button>
+			{#if arrows}
+				<button
+					type="button"
+					class="arrow"
+					aria-label={prevLabel}
+					disabled={atStart}
+					onclick={() => page(-1)}
+				>
+					<Icon name="chevron-left" size={15} stroke={2} />
+				</button>
+				<button
+					type="button"
+					class="arrow"
+					aria-label={nextLabel}
+					disabled={atEnd}
+					onclick={() => page(1)}
+				>
+					<Icon name="chevron-right" size={15} stroke={2} />
+				</button>
+			{/if}
 		</div>
 	</div>
 	<div

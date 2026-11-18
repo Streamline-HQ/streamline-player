@@ -21,8 +21,9 @@ import {
 import { afterNavigate } from "$app/navigation";
 import EmptyState from "#lib/ui/EmptyState.svelte";
 import Button from "#lib/ui/Button.svelte";
+import { isTablet } from "#lib/platform/form-factor.svelte.ts";
 
-const PAD_X = 56;
+const PAD_X = $derived(isTablet() ? 44 : 56);
 const TOP = 80;
 const GLOW = 480;
 const MIN_COL = 148;

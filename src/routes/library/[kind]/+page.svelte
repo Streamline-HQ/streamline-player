@@ -1,8 +1,10 @@
 <script lang="ts">
 import { page } from "$app/state";
 import type { Kind } from "#lib/core/types.ts";
+import { isPhone } from "#lib/platform/form-factor.svelte.ts";
 import { FORM_FACTOR } from "#lib/platform/target.ts";
 import Library from "#lib/screens/Library.svelte";
+import PhoneLibrary from "#lib/screens/phone/Library.svelte";
 import TvLibrary from "#lib/screens/tv/Library.svelte";
 
 const kind = $derived(page.params.kind as Kind);
@@ -10,6 +12,8 @@ const kind = $derived(page.params.kind as Kind);
 
 {#if FORM_FACTOR === "tv"}
 	<TvLibrary {kind} />
+{:else if isPhone()}
+	<PhoneLibrary {kind} />
 {:else}
 	<Library {kind} />
 {/if}

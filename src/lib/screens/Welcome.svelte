@@ -1,4 +1,5 @@
 <script lang="ts">
+import { isPhone, isTablet } from "#lib/platform/form-factor.svelte.ts";
 import { checkAddress } from "#lib/core/pairing.svelte.ts";
 import { toast } from "#lib/core/toast.svelte.ts";
 import type { DeviceInfo, Me } from "#lib/core/types.ts";
@@ -6,6 +7,7 @@ import { m as i18n } from "#lib/paraglide/messages.js";
 import Icon from "#lib/ui/Icon.svelte";
 import Mark from "#lib/ui/Mark.svelte";
 import { goto } from "#lib/ui/nav.ts";
+import PhoneOnboarding from "#lib/screens/phone/Onboarding.svelte";
 import SignIn from "#lib/screens/SignIn.svelte";
 import { authState, connect, deviceInfo, me as whoAmI, signOut } from "#platform";
 import { onMount } from "svelte";
@@ -35,6 +37,7 @@ let goLeft = $state<number | null>(null);
 let timer: ReturnType<typeof setTimeout> | undefined;
 let goTimer: ReturnType<typeof setInterval> | undefined;
 
+const phone = $derived(isPhone());
 const host = $derived(url.replace(/^[a-z]+:\/\//i, "").replace(/\/.*$/, ""));
 const firstName = $derived(account.name.split(" ")[0] ?? "");
 function stopGo() {
@@ -99,7 +102,7 @@ async function signedIn(result?: { name: string }) {
 		? i18n.common_key_not_stored({ error: state.store_error })
 		: state.keystore;
 	step = "paired";
-	startGo();
+	if (!phone) startGo();
 }
 
 async function leave() {
@@ -132,8 +135,29 @@ onMount(() => {
 
 {#if step === "pair"}
 	<SignIn next="/" done={signedIn} change={changeServer} />
+{:else if phone && step === "server"}
+	<PhoneOnboarding
+		kind="server"
+		{url}
+		{error}
+		{checking}
+		{found}
+		oninput={(value) => {
+			url = value;
+			found = false;
+			error = "";
+		}}
+		onsubmit={submit}
+	/>
+{:else if phone && step === "paired"}
+	<PhoneOnboarding
+		kind="paired"
+		name={account.name}
+		{keystore}
+		onfinish={() => goto("/", { replace: true })}
+	/>
 {:else}
-	<div class="page">
+	<div class="page" style:padding-top="{isTablet() ? 24 : 36}px">
 		<div class="glow"></div>
 		{#if step === "server"}
 			<form
@@ -199,7 +223,9 @@ onMount(() => {
 				<span class="tick"><Icon name="tick" size={28} stroke={2.25} /></span>
 				<div class="head center">
 					<h1>{i18n.welcome_paired_title()}</h1>
-					<p class="lead">{i18n.welcome_paired_lead({ host })}</p>
+					<p class="lead">
+						{(isTablet() ? i18n.welcome_paired_lead_tablet : i18n.welcome_paired_lead)({ host })}
+					</p>
 				</div>
 				<div class="facts">
 					<div class="who">

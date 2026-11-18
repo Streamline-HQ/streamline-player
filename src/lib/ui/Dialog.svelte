@@ -1,5 +1,6 @@
 <script lang="ts">
 import Button from "#lib/ui/Button.svelte";
+import { useDialogSurface } from "#lib/ui/dialog-surface.ts";
 import "#lib/ui/ui.css";
 import type { Snippet } from "svelte";
 
@@ -18,29 +19,35 @@ let {
 	children: Snippet;
 	footer?: Snippet;
 } = $props();
+
+const Surface = useDialogSurface();
 </script>
 
-<div class="layer" class:shown>
-	<button
-		type="button"
-		class="shade"
-		tabindex="-1"
-		aria-label={closeLabel}
-		onclick={onclose}
-	></button>
-	<div class="panel">
-		<div class="sl-dialog" role="dialog" aria-modal="true" aria-label={title}>
-			<div class="sl-dialog__head">
-				<h2 class="sl-dialog__title">{title}</h2>
-				<Button variant="icon" icon="x" label={closeLabel} onclick={onclose} />
+{#if Surface}
+	<Surface {title} {closeLabel} {shown} {onclose} {children} {footer} />
+{:else}
+	<div class="layer" class:shown>
+		<button
+			type="button"
+			class="shade"
+			tabindex="-1"
+			aria-label={closeLabel}
+			onclick={onclose}
+		></button>
+		<div class="panel">
+			<div class="sl-dialog" role="dialog" aria-modal="true" aria-label={title}>
+				<div class="sl-dialog__head">
+					<h2 class="sl-dialog__title">{title}</h2>
+					<Button variant="icon" icon="x" label={closeLabel} onclick={onclose} />
+				</div>
+				<div class="sl-dialog__body">{@render children()}</div>
+				{#if footer}
+					<div class="sl-dialog__foot">{@render footer()}</div>
+				{/if}
 			</div>
-			<div class="sl-dialog__body">{@render children()}</div>
-			{#if footer}
-				<div class="sl-dialog__foot">{@render footer()}</div>
-			{/if}
 		</div>
 	</div>
-</div>
+{/if}
 
 <style>
 .layer {

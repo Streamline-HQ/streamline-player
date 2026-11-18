@@ -15,6 +15,8 @@ let {
 	scrolled,
 	searchLabel,
 	searchKbd,
+	hit,
+	accountDot = false,
 	activityLabel,
 	activityDot,
 	activityOn,
@@ -38,7 +40,9 @@ let {
 	padRight: number;
 	scrolled: boolean;
 	searchLabel: string;
-	searchKbd: string;
+	searchKbd?: string;
+	hit?: number;
+	accountDot?: boolean;
 	activityLabel: string;
 	activityDot: boolean;
 	activityOn: boolean;
@@ -74,10 +78,12 @@ let {
 	</nav>
 	<div class="grow"></div>
 	<div class="actions">
-		<button type="button" class="sl-searchbtn" onclick={onsearch}>
+		<button type="button" class="sl-searchbtn" class:compact={!searchKbd} onclick={onsearch}>
 			<Icon name="search" />
 			<span class="label">{searchLabel}</span>
-			<Kbd>{searchKbd}</Kbd>
+			{#if searchKbd}
+				<Kbd>{searchKbd}</Kbd>
+			{/if}
 		</button>
 		<Button
 			variant="icon"
@@ -86,6 +92,7 @@ let {
 			title={activityLabel}
 			dot={activityDot}
 			active={activityOn}
+			{hit}
 			onclick={onactivity}
 		/>
 		{#if showDownloads}
@@ -96,6 +103,7 @@ let {
 				title={downloadsLabel}
 				dot={downloadsDot ? "var(--status-downloading)" : false}
 				active={downloadsOn}
+				{hit}
 				onclick={ondownloads}
 			/>
 		{/if}
@@ -105,9 +113,14 @@ let {
 			aria-label={accountLabel}
 			aria-haspopup="menu"
 			aria-expanded={menuOpen}
+			style:width={hit ? `${hit}px` : undefined}
+			style:height={hit ? `${hit}px` : undefined}
 			onclick={onmenu}
 		>
 			<Avatar {...account} size={32} ring={menuOpen || accountOn} />
+			{#if accountDot}
+				<span class="pending"></span>
+			{/if}
 		</button>
 	</div>
 </div>
@@ -268,6 +281,10 @@ nav {
 	cursor: pointer;
 }
 
+.sl-searchbtn.compact {
+	min-width: 44px;
+}
+
 .sl-searchbtn:hover {
 	background: color-mix(in srgb, var(--bg-selected) 88%, transparent);
 	color: var(--fg);
@@ -297,5 +314,16 @@ nav {
 	background: transparent;
 	cursor: pointer;
 	border-radius: var(--radius-md);
+}
+
+.pending {
+	position: absolute;
+	top: 1.5px;
+	right: 1.5px;
+	width: 9px;
+	height: 9px;
+	border-radius: 50%;
+	background: var(--accent);
+	pointer-events: none;
 }
 </style>

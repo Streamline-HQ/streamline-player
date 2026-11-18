@@ -6,8 +6,16 @@ let {
 	title,
 	closeLabel,
 	rows,
+	left = false,
 	onclose,
-}: { title: string; closeLabel: string; rows: StatRow[]; onclose: () => void } = $props();
+}: {
+	title: string;
+	closeLabel: string;
+	rows: StatRow[];
+	/** Docked top left under the touch layout's top bar, not top right. */
+	left?: boolean;
+	onclose: () => void;
+} = $props();
 
 const pop = (_: Element, { duration = 110 } = {}) => ({
 	duration,
@@ -16,7 +24,7 @@ const pop = (_: Element, { duration = 110 } = {}) => ({
 });
 </script>
 
-<div class="sl-stats" in:pop|global out:pop|global={{ duration: 80 }}>
+<div class="sl-stats" class:left in:pop|global out:pop|global={{ duration: 80 }}>
 	<div class="head">
 		<span>{title}</span>
 		<button type="button" class="close" aria-label={closeLabel} onclick={onclose}>
@@ -48,6 +56,13 @@ const pop = (_: Element, { duration = 110 } = {}) => ({
 	font: 400 11.5px / 1.65 var(--font-mono);
 	color: var(--player-ink-muted);
 	transform-origin: 100% 0;
+}
+
+.sl-stats.left {
+	left: 28px;
+	right: auto;
+	top: 84px;
+	transform-origin: 0 0;
 }
 
 .head {

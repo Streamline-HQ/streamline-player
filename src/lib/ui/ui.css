@@ -55,6 +55,10 @@
 	padding: 0 12px;
 }
 
+.sl-btn--lg {
+	height: 44px;
+}
+
 .sl-btn--primary {
 	background: var(--accent);
 	color: var(--fg-on-accent);

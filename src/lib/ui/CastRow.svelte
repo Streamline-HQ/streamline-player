@@ -18,6 +18,7 @@ let {
 	count,
 	members,
 	padX = 56,
+	arrows = true,
 	prevLabel,
 	nextLabel,
 	onopen,
@@ -26,6 +27,7 @@ let {
 	count: number;
 	members: Member[];
 	padX?: number;
+	arrows?: boolean;
 	prevLabel: string;
 	nextLabel: string;
 	onopen: (id: string) => void;
@@ -58,7 +60,7 @@ $effect(() => {
 		<h2>{title}</h2>
 		<span class="count">{count}</span>
 		<!-- A mouse has no other way along a row whose scrollbar is hidden. -->
-		{#if !(atStart && atEnd)}
+		{#if arrows && !(atStart && atEnd)}
 			<div class="tools">
 				<button
 					type="button"

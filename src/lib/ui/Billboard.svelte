@@ -28,12 +28,14 @@ let {
 	slides,
 	height,
 	padX = 56,
+	titleSize = 58,
 	infoLabel,
 	dotLabel,
 }: {
 	slides: Slide[];
 	height: number;
 	padX?: number;
+	titleSize?: number;
 	infoLabel: string;
 	dotLabel: (title: string) => string;
 } = $props();
@@ -109,7 +111,7 @@ const frameStyle = (i: number) => {
 		<div class="fade"></div>
 		<div class="body" style:left="{padX}px" style="{text}">
 			<div class="eyebrow">{slide.eyebrow}</div>
-			<h1>{slide.title}</h1>
+			<h1 style:font-size="{titleSize}px">{slide.title}</h1>
 			<div class="meta">
 				<span>{slide.meta}</span>
 				{#each slide.chips as c}
@@ -335,8 +337,10 @@ p {
 	display: flex;
 	flex-direction: column;
 	gap: 6px;
-	width: 140px;
+	width: max-content;
+	min-width: 140px;
 	margin-left: 10px;
+	white-space: nowrap;
 	font: 400 11.5px var(--font-mono);
 	color: var(--player-ink-muted);
 }

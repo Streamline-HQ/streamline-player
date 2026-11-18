@@ -29,7 +29,10 @@ const min = $derived(tiles.some((t) => t.mono) ? 300 : 180);
 	<span class="sub">{t.sub}</span>
 {/snippet}
 
-<div class="tiles" style:grid-template-columns="repeat(auto-fit, minmax({min}px, 1fr))">
+<div
+	class="tiles"
+	style:grid-template-columns="repeat(auto-fit, minmax(var(--tile-min, {min}px), 1fr))"
+>
 	{#each tiles as t (t.label)}
 		{@const go = t.go}
 		{#if go}
