@@ -172,9 +172,7 @@ beforeNavigate(({ to }) => {
 
 const pb = $derived(launch && nowPlaying.launch?.key === launch.key ? nowPlaying.pb : null);
 const view = $derived(launch?.view ?? null);
-const controlsOn = $derived(
-	!!pb && (controls || (!pb.playing && !pb.buffering) || !!menu || pb.stats),
-);
+const controlsOn = $derived(!!pb && (controls || (!pb.playing && !pb.buffering) || !!menu));
 const showBar = $derived(controlsOn && !pb?.ended && !pb?.halt);
 
 // Where a launch gets its server calls: the server's, or the saved file's when that is all there is.

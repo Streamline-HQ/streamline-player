@@ -116,11 +116,11 @@ function setHover(v: number | null) {
 		{#each segs as s}
 			<div class="seg" style:flex={s.to - s.from}>
 				<div class="buf" style:width="{within(buffered, s)}%"></div>
-				<div class="fill" style:width="{within(shown, s)}%"></div>
+				<div class="fill" style:transform="scaleX({within(shown, s) / 100})"></div>
 			</div>
 		{/each}
 	</div>
-	<div class="thumb" style:left="{pct}%"></div>
+	<div class="thumb" style:transform="translateX({pct}cqw)"></div>
 	{#if peek && hover !== null}
 		<div class="peek" style:left="{Math.max(7, Math.min(93, hover * 100))}%">
 			<div class="frame" bind:clientWidth={frameWidth} bind:clientHeight={frameHeight}>
@@ -153,6 +153,7 @@ function setHover(v: number | null) {
 	align-items: center;
 	cursor: pointer;
 	touch-action: none;
+	container-type: inline-size;
 }
 
 .track {
@@ -183,12 +184,16 @@ function setHover(v: number | null) {
 	background: var(--player-buffer);
 }
 
+/* The position moves on every display frame: a transform skips the layout a width would cost. */
 .fill {
+	width: 100%;
+	transform-origin: left;
 	background: var(--player-accent);
 }
 
 .thumb {
 	position: absolute;
+	left: 0;
 	top: 50%;
 	width: 14px;
 	height: 14px;
