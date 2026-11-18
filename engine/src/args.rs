@@ -507,6 +507,9 @@ pub fn live_args(s: &RunSpec) -> Vec<String> {
     // shifting it with an edit list in the init. A player that plays on through a run change keeps
     // the first init, so without it the position falls back by the new run's start and playback
     // stalls.
+    // skip_sidx: the hls muxer turns on movenc's dash mode, which, to keep each sidx continuous
+    // with the last, overwrites the pts of a fragment's first sample. A keyframe that leading
+    // pictures follow (open GOP) then lands one or more frames early, before those pictures.
     // ponytail: hls_time 0.001 cuts at every keyframe, one segment per GOP. On
     // 1-second-GOP Blu-ray remuxes that is many small requests; the upgrade is an
     // explicit segmenter that groups GOPs.
@@ -522,7 +525,7 @@ pub fn live_args(s: &RunSpec) -> Vec<String> {
         "-hls_flags",
         "independent_segments+temp_file",
         "-hls_segment_options",
-        "movflags=+frag_discont",
+        "movflags=+frag_discont+skip_sidx",
         "-start_number",
         &n.to_string(),
         "-hls_fmp4_init_filename",
