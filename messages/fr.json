@@ -1045,5 +1045,13 @@
 	"search_phone_genres": "Genres",
 	"search_phone_no_matches": "Aucun résultat pour « {query} »",
 	"search_phone_requests": "Les demandes se font dans l’application web Streamline.",
-	"library_phone_sort": "Tri : {sort}"
+	"library_phone_sort": "Tri : {sort}",
+	"detail_phone_from_start": "Depuis le début",
+	"detail_phone_reset": "Réinitialiser",
+	"detail_phone_mode_as_is": "tel quel",
+	"detail_phone_mode_converted": "converti",
+	"detail_phone_mode_burn": "incrusté",
+	"detail_phone_mode_shown": "affiché",
+	"person_phone_on_server": "{year} · sur le serveur",
+	"person_phone_not_in_library": "{year} · absent de la bibliothèque"
 }
