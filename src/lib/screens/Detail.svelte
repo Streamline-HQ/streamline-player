@@ -101,8 +101,9 @@ import {
 import { afterNavigate } from "$app/navigation";
 import { page } from "$app/state";
 import { onMount, untrack } from "svelte";
+import { isTablet } from "#lib/platform/form-factor.svelte.ts";
 
-const PAD_X = 56;
+const PAD_X = $derived(isTablet() ? 44 : 56);
 const BAR = 64;
 const MAX_SIMILAR = 8;
 const MAX_CAST = 14;
@@ -737,7 +738,11 @@ function setSeason(n: number) {
 }
 
 const heroHeight = $derived(
-	!series && castShown.length ? Math.max(420, innerHeight - 250) : Math.round(innerHeight * 0.78),
+	isTablet()
+		? Math.round(innerHeight * 0.78)
+		: !series && castShown.length
+			? Math.max(420, innerHeight - 250)
+			: Math.round(innerHeight * 0.78),
 );
 </script>
 
@@ -761,13 +766,13 @@ const heroHeight = $derived(
 			</EmptyState>
 		</div>
 	{:else if t && ready}
-		<section class="hero" style:min-height="{heroHeight}px">
+		<section class="hero" style:min-height="{heroHeight}px" style:padding-inline="{PAD_X}px">
 			<div class="backdrop">
 				<Art src={artwork(kind, t.id, "backdrop")} position="50% 25%" />
 				<div class="side"></div>
 				<div class="low"></div>
 			</div>
-			<button type="button" class="back" onclick={back}>
+			<button type="button" class="back" style:left="{PAD_X}px" onclick={back}>
 				<Icon name="arrow-left" size={14} stroke={2} />{i18n.common_back()}
 			</button>
 			<div class="copy">
@@ -889,6 +894,7 @@ const heroHeight = $derived(
 					}}
 					eps={episodes}
 					newLabel={i18n.home_new()}
+					minWidth={isTablet() ? 236 : 252}
 					onseason={setSeason}
 					onplay={playEpisode}
 					onmark={markEpisode}
@@ -907,6 +913,7 @@ const heroHeight = $derived(
 					prevLabel={i18n.home_scroll_left()}
 					nextLabel={i18n.home_scroll_right()}
 					padX={PAD_X}
+					arrows={!isTablet()}
 					onopen={(person) => goto(`/person/${person}`)}
 				/>
 			{/if}

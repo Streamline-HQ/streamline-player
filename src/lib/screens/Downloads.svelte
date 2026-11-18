@@ -18,9 +18,11 @@ import Icon from "#lib/ui/Icon.svelte";
 import { goto } from "#lib/ui/nav.ts";
 import Art from "#lib/ui/Art.svelte";
 import StorageMeter from "#lib/ui/StorageMeter.svelte";
+import { isTablet } from "#lib/platform/form-factor.svelte.ts";
 import { artworkAt } from "#platform";
 
-const PAD_X = 56;
+const PAD_X = $derived(isTablet() ? 44 : 56);
+const ICON_HIT = $derived(isTablet() ? 44 : undefined);
 const TOP = 92;
 const BOTTOM = 32;
 
@@ -215,6 +217,7 @@ const openGroup = (g: Group) =>
 					<Button
 						variant="icon"
 						icon="x"
+						hit={ICON_HIT}
 						label={i18n.dl_cancel()}
 						title={i18n.dl_cancel()}
 						onclick={() => cancel(r.key)}
@@ -296,6 +299,7 @@ const openGroup = (g: Group) =>
 												<Button
 													variant="icon"
 													icon="trash-2"
+													hit={ICON_HIT}
 													label={i18n.dl_remove()}
 													title={i18n.dl_remove()}
 													onclick={() => removeOne(c)}
@@ -316,7 +320,11 @@ const openGroup = (g: Group) =>
 		<div class="none">
 			<EmptyState icon="download" title={i18n.dl_empty_title()} text={i18n.dl_empty_text()}>
 				{#snippet action()}
-					<Button variant="primary" onclick={() => goto("/library/movies")}>
+					<Button
+						variant="primary"
+						size={isTablet() ? "lg" : "md"}
+						onclick={() => goto("/library/movies")}
+					>
 						{i18n.dl_browse()}
 					</Button>
 				{/snippet}

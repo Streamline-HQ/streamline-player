@@ -25,7 +25,7 @@ let {
 		| "danger"
 		| "danger-outline"
 		| "destructive";
-	size?: "sm" | "md";
+	size?: "sm" | "md" | "lg";
 	icon?: IconName;
 	label?: string;
 	title?: string;
@@ -44,6 +44,7 @@ let {
 	type="button"
 	class="sl-btn sl-btn--{variant}"
 	class:sl-btn--sm={size === "sm"}
+	class:sl-btn--lg={size === "lg"}
 	class:on={active}
 	aria-label={variant === "icon" ? label : undefined}
 	{disabled}

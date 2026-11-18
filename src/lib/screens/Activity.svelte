@@ -24,8 +24,9 @@ import {
 	watchState,
 } from "#platform";
 import { onMount } from "svelte";
+import { isTablet } from "#lib/platform/form-factor.svelte.ts";
 
-const PAD_X = 56;
+const PAD_X = $derived(isTablet() ? 44 : 56);
 const TOP = 92;
 const BOTTOM = 32;
 const MAX_WIDTH = 980;
@@ -72,7 +73,11 @@ onMount(() => {
 });
 </script>
 
-<div class="page" style:padding="{TOP}px {PAD_X}px {BOTTOM}px" style:--max="{MAX_WIDTH}px">
+<div
+	class="page"
+	style:padding="{TOP}px {PAD_X}px {BOTTOM}px"
+	style:--max="{MAX_WIDTH + 2 * PAD_X}px"
+>
 	<div class="top">
 		<div class="titles">
 			<h1>{i18n.shell_activity()}</h1>
@@ -130,7 +135,7 @@ onMount(() => {
 <style>
 .page {
 	box-sizing: border-box;
-	max-width: calc(var(--max) + 2 * 56px);
+	max-width: var(--max);
 	min-height: 100%;
 	margin: 0 auto;
 	display: flex;
