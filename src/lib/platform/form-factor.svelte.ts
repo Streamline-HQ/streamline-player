@@ -1,0 +1,42 @@
+import { createSubscriber } from "svelte/reactivity";
+import { FORM_FACTOR, type FormFactor, IS_WEB, TARGET } from "#lib/platform/target.ts";
+
+const TABLET_MIN_SIDE = 600;
+const OVERRIDES: FormFactor[] = ["phone", "tablet", "desktop"];
+
+const override = (): FormFactor | null => {
+	if (!import.meta.env.DEV) return null;
+	try {
+		const asked =
+			new URLSearchParams(location.search).get("form") ?? localStorage.getItem("slp.form");
+		return OVERRIDES.find((f) => f === asked) ?? null;
+	} catch {
+		return null;
+	}
+};
+// Read once: a client-side navigation drops the query, the module outlives it.
+const forced = override();
+
+const subscribe = createSubscriber((update) => {
+	const coarse = matchMedia("(pointer: coarse)");
+	window.addEventListener("resize", update);
+	window.addEventListener("orientationchange", update);
+	coarse.addEventListener("change", update);
+	return () => {
+		window.removeEventListener("resize", update);
+		window.removeEventListener("orientationchange", update);
+		coarse.removeEventListener("change", update);
+	};
+});
+
+export function formFactor(): FormFactor {
+	if (FORM_FACTOR === "tv") return "tv";
+	if (TARGET === "darwin" || TARGET === "linux" || TARGET === "windows") return "desktop";
+	subscribe();
+	if (forced) return forced;
+	const touch = !IS_WEB || matchMedia("(pointer: coarse)").matches;
+	if (!touch) return "desktop";
+	return Math.min(window.innerWidth, window.innerHeight) >= TABLET_MIN_SIDE ? "tablet" : "phone";
+}
+
+export const isTablet = () => formFactor() === "tablet";

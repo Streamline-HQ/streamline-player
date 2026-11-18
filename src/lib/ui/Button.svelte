@@ -13,6 +13,7 @@ let {
 	dot = false,
 	disabled = false,
 	active = false,
+	hit,
 	onclick,
 	children,
 }: {
@@ -32,6 +33,8 @@ let {
 	dot?: boolean | string;
 	disabled?: boolean;
 	active?: boolean;
+	/** Square side in px of an icon button, where the default 40 is too small for a finger. */
+	hit?: number;
 	onclick?: (e: MouseEvent) => void;
 	children?: Snippet;
 } = $props();
@@ -44,6 +47,8 @@ let {
 	class:on={active}
 	aria-label={variant === "icon" ? label : undefined}
 	{disabled}
+	style:width={variant === "icon" && hit ? `${hit}px` : undefined}
+	style:height={variant === "icon" && hit ? `${hit}px` : undefined}
 	{onclick}
 >
 	<Tip text={title} />
