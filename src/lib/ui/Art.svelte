@@ -43,6 +43,7 @@ $effect(() => {
 			bind:this={img}
 			{src}
 			alt=""
+			draggable="false"
 			loading="lazy"
 			decoding="async"
 			class:loaded
@@ -109,6 +110,9 @@ img {
 	object-fit: cover;
 	display: block;
 	opacity: 0;
+	/* Android WebView turns a held image into its own drag or save menu and cancels the pointer. */
+	pointer-events: none;
+	-webkit-touch-callout: none;
 }
 
 img.loaded {

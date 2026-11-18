@@ -86,6 +86,43 @@ const stop = (e: Event, then: () => void) => {
 const open = (e: KeyboardEvent) => {
 	if (e.key === "Enter" && e.target === e.currentTarget) onclick();
 };
+
+const has = $derived(!!(onplay || reset || mark || lang));
+const HOLD_MS = 450;
+let box = $state<HTMLElement>();
+let held = $state(false);
+let holdTimer: ReturnType<typeof setTimeout> | undefined;
+// The click that ends the long press must not open the title.
+let swallow = false;
+function press() {
+	clearTimeout(holdTimer);
+	if (held || !has) return;
+	holdTimer = setTimeout(() => {
+		swallow = true;
+		held = true;
+	}, HOLD_MS);
+}
+const release = () => clearTimeout(holdTimer);
+// A press that turns into a scroll ends without a click.
+function cancel() {
+	release();
+	swallow = false;
+}
+function tap() {
+	if (swallow) swallow = false;
+	else if (!held) onclick();
+}
+$effect(() => {
+	if (!held) return;
+	const away = (e: PointerEvent) => {
+		if (box?.contains(e.target as Node)) return;
+		held = false;
+		swallow = false;
+	};
+	document.addEventListener("pointerdown", away, true);
+	return () => document.removeEventListener("pointerdown", away, true);
+});
+$effect(() => release);
 </script>
 
 <!-- A card's stand-in while a long list mounts: its size, from the same rules, and its title as text the browser's find can match. -->
@@ -118,6 +155,74 @@ const open = (e: KeyboardEvent) => {
 	{/if}
 {/snippet}
 
+<!-- The card's own actions: over the art on hover (desktop), after a long press (phone). -->
+{#snippet controls(on: boolean, play: number)}
+	{#if has}
+		<span class="slp-hover" class:slp-hover--on={on}>
+			{#if onplay}
+				<button
+					type="button"
+					class="slp-play"
+					aria-label={playLabel}
+					onclick={(e) => stop(e, onplay)}
+				>
+					{#if size !== "phone"}
+						<Tip text={playLabel} />
+					{/if}
+					<Icon name="play" filled size={play} />
+				</button>
+			{/if}
+			<span class="slp-acts">
+				{#if reset}
+					<button
+						type="button"
+						class="slp-glass"
+						aria-label={reset.label}
+						onclick={(e) => stop(e, reset.onclick)}
+					>
+						{#if size !== "phone"}
+							<Tip text={reset.label} />
+						{/if}
+						<Icon name="rotate-ccw" />
+					</button>
+				{/if}
+				{#if mark}
+					<button
+						type="button"
+						class="slp-glass"
+						class:on={mark.on}
+						aria-label={mark.label}
+						onclick={(e) => stop(e, mark.onclick)}
+					>
+						{#if size !== "phone"}
+							<Tip text={mark.label} />
+						{/if}
+						<WatchGlyph on={mark.on} size={15} stroke={1.9} />
+					</button>
+				{/if}
+				{#if lang}
+					<button
+						type="button"
+						class="slp-glass"
+						class:own={lang.own}
+						data-lang-trigger="card"
+						aria-label={lang.label}
+						onclick={(e) => {
+							e.stopPropagation();
+							lang.onclick(e.currentTarget);
+						}}
+					>
+						{#if size !== "phone"}
+							<Tip text={lang.label} />
+						{/if}
+						<Icon name="languages" />
+					</button>
+				{/if}
+			</span>
+		</span>
+	{/if}
+{/snippet}
+
 {#if size === "tv"}
 	<div class="tv slp-mk--tv" style:width={width ? `${width}px` : undefined}>
 		<button
@@ -146,15 +251,26 @@ const open = (e: KeyboardEvent) => {
 		{/if}
 	</div>
 {:else if size === "phone"}
-	<button
-		type="button"
+	<!-- biome-ignore lint/a11y/useSemanticElements: an <a> may not hold the card's own buttons. -->
+	<div
+		bind:this={box}
 		class="phone slp-mk--phone"
+		class:held
+		role="link"
+		tabindex="0"
 		style:width={width ? `${width}px` : undefined}
 		aria-label={title}
-		{onclick}
+		onclick={tap}
+		onkeydown={open}
+		onpointerdown={press}
+		onpointerup={release}
+		onpointerleave={release}
+		onpointercancel={cancel}
+		oncontextmenu={(e) => e.preventDefault()}
 	>
 		<span class="slp-art">
 			<Art {src} kind="poster" />
+			{@render controls(held, 16)}
 			{@render markers()}
 		</span>
 		<span class="phone-lines">
@@ -166,7 +282,7 @@ const open = (e: KeyboardEvent) => {
 				<span class="phone-sub">{sub}</span>
 			{/if}
 		</span>
-	</button>
+	</div>
 {:else}
 	<!-- biome-ignore lint/a11y/useSemanticElements: an <a> may not hold the card's own buttons. -->
 	<div
@@ -181,62 +297,7 @@ const open = (e: KeyboardEvent) => {
 	>
 		<span class="slp-art desk-art">
 			<Art {src} kind="poster" />
-			{#if onplay || reset || mark || lang}
-				<span class="slp-hover">
-					{#if onplay}
-						<button
-							type="button"
-							class="slp-play"
-							aria-label={playLabel}
-							onclick={(e) => stop(e, onplay)}
-						>
-							<Tip text={playLabel} />
-							<Icon name="play" filled size={20} />
-						</button>
-					{/if}
-					<span class="slp-acts">
-						{#if reset}
-							<button
-								type="button"
-								class="slp-glass"
-								aria-label={reset.label}
-								onclick={(e) => stop(e, reset.onclick)}
-							>
-								<Tip text={reset.label} />
-								<Icon name="rotate-ccw" />
-							</button>
-						{/if}
-						{#if mark}
-							<button
-								type="button"
-								class="slp-glass"
-								class:on={mark.on}
-								aria-label={mark.label}
-								onclick={(e) => stop(e, mark.onclick)}
-							>
-								<Tip text={mark.label} />
-								<WatchGlyph on={mark.on} size={15} stroke={1.9} />
-							</button>
-						{/if}
-						{#if lang}
-							<button
-								type="button"
-								class="slp-glass"
-								class:own={lang.own}
-								data-lang-trigger="card"
-								aria-label={lang.label}
-								onclick={(e) => {
-									e.stopPropagation();
-									lang.onclick(e.currentTarget);
-								}}
-							>
-								<Tip text={lang.label} />
-								<Icon name="languages" />
-							</button>
-						{/if}
-					</span>
-				</span>
-			{/if}
+			{@render controls(false, 20)}
 			{@render markers()}
 		</span>
 		<span class="text">
@@ -420,6 +481,25 @@ const open = (e: KeyboardEvent) => {
 	text-align: left;
 	cursor: pointer;
 	scroll-snap-align: start;
+	outline: none;
+	user-select: none;
+	-webkit-user-select: none;
+	-webkit-touch-callout: none;
+	-webkit-tap-highlight-color: transparent;
+}
+
+/* A long press lifts the poster first; its controls come in once it has grown. */
+.phone .slp-art {
+	transition:
+		transform 200ms var(--ease),
+		box-shadow 200ms var(--ease);
+}
+
+.phone.held .slp-art {
+	z-index: 2;
+	transform: scale(1.08);
+	/* Not the hover shadow: its accent ring reads as a selection. */
+	box-shadow: var(--shadow-2);
 }
 
 .phone-lines {

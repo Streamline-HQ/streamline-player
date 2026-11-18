@@ -26,6 +26,16 @@
 /* Hover controls over the art (desktop) */
 .slp-hover{position:absolute;inset:0;z-index:1;display:grid;place-items:center;background:linear-gradient(180deg,transparent 30%,color-mix(in srgb,var(--bg-deep) 55%,transparent) 100%);opacity:0;transition:opacity 180ms var(--ease)}
 .slp-art:hover .slp-hover,.slp-art:focus-within .slp-hover{opacity:1}
+/* Phone: no hover. A long press on the card turns the controls on, sized for the smaller poster. */
+.slp-mk--phone .slp-hover{opacity:0!important;pointer-events:none}
+.slp-mk--phone .slp-hover.slp-hover--on{opacity:1!important;pointer-events:auto;transition-delay:160ms;background:color-mix(in srgb,var(--bg-deep) 55%,transparent)}
+.slp-mk--phone .slp-play{width:40px;height:40px;margin-bottom:28px}
+.slp-mk--phone .slp-play svg{margin-left:2px}
+.slp-mk--phone .slp-acts{bottom:8px;gap:4px}
+/* Over a poster with no hover to tint it, the glass has to carry its own contrast. */
+.slp-mk--phone .slp-glass{width:30px;height:30px;background:rgba(10,10,14,.84);box-shadow:inset 0 0 0 1px rgba(255,255,255,.3),0 2px 8px rgba(0,0,0,.45)}
+.slp-mk--phone .slp-glass>svg{width:16px;height:16px;stroke-width:2.1}
+.slp-mk--phone button{-webkit-tap-highlight-color:transparent}
 .slp-play{width:52px;height:52px;display:grid;place-items:center;padding:0;border:0;border-radius:50%;background:color-mix(in srgb,var(--fg) 94%,transparent);color:var(--fg-on-accent);cursor:pointer;box-shadow:0 8px 24px rgba(0,0,0,.45);transition:transform var(--dur-fast) var(--ease)}
 .slp-play:hover{transform:scale(1.08)}
 .slp-play svg{margin-left:3px}
