@@ -203,6 +203,12 @@ async function load(url: string, at: number) {
 				},
 			},
 			manifest: {
+				// Shaka otherwise moves every segment so that its first decode time sits on the
+				// playlist's start time. The engine's playlist is cut on keyframe pts, and a keyframe
+				// followed by leading pictures (open GOP) decodes a frame or more earlier than the
+				// others do, so that one segment got pushed late and left a hole before it. The
+				// engine's segments carry the file's real times: they place themselves.
+				hls: { ignoreManifestTimestampsInSegmentsMode: true },
 				retryParameters: {
 					maxAttempts: 2,
 					baseDelay: 500,
