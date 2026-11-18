@@ -1,4 +1,5 @@
 <script lang="ts">
+import { loadErrorText } from "#lib/core/load-error.ts";
 import { lib, loadLibrary } from "#lib/core/library.svelte.ts";
 import { runtime } from "#lib/core/format.ts";
 import { getLocale } from "#lib/paraglide/runtime.js";
@@ -138,7 +139,7 @@ onMount(() => {
 	/>
 
 	{#if lib.error !== null}
-		<EmptyState icon="film" title={i18n.home_error_title()} text={lib.error}>
+		<EmptyState icon="film" title={i18n.home_error_title()} text={loadErrorText(lib.error)}>
 			{#snippet action()}
 				<Button variant="secondary" onclick={() => loadLibrary(port, true)}>
 					{i18n.halt_try_again()}

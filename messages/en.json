@@ -285,6 +285,8 @@
 	"home_count_month": "{count} this month",
 	"home_empty_text": "Titles appear here as soon as they are added to Streamline.",
 	"home_empty_title": "Your library is empty",
+	"home_error_network": "Can’t reach the server. Check your connection, or try again in a moment.",
+	"home_error_server": "The server couldn’t answer. Try again in a moment.",
 	"home_error_title": "Couldn’t load your library",
 	"home_eyebrow_episode": "New episode · S{season} E{episode}",
 	"home_eyebrow_episodes": "New episodes · S{season} E{from}–E{to}",

@@ -1,4 +1,5 @@
 <script lang="ts">
+import { loadErrorText } from "#lib/core/load-error.ts";
 import { isNew, watchedTitle } from "#lib/core/browse.ts";
 import { addedText, badges, sizeText } from "#lib/core/format.ts";
 import { clickGroup, clickOne } from "#lib/core/download-ask.svelte.ts";
@@ -369,7 +370,7 @@ const heads: { label: () => string; sort?: Sort; end?: boolean }[] = [
 <div class="library" style:--cols={LIST_COLS} bind:this={box}>
 	{#if lib.error !== null}
 		<div class="state">
-			<EmptyState icon="film" title={i18n.home_error_title()} text={lib.error}>
+			<EmptyState icon="film" title={i18n.home_error_title()} text={loadErrorText(lib.error)}>
 				{#snippet action()}
 					<div class="failed-actions">
 						<Button variant="secondary" onclick={() => loadLibrary(port, true)}>

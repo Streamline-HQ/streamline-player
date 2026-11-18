@@ -285,6 +285,8 @@
 	"home_count_month": "{count} ce mois-ci",
 	"home_empty_text": "Les titres apparaissent ici dès qu’ils sont ajoutés à Streamline.",
 	"home_empty_title": "Votre bibliothèque est vide",
+	"home_error_network": "Serveur injoignable. Vérifiez votre connexion ou réessayez dans un instant.",
+	"home_error_server": "Le serveur n’a pas pu répondre. Réessayez dans un instant.",
 	"home_error_title": "Impossible de charger votre bibliothèque",
 	"home_eyebrow_episode": "Nouvel épisode · S{season} É{episode}",
 	"home_eyebrow_episodes": "Nouveaux épisodes · S{season} É{from}–É{to}",
