@@ -20,6 +20,8 @@ permissions = [
   "allow-viewport",
   "allow-subtitleLift",
   "allow-voice",
+  "allow-requestNotifications",
+  "allow-pendingRoute",
   "allow-registerListener",
   "allow-register-listener",
   "allow-removeListener",

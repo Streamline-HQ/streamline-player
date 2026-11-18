@@ -122,8 +122,9 @@ internal class SubtitleOverlay(context: Context, private val positionMs: () -> L
     }
 }
 
-/** Downloads once: a track or a font doesn't change under the same URL. */
+/** Downloads once: a track or a font doesn't change under the same URL. A local path is used in place. */
 internal fun fetchCached(url: String, dir: File): File {
+    if (url.startsWith("/")) return File(url)
     dir.mkdirs()
     val file = File(dir, "${Integer.toHexString(url.hashCode())}-${url.substringAfterLast('/').substringBefore('?')}")
     if (file.exists()) return file

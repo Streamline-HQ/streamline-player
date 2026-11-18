@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="downloads_channel">Téléchargements</string>
+    <string name="downloads_title">Téléchargement</string>
+    <string name="downloads_progress">%1$d sur %2$d</string>
+    <string name="downloads_paused">Téléchargements en pause</string>
+    <string name="downloads_paused_text">Ouvrez Streamline pour continuer à télécharger</string>
+    <string name="pip_pause">Pause</string>
+    <string name="pip_play">Lecture</string>
+</resources>

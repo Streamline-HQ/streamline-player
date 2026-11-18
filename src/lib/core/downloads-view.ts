@@ -28,7 +28,12 @@ export type Words = {
 	preparing(pct: number): string;
 	queued(n: number): string;
 	waiting: string;
+	waitingWifi: string;
 	queuedShort: string;
+	/** "1.2 of 4.0 GB". */
+	of(got: string, total: string): string;
+	/** " · Wi-Fi" while downloads wait for it, else empty. */
+	wifi: string;
 	cause(code: DownloadError): string;
 	kept(size: string): string;
 	perSecond(speed: string, eta: string): string;
@@ -121,10 +126,8 @@ export type Group = {
 	seasons: { label: string | null; cards: Card[] }[];
 };
 
-function got(e: DownloadEntry) {
-	return e.size >= 1e9
-		? `${(e.bytes / 1e9).toFixed(2)} of ${sizeText(e.size)}`
-		: `${sizeText(e.bytes)} of ${sizeText(e.size)}`;
+function got(e: DownloadEntry, w: Words) {
+	return w.of(e.size >= 1e9 ? (e.bytes / 1e9).toFixed(2) : sizeText(e.bytes), sizeText(e.size));
 }
 
 function activeRows(items: DownloadEntry[], rate: number, w: Words): ActiveRow[] {
@@ -137,7 +140,7 @@ function activeRows(items: DownloadEntry[], rate: number, w: Words): ActiveRow[]
 				key: e.key,
 				title: fullTitle(e),
 				pct: pctOf(e.progress),
-				sub: `${w.quality(e.quality)} · ${got(e)}`,
+				sub: `${w.quality(e.quality)} · ${got(e, w)}${w.wifi}`,
 				still: e.meta.still,
 				canRetry: false,
 			};
@@ -157,7 +160,12 @@ function activeRows(items: DownloadEntry[], rate: number, w: Words): ActiveRow[]
 					state: "preparing",
 				};
 			if (e.state === "waiting")
-				return { ...base, note: w.waiting, noteTone: "muted", state: "waiting" };
+				return {
+					...base,
+					note: e.error === "wifi" ? w.waitingWifi : w.waiting,
+					noteTone: "muted",
+					state: "waiting",
+				};
 			if (e.state === "downloading" && !started) {
 				started = true;
 				return rate > 0
@@ -402,6 +410,7 @@ export function popoverView(
 				? w.preparing(pctOf(current.progress))
 				: rateText(rate, sizeSum - gotSum, w);
 	else if (state === "failed") line = w.cause(failed?.error ?? "prepare_failed");
+	else if (list.some((e) => e.error === "wifi")) line = w.waitingWifi;
 	else line = list.some((e) => e.state === "waiting") ? w.waiting : w.queuedShort;
 	const keptBytes = list.filter((e) => e.state === "failed").reduce((n, e) => n + e.bytes, 0);
 	return {
@@ -409,8 +418,8 @@ export function popoverView(
 		title: label,
 		progress,
 		got: unit
-			? `${(gotSum / 1e9).toFixed(1)} of ${gb(sizeSum)}`
-			: `${sizeText(gotSum)} of ${sizeText(sizeSum)}`,
+			? w.of((gotSum / 1e9).toFixed(1), gb(sizeSum))
+			: w.of(sizeText(gotSum), sizeText(sizeSum)),
 		rate: line,
 		size: sizeText(sizeSum),
 		quality: list[0] ? w.quality(list[0].quality) : "",

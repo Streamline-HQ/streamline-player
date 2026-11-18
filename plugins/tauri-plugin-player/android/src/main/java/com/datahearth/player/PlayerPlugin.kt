@@ -1,6 +1,16 @@
 package com.datahearth.player
 
 import android.app.Activity
+import android.app.PendingIntent
+import android.app.PictureInPictureParams
+import android.app.RemoteAction
+import android.content.BroadcastReceiver
+import android.content.IntentFilter
+import android.graphics.drawable.Icon
+import android.util.Rational
+import androidx.core.app.PictureInPictureModeChangedInfo
+import androidx.core.content.ContextCompat
+import androidx.core.util.Consumer
 import android.content.ActivityNotFoundException
 import android.content.Context
 import android.content.Intent
@@ -8,6 +18,10 @@ import android.content.pm.ActivityInfo
 import android.content.pm.PackageManager
 import android.graphics.Color
 import android.graphics.Rect
+import android.Manifest
+import android.net.ConnectivityManager
+import android.net.Uri
+import android.os.Build
 import android.os.Handler
 import android.os.Looper
 import android.speech.RecognizerIntent
@@ -21,6 +35,7 @@ import android.webkit.WebView
 import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.WindowInsetsControllerCompat
+import java.io.File
 import java.util.concurrent.atomic.AtomicLong
 import android.widget.FrameLayout
 import androidx.activity.OnBackPressedCallback
@@ -54,7 +69,10 @@ import androidx.media3.exoplayer.mediacodec.MediaCodecSelector
 import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
 import app.tauri.annotation.ActivityCallback
 import app.tauri.annotation.Command
+import app.tauri.PermissionState
 import app.tauri.annotation.InvokeArg
+import app.tauri.annotation.Permission
+import app.tauri.annotation.PermissionCallback
 import app.tauri.annotation.TauriPlugin
 import app.tauri.plugin.Invoke
 import app.tauri.plugin.JSObject
@@ -63,6 +81,10 @@ import app.tauri.plugin.Plugin
 @InvokeArg
 class ViewportArgs {
     var full: Boolean = false
+    var x: Double? = null
+    var y: Double? = null
+    var width: Double? = null
+    var height: Double? = null
 }
 
 @InvokeArg
@@ -87,6 +109,15 @@ class VoiceArgs {
 class VaultArgs {
     lateinit var name: String
     var value: String? = null
+}
+
+@InvokeArg
+class ServiceArgs {
+    var active: Boolean = false
+    var count: Int = 0
+    var done: Int = 0
+    var title: String? = null
+    var percent: Int = -1
 }
 
 @InvokeArg
@@ -153,6 +184,7 @@ private class DecodeHereSink(sink: AudioSink, private val decoded: () -> Set<Str
 }
 
 private const val TAG = "PlayerPlugin"
+private const val PIP_TOGGLE = "com.datahearth.player.PIP_TOGGLE"
 private const val POSITION_INTERVAL_MS = 500L
 // DefaultBandwidthMeter answers with its built-in guess for the network type until it has seen this much.
 private const val METER_TRUSTED_BYTES = 512 * 1024L
@@ -160,7 +192,9 @@ private const val READS_WINDOW_MS = 2000L
 // Replacing a direct stream closes its connection, and the meter counts all the time it sat open.
 private const val METER_QUIET_AFTER_LOAD_MS = 1000L
 
-@TauriPlugin
+private fun toUri(s: String): Uri = if (s.startsWith("/")) Uri.fromFile(File(s)) else Uri.parse(s)
+
+@TauriPlugin(permissions = [Permission(strings = [Manifest.permission.POST_NOTIFICATIONS], alias = "notifications")])
 class PlayerPlugin(private val activity: Activity) : Plugin(activity) {
     // ExoPlayer must be touched only from the thread that created it (main).
     // Tauri 2.12 happens to dispatch commands on main too, but that is not a
@@ -168,6 +202,10 @@ class PlayerPlugin(private val activity: Activity) : Plugin(activity) {
     private val main = Handler(Looper.getMainLooper())
     private var player: ExoPlayer? = null
     private var surfaceView: SurfaceView? = null
+    private var page: WebView? = null
+    // The mini player's rectangle in screen pixels; null while the film has the whole screen.
+    private var box: Rect? = null
+    private var inPip = false
     private var overlay: SubtitleOverlay? = null
     @Volatile private var audioDelayUs = 0L
     @Volatile private var decodeHere = emptySet<String>()
@@ -211,13 +249,19 @@ class PlayerPlugin(private val activity: Activity) : Plugin(activity) {
         }
     }
 
+    private var pendingRoute: String? = null
+
     override fun load(webView: WebView) {
+        DownloadService.appContext = activity.applicationContext
         main.post { attach(webView) }
     }
 
     private fun attach(webView: WebView) {
         webView.setBackgroundColor(Color.TRANSPARENT)
         fillScreen(false)
+        page = webView
+        (activity as? AppCompatActivity)?.addOnPictureInPictureModeChangedListener(pipChanged)
+        ContextCompat.registerReceiver(activity, pipToggle, IntentFilter(PIP_TOGGLE), ContextCompat.RECEIVER_NOT_EXPORTED)
 
         val content = webView.parent as? ViewGroup
             ?: activity.findViewById(android.R.id.content)
@@ -246,7 +290,10 @@ class PlayerPlugin(private val activity: Activity) : Plugin(activity) {
             .build()
         p.setVideoSurfaceView(surface)
         p.addListener(object : Player.Listener {
-            override fun onVideoSizeChanged(videoSize: VideoSize) = fitVideo()
+            override fun onVideoSizeChanged(videoSize: VideoSize) {
+                fitVideo()
+                offerPip()
+            }
             override fun onIsLoadingChanged(isLoading: Boolean) {
                 loadedWholeWindow = false
             }
@@ -257,6 +304,7 @@ class PlayerPlugin(private val activity: Activity) : Plugin(activity) {
             override fun onIsPlayingChanged(isPlaying: Boolean) {
                 emitState()
                 if (isPlaying) startTicker() else stopTicker()
+                offerPip()
             }
             override fun onPlayerError(error: PlaybackException) {
                 Log.e(TAG, "playback error", error)
@@ -315,20 +363,72 @@ class PlayerPlugin(private val activity: Activity) : Plugin(activity) {
         val surface = surfaceView ?: return
         val parent = surface.parent as? ViewGroup ?: return
         val video = player?.videoSize ?: return
-        val (screenW, screenH) = parent.width to parent.height
-        if (video.width == 0 || video.height == 0 || screenW == 0 || screenH == 0) return
+        // Android's own picture-in-picture shrinks the whole activity: the film takes all of it.
+        val area = box?.takeUnless { inPip } ?: Rect(0, 0, parent.width, parent.height)
+        val (screenW, screenH) = area.width() to area.height()
+        if (video.width == 0 || video.height == 0 || screenW <= 0 || screenH <= 0) return
         val aspect = video.width * video.pixelWidthHeightRatio / video.height
         val (w, h) = if (aspect >= screenW.toFloat() / screenH) {
             screenW to Math.round(screenW / aspect)
         } else {
             Math.round(screenH * aspect) to screenH
         }
-        val left = (screenW - w) / 2
-        val top = (screenH - h) / 2
+        val left = area.left + (screenW - w) / 2
+        val top = area.top + (screenH - h) / 2
         overlay?.videoRect = Rect(left, top, left + w, top + h)
-        if (surface.layoutParams.width != w || surface.layoutParams.height != h) {
-            surface.layoutParams = FrameLayout.LayoutParams(w, h, Gravity.CENTER)
+        val at = surface.layoutParams as? FrameLayout.LayoutParams
+        if (at == null || at.width != w || at.height != h || at.leftMargin != left || at.topMargin != top) {
+            surface.layoutParams = FrameLayout.LayoutParams(w, h, Gravity.TOP or Gravity.START).apply {
+                leftMargin = left
+                topMargin = top
+            }
         }
+    }
+
+    private val pipChanged = Consumer<PictureInPictureModeChangedInfo> { info ->
+        inPip = info.isInPictureInPictureMode
+        // The page's controls would be drawn at thumbnail size over the film. Alpha, not visibility:
+        // a hidden WebView stops its timers, and the session's heartbeat with them.
+        page?.alpha = if (inPip) 0f else 1f
+        fitVideo()
+    }
+
+    private val pipToggle = object : BroadcastReceiver() {
+        override fun onReceive(context: Context, intent: Intent) {
+            val p = player ?: return
+            if (p.isPlaying) p.pause() else p.play()
+        }
+    }
+
+    /** While a film plays, leaving the app keeps it in Android's floating window (Android 12+). */
+    private fun offerPip() {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.S) return
+        if (activity.packageManager.hasSystemFeature(PackageManager.FEATURE_LEANBACK)) return
+        val p = player ?: return
+        val video = p.videoSize
+        val params = PictureInPictureParams.Builder().setAutoEnterEnabled(p.isPlaying && video.width > 0)
+        if (video.width > 0 && video.height > 0) {
+            // Android refuses ratios outside 1:2.39 .. 2.39:1.
+            val ratio = (video.width * video.pixelWidthHeightRatio / video.height).coerceIn(0.42f, 2.39f)
+            params.setAspectRatio(Rational(Math.round(ratio * 1000), 1000))
+        }
+        surfaceView?.let { surface ->
+            val seen = Rect()
+            if (surface.getGlobalVisibleRect(seen)) params.setSourceRectHint(seen)
+        }
+        val label = activity.getString(if (p.isPlaying) R.string.pip_pause else R.string.pip_play)
+        val toggle = PendingIntent.getBroadcast(
+            activity,
+            0,
+            Intent(PIP_TOGGLE).setPackage(activity.packageName),
+            PendingIntent.FLAG_IMMUTABLE,
+        )
+        val icon = Icon.createWithResource(
+            activity,
+            if (p.isPlaying) android.R.drawable.ic_media_pause else android.R.drawable.ic_media_play,
+        )
+        params.setActions(listOf(RemoteAction(icon, label, label, toggle)))
+        runCatching { activity.setPictureInPictureParams(params.build()) }
     }
 
     @androidx.annotation.OptIn(UnstableApi::class)
@@ -431,7 +531,7 @@ class PlayerPlugin(private val activity: Activity) : Plugin(activity) {
         onPlayer(invoke) {
             decodeHere = args.decode.toSet()
             meterQuietUntil = System.currentTimeMillis() + METER_QUIET_AFTER_LOAD_MS
-            it.setMediaItem(MediaItem.fromUri(args.url), (args.at * 1000).toLong().coerceAtLeast(0))
+            it.setMediaItem(MediaItem.fromUri(toUri(args.url)), (args.at * 1000).toLong().coerceAtLeast(0))
             it.prepare()
         }
     }
@@ -446,9 +546,21 @@ class PlayerPlugin(private val activity: Activity) : Plugin(activity) {
     /** The page says whether the player fills the screen or sits in a corner of the app. */
     @Command
     fun viewport(invoke: Invoke) {
-        val full = invoke.parseArgs(ViewportArgs::class.java).full
+        val args = invoke.parseArgs(ViewportArgs::class.java)
+        val (x, y, width, height) = listOf(args.x, args.y, args.width, args.height)
         main.post {
-            fillScreen(full)
+            // The page measures in CSS pixels, which a WebView draws at the screen's density.
+            val px = activity.resources.displayMetrics.density
+            box = if (args.full || x == null || y == null || width == null || height == null) null
+            else Rect(
+                Math.round(x * px).toInt(),
+                Math.round(y * px).toInt(),
+                Math.round((x + width) * px).toInt(),
+                Math.round((y + height) * px).toInt(),
+            )
+            fillScreen(args.full)
+            fitVideo()
+            offerPip()
             invoke.resolve()
         }
     }
@@ -524,6 +636,59 @@ class PlayerPlugin(private val activity: Activity) : Plugin(activity) {
     fun vaultDelete(invoke: Invoke) {
         vault.delete(invoke.parseArgs(VaultArgs::class.java).name)
         invoke.resolve()
+    }
+
+    // Rust only, like the vault commands: not in build.rs COMMANDS.
+    @Command
+    fun downloadsService(invoke: Invoke) {
+        val args = invoke.parseArgs(ServiceArgs::class.java)
+        val ctx = DownloadService.appContext
+        if (ctx == null) {
+            invoke.resolve(JSObject().apply { put("started", false) })
+            return
+        }
+        val started = DownloadService.apply(
+            ctx,
+            DownloadState(args.active, args.count, args.done, args.title.orEmpty(), args.percent),
+        )
+        invoke.resolve(JSObject().apply { put("started", started) })
+    }
+
+    /** Rust only, like `downloadsService`: whether the connection in use is billed by volume. */
+    @Command
+    fun metered(invoke: Invoke) {
+        val net = activity.applicationContext.getSystemService(Context.CONNECTIVITY_SERVICE) as ConnectivityManager
+        invoke.resolve(JSObject().apply { put("metered", net.isActiveNetworkMetered) })
+    }
+
+    @Command
+    fun requestNotifications(invoke: Invoke) {
+        val state = getPermissionState("notifications")
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU ||
+            (state != PermissionState.PROMPT && state != PermissionState.PROMPT_WITH_RATIONALE)
+        ) {
+            invoke.resolve(JSObject().apply { put("granted", Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU || state == PermissionState.GRANTED) })
+            return
+        }
+        requestPermissionForAlias("notifications", invoke, "onNotifications")
+    }
+
+    @PermissionCallback
+    fun onNotifications(invoke: Invoke) {
+        invoke.resolve(JSObject().apply { put("granted", getPermissionState("notifications") == PermissionState.GRANTED) })
+    }
+
+    // Polled rather than pushed: a trigger() on a cold start can fire before the JS listener exists.
+    @Command
+    fun pendingRoute(invoke: Invoke) {
+        val path = pendingRoute ?: activity.intent?.getStringExtra("route")
+        pendingRoute = null
+        activity.intent?.removeExtra("route")
+        invoke.resolve(JSObject().apply { put("path", path ?: org.json.JSONObject.NULL) })
+    }
+
+    override fun onNewIntent(intent: Intent) {
+        pendingRoute = intent.getStringExtra("route")
     }
 
     @Command
@@ -617,6 +782,8 @@ class PlayerPlugin(private val activity: Activity) : Plugin(activity) {
     override fun onPause(activity: AppCompatActivity) {
         main.post {
             val p = player ?: return@post
+            // In the floating window the activity is paused and still on screen.
+            if (activity.isInPictureInPictureMode) return@post
             resumeOnForeground = p.playWhenReady
             p.pause()
             Log.i(TAG, "activity paused at ${p.currentPosition}ms, resume=$resumeOnForeground")
@@ -624,6 +791,7 @@ class PlayerPlugin(private val activity: Activity) : Plugin(activity) {
     }
 
     override fun onResume(activity: AppCompatActivity) {
+        DownloadService.blocked = false
         main.post {
             Log.i(TAG, "activity resumed, resume=$resumeOnForeground")
             if (resumeOnForeground) player?.play()
@@ -631,7 +799,13 @@ class PlayerPlugin(private val activity: Activity) : Plugin(activity) {
         }
     }
 
+    // The floating window was closed, or the app left the screen some other way.
+    override fun onStop(activity: AppCompatActivity) {
+        main.post { player?.pause() }
+    }
+
     override fun onDestroy(activity: AppCompatActivity) {
+        runCatching { activity.unregisterReceiver(pipToggle) }
         main.post {
             stopTicker()
             main.removeCallbacks(readsTicker)

@@ -355,6 +355,18 @@
           "markdownDescription": "Denies the pause command without any pre-configured scope."
         },
         {
+          "description": "Enables the pendingRoute command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-pendingRoute",
+          "markdownDescription": "Enables the pendingRoute command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the pendingRoute command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-pendingRoute",
+          "markdownDescription": "Denies the pendingRoute command without any pre-configured scope."
+        },
+        {
           "description": "Enables the play command without any pre-configured scope.",
           "type": "string",
           "const": "allow-play",
@@ -413,6 +425,18 @@
           "type": "string",
           "const": "deny-remove-listener",
           "markdownDescription": "Denies the remove_listener command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the requestNotifications command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-requestNotifications",
+          "markdownDescription": "Enables the requestNotifications command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the requestNotifications command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-requestNotifications",
+          "markdownDescription": "Denies the requestNotifications command without any pre-configured scope."
         },
         {
           "description": "Enables the restoreDisplay command without any pre-configured scope.",
@@ -547,10 +571,10 @@
           "markdownDescription": "Denies the volume command without any pre-configured scope."
         },
         {
-          "description": "Allows controlling the native player and listening to its events\n#### This default permission set includes:\n\n- `allow-capabilities`\n- `allow-deviceInfo`\n- `allow-frameRate`\n- `allow-restoreDisplay`\n- `allow-load`\n- `allow-play`\n- `allow-pause`\n- `allow-seek`\n- `allow-stop`\n- `allow-speed`\n- `allow-stats`\n- `allow-subtitle`\n- `allow-timing`\n- `allow-volume`\n- `allow-viewport`\n- `allow-subtitleLift`\n- `allow-voice`\n- `allow-registerListener`\n- `allow-register-listener`\n- `allow-removeListener`\n- `allow-remove-listener`",
+          "description": "Allows controlling the native player and listening to its events\n#### This default permission set includes:\n\n- `allow-capabilities`\n- `allow-deviceInfo`\n- `allow-frameRate`\n- `allow-restoreDisplay`\n- `allow-load`\n- `allow-play`\n- `allow-pause`\n- `allow-seek`\n- `allow-stop`\n- `allow-speed`\n- `allow-stats`\n- `allow-subtitle`\n- `allow-timing`\n- `allow-volume`\n- `allow-viewport`\n- `allow-subtitleLift`\n- `allow-voice`\n- `allow-requestNotifications`\n- `allow-pendingRoute`\n- `allow-registerListener`\n- `allow-register-listener`\n- `allow-removeListener`\n- `allow-remove-listener`",
           "type": "string",
           "const": "default",
-          "markdownDescription": "Allows controlling the native player and listening to its events\n#### This default permission set includes:\n\n- `allow-capabilities`\n- `allow-deviceInfo`\n- `allow-frameRate`\n- `allow-restoreDisplay`\n- `allow-load`\n- `allow-play`\n- `allow-pause`\n- `allow-seek`\n- `allow-stop`\n- `allow-speed`\n- `allow-stats`\n- `allow-subtitle`\n- `allow-timing`\n- `allow-volume`\n- `allow-viewport`\n- `allow-subtitleLift`\n- `allow-voice`\n- `allow-registerListener`\n- `allow-register-listener`\n- `allow-removeListener`\n- `allow-remove-listener`"
+          "markdownDescription": "Allows controlling the native player and listening to its events\n#### This default permission set includes:\n\n- `allow-capabilities`\n- `allow-deviceInfo`\n- `allow-frameRate`\n- `allow-restoreDisplay`\n- `allow-load`\n- `allow-play`\n- `allow-pause`\n- `allow-seek`\n- `allow-stop`\n- `allow-speed`\n- `allow-stats`\n- `allow-subtitle`\n- `allow-timing`\n- `allow-volume`\n- `allow-viewport`\n- `allow-subtitleLift`\n- `allow-voice`\n- `allow-requestNotifications`\n- `allow-pendingRoute`\n- `allow-registerListener`\n- `allow-register-listener`\n- `allow-removeListener`\n- `allow-remove-listener`"
         }
       ]
     }

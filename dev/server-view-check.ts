@@ -182,7 +182,7 @@ const words: Words = {
 	changesWaiting: (n) => `${plural(n, "change")} waiting`,
 	restartNote: (n, keys) =>
 		`${plural(n, "change")} only ${n === 1 ? "applies" : "apply"} after a restart: ${keys}.`,
-	streamSummary: (t, m) => `${t} transcoding · ${m} out`,
+	streamSummary: (v, a, m) => `${v} video · ${a} audio transcoding · ${m} out`,
 	mbps: (n) => `${n} Mbps`,
 	you: (name) => `${name} (you)`,
 	cannotDecode: (kind, codec) => `this ${kind} can’t decode ${codec}`,
@@ -447,7 +447,7 @@ eq(section(all, "overview").badge, undefined);
 const tiles = kinds(rows(section(all, "overview")), "tiles").flatMap((t) => t.tiles);
 const tile = (label: string) => must(tiles.find((t) => t.label === label));
 eq(tile("Streams").value, "3");
-eq(tile("Streams").sub, "1 transcoding · 29.9 Mbps out");
+eq(tile("Streams").sub, "1 video · 1 audio transcoding · 29.9 Mbps out");
 eq(tile("Pairing").value, "1");
 eq(tile("Pairing").sub, "iPad mini");
 eq(tile("Library").value, "70");

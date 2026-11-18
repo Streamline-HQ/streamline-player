@@ -503,6 +503,8 @@ export const startDownloads = (
 	_items: DownloadRequest[],
 	_capabilities: unknown,
 ): Promise<unknown> => Promise.reject(new Error("not on this target"));
+export const takeLaunchRoute = (): Promise<string | null> => Promise.resolve(null);
+export const setWifiOnly = (_on: boolean): Promise<unknown> => Promise.resolve();
 export const removeDownloads = (_keys: string[]): Promise<unknown> => Promise.resolve();
 export const retryDownload = (_key: string): Promise<unknown> => Promise.resolve();
 export const downloadStorage = (): Promise<DownloadStorage> =>

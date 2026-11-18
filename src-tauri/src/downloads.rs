@@ -43,6 +43,8 @@ pub struct Config {
     /// How long an open transfer may deliver nothing before it counts as lost.
     pub stall: Duration,
     pub open_part: OpenPart,
+    /// True while transfers must wait: "Wi-Fi only" on a metered connection.
+    pub hold: Arc<dyn Fn() -> bool + Send + Sync>,
 }
 
 impl Default for Config {
@@ -62,6 +64,7 @@ impl Default for Config {
                     .open(path)?;
                 Ok(Box::new(file))
             }),
+            hold: Arc::new(|| false),
         }
     }
 }
@@ -107,6 +110,8 @@ pub enum Cause {
     PrepareFailed,
     NoSpace,
     Gone,
+    /// Not a failure: held until the connection is no longer metered.
+    Wifi,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -455,11 +460,13 @@ impl Queue {
         let inner = Arc::new(Inner {
             dir: dir.clone(),
             server,
-            engine: reqwest::Client::builder()
-                .connect_timeout(Duration::from_secs(10))
-                .read_timeout(Duration::from_secs(30))
-                .build()
-                .expect("a client with no TLS options builds"),
+            engine: crate::with_roots(
+                reqwest::Client::builder()
+                    .connect_timeout(Duration::from_secs(10))
+                    .read_timeout(Duration::from_secs(30)),
+            )
+            .build()
+            .expect("the default TLS backend builds"),
             emit,
             cfg,
             shared: Mutex::new(Shared {
@@ -818,6 +825,18 @@ impl Inner {
     async fn run(&self, key: &str) {
         let mut stalled = 0;
         loop {
+            let mut held = false;
+            while (self.cfg.hold)() {
+                held = true;
+                self.update(key, |e| {
+                    e.state = State::Waiting;
+                    e.error = Some(Cause::Wifi);
+                });
+                tokio::time::sleep(self.cfg.poll).await;
+            }
+            if held {
+                self.update(key, |e| e.error = None);
+            }
             match self.attempt(key).await {
                 Ok(()) => return,
                 Err(Stop::Fail(cause)) => {
@@ -993,6 +1012,9 @@ impl Inner {
             let mut writer = (self.cfg.open_part)(&part).map_err(io_stop)?;
             let start = file_len(&part);
             loop {
+                if (self.cfg.hold)() {
+                    return Err(Stop::Retry(false));
+                }
                 let chunk = tokio::time::timeout(self.cfg.stall, response.chunk()).await;
                 match chunk {
                     Err(_) => break,

@@ -6,8 +6,10 @@ use std::{
 };
 use tauri::{AppHandle, Emitter, Manager};
 
+#[cfg(any(test, target_os = "android"))]
+mod android_service;
 mod auth;
-#[cfg(desktop)]
+#[cfg(downloads)]
 mod downloads;
 
 #[derive(Clone, Default)]
@@ -55,7 +57,7 @@ impl Kind {
 
 // Images load through <img>, which can't carry the device key, so they pass through here.
 async fn artwork(app: AppHandle, path: String) -> tauri::http::Response<Vec<u8>> {
-    #[cfg(desktop)]
+    #[cfg(downloads)]
     if let Some(bytes) = app.state::<Downloads>().0.local_artwork(&path) {
         return jpeg(Ok(bytes));
     }
@@ -662,7 +664,7 @@ async fn media_text(
     api: tauri::State<'_, Api>,
     url: String,
 ) -> Result<String, String> {
-    #[cfg(desktop)]
+    #[cfg(downloads)]
     if downloads::is_local(&url) {
         let dir = downloads_dir(&app)?;
         return downloads::read_local_text(&dir, &url);
@@ -736,20 +738,20 @@ async fn reachable(api: tauri::State<'_, Api>) -> Result<bool, String> {
     Ok(answer.as_ref().err().is_none_or(|e| downloads_is_answer(e)))
 }
 
-#[cfg(desktop)]
+#[cfg(downloads)]
 fn downloads_is_answer(e: &str) -> bool {
     downloads::is_answer(e)
 }
 
-#[cfg(not(desktop))]
+#[cfg(not(downloads))]
 fn downloads_is_answer(e: &str) -> bool {
     serde_json::from_str::<Value>(e).is_ok()
 }
 
-#[cfg(desktop)]
+#[cfg(downloads)]
 struct Downloads(downloads::Queue);
 
-#[cfg(desktop)]
+#[cfg(downloads)]
 fn downloads_dir(app: &AppHandle) -> Result<PathBuf, String> {
     app.path()
         .app_data_dir()
@@ -757,10 +759,10 @@ fn downloads_dir(app: &AppHandle) -> Result<PathBuf, String> {
         .map_err(|e| e.to_string())
 }
 
-#[cfg(desktop)]
+#[cfg(downloads)]
 struct AppServer(AppHandle);
 
-#[cfg(desktop)]
+#[cfg(downloads)]
 impl downloads::Server for AppServer {
     fn call(
         &self,
@@ -778,13 +780,23 @@ impl downloads::Server for AppServer {
     }
 }
 
-#[cfg(desktop)]
+#[cfg(downloads)]
 #[tauri::command]
 fn list_downloads(queue: tauri::State<'_, Downloads>) -> Vec<downloads::DownloadEntry> {
     queue.0.items()
 }
 
-#[cfg(desktop)]
+#[cfg(downloads)]
+static WIFI_ONLY: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
+
+/// The "Download on Wi-Fi only" setting, which lives with the page's other preferences.
+#[cfg(downloads)]
+#[tauri::command]
+fn set_wifi_only(on: bool) {
+    WIFI_ONLY.store(on, std::sync::atomic::Ordering::Relaxed);
+}
+
+#[cfg(downloads)]
 #[tauri::command]
 fn start_downloads(
     queue: tauri::State<'_, Downloads>,
@@ -794,7 +806,7 @@ fn start_downloads(
     queue.0.start(items, capabilities);
 }
 
-#[cfg(desktop)]
+#[cfg(downloads)]
 #[tauri::command]
 async fn remove_downloads(
     queue: tauri::State<'_, Downloads>,
@@ -804,13 +816,13 @@ async fn remove_downloads(
     Ok(())
 }
 
-#[cfg(desktop)]
+#[cfg(downloads)]
 #[tauri::command]
 fn retry_download(queue: tauri::State<'_, Downloads>, key: String) {
     queue.0.retry(&key);
 }
 
-#[cfg(desktop)]
+#[cfg(downloads)]
 #[tauri::command]
 async fn download_storage(
     queue: tauri::State<'_, Downloads>,
@@ -818,22 +830,37 @@ async fn download_storage(
     Ok(queue.0.storage())
 }
 
-#[cfg(desktop)]
+#[cfg(downloads)]
 #[tauri::command]
 fn local_playback(queue: tauri::State<'_, Downloads>, key: String) -> Option<downloads::Local> {
     queue.0.local_playback(&key)
 }
 
-#[cfg(desktop)]
+#[cfg(downloads)]
 #[tauri::command]
 fn note_offline(queue: tauri::State<'_, Downloads>, key: String, position: f64, done: bool) {
     queue.0.note_offline(&key, position, done);
 }
 
-#[cfg(desktop)]
+#[cfg(downloads)]
 #[tauri::command]
 async fn sync_offline(queue: tauri::State<'_, Downloads>) -> Result<usize, String> {
     Ok(queue.0.sync_offline().await)
+}
+
+// ponytail: reqwest's default verifier asks Android for its trust store and panics
+// unless the app ships rustls-platform-verifier's Kotlin half and initialises it.
+// Mozilla's roots stand in, so a certificate authority the person installed on the
+// device is not trusted; wire the platform verifier if someone needs that.
+pub(crate) fn with_roots(builder: reqwest::ClientBuilder) -> reqwest::ClientBuilder {
+    #[cfg(target_os = "android")]
+    return builder.tls_certs_only(
+        webpki_root_certs::TLS_SERVER_ROOT_CERTS
+            .iter()
+            .filter_map(|c| reqwest::Certificate::from_der(c).ok()),
+    );
+    #[cfg(not(target_os = "android"))]
+    builder
 }
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
@@ -845,16 +872,7 @@ pub fn run() {
             let http = reqwest::Client::builder()
                 .connect_timeout(std::time::Duration::from_secs(10))
                 .read_timeout(std::time::Duration::from_secs(30));
-            // ponytail: reqwest's default verifier asks Android for its trust store and panics
-            // unless the app ships rustls-platform-verifier's Kotlin half and initialises it.
-            // Mozilla's roots stand in, so a certificate authority the person installed on the
-            // device is not trusted; wire the platform verifier if someone needs that.
-            #[cfg(target_os = "android")]
-            let http = http.tls_certs_only(
-                webpki_root_certs::TLS_SERVER_ROOT_CERTS
-                    .iter()
-                    .filter_map(|c| reqwest::Certificate::from_der(c).ok()),
-            );
+            let http = with_roots(http);
             #[cfg(target_os = "android")]
             app.manage(Pictures::default());
             app.manage(Api {
@@ -863,17 +881,31 @@ pub fn run() {
                 conn: RwLock::default(),
                 pairing: Mutex::default(),
             });
-            #[cfg(desktop)]
+            #[cfg(downloads)]
             {
                 let handle = app.handle().clone();
                 let emitter = handle.clone();
+                #[cfg(target_os = "android")]
+                let pump = android_service::ServicePump::new(handle.clone());
                 app.manage(Downloads(downloads::Queue::new(
                     downloads_dir(&handle)?,
                     std::sync::Arc::new(AppServer(handle)),
                     std::sync::Arc::new(move |snapshot| {
                         let _ = emitter.emit("downloads", snapshot);
+                        #[cfg(target_os = "android")]
+                        pump.push(snapshot);
                     }),
-                    downloads::Config::default(),
+                    downloads::Config {
+                        #[cfg(target_os = "android")]
+                        hold: {
+                            let app = app.handle().clone();
+                            std::sync::Arc::new(move || {
+                                WIFI_ONLY.load(std::sync::atomic::Ordering::Relaxed)
+                                    && android_service::metered(&app)
+                            })
+                        },
+                        ..Default::default()
+                    },
                 )));
             }
             #[cfg(target_os = "linux")]
@@ -956,21 +988,23 @@ pub fn run() {
             stop_session,
             heartbeat,
             reachable,
-            #[cfg(desktop)]
+            #[cfg(downloads)]
             list_downloads,
-            #[cfg(desktop)]
+            #[cfg(downloads)]
             start_downloads,
-            #[cfg(desktop)]
+            #[cfg(downloads)]
+            set_wifi_only,
+            #[cfg(downloads)]
             remove_downloads,
-            #[cfg(desktop)]
+            #[cfg(downloads)]
             retry_download,
-            #[cfg(desktop)]
+            #[cfg(downloads)]
             download_storage,
-            #[cfg(desktop)]
+            #[cfg(downloads)]
             local_playback,
-            #[cfg(desktop)]
+            #[cfg(downloads)]
             note_offline,
-            #[cfg(desktop)]
+            #[cfg(downloads)]
             sync_offline
         ])
         .run(tauri::generate_context!())

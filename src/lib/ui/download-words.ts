@@ -8,6 +8,7 @@ import {
 	subInfo,
 	subName,
 } from "#lib/core/playback/names.ts";
+import { prefs } from "#lib/core/prefs.svelte.ts";
 import { m as i18n } from "#lib/paraglide/messages.js";
 
 export const downloadWords = (): Words => ({
@@ -28,12 +29,16 @@ export const downloadWords = (): Words => ({
 	preparing: (pct) => i18n.dl_preparing({ pct }),
 	queued: (n) => i18n.dl_queued({ n }),
 	waiting: i18n.dl_waiting(),
+	waitingWifi: i18n.dl_waiting_wifi(),
 	queuedShort: i18n.dl_queued_short(),
+	of: (got, total) => i18n.dl_got_of({ got, total }),
+	wifi: prefs.wifiOnly ? " · Wi-Fi" : "",
 	cause: (code) =>
 		({
 			prepare_failed: i18n.dl_cause_prepare_failed(),
 			no_space: i18n.dl_cause_no_space(),
 			gone: i18n.dl_cause_gone(),
+			wifi: i18n.dl_waiting_wifi(),
 		})[code],
 	kept: (size) => i18n.dl_kept({ size }),
 	perSecond: (speed, eta) => i18n.dl_per_second({ speed, eta }),

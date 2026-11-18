@@ -20,7 +20,11 @@ import Icon from "#lib/ui/Icon.svelte";
 import { goto } from "#lib/ui/nav.ts";
 import Art from "#lib/ui/Art.svelte";
 import StorageMeter from "#lib/ui/StorageMeter.svelte";
+import { prefs } from "#lib/core/prefs.svelte.ts";
+import { TARGET } from "#lib/platform/target.ts";
 import { artworkAt } from "#platform";
+
+const touch = TARGET === "android";
 
 const PAD_X = $derived(isTablet() ? 44 : 56);
 const ICON_HIT = $derived(isTablet() ? 44 : undefined);
@@ -205,6 +209,12 @@ const phoneGroups = $derived<PhoneGroup[]>(
 				<div class="meter">
 					<StorageMeter usedPct={meter.usedPct} otherPct={meter.otherPct} labels={meter.labels} />
 				</div>
+			{/if}
+			{#if touch}
+				<p class="wifi">
+					<Icon name="wifi" size={15} stroke={1.75} />
+					{prefs.wifiOnly ? i18n.dl_wifi_note_on() : i18n.dl_wifi_note_off()}
+				</p>
 			{/if}
 		</div>
 
@@ -846,5 +856,13 @@ h2 {
 
 .box.on :global(.sl-ico) {
 	opacity: 1;
+}
+.wifi {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	margin: 0;
+	font-size: 12.5px;
+	color: var(--fg-subtle);
 }
 </style>

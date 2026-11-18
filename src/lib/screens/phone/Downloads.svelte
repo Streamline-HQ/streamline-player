@@ -20,7 +20,11 @@ import Button from "#lib/ui/Button.svelte";
 import EmptyState from "#lib/ui/EmptyState.svelte";
 import Icon from "#lib/ui/Icon.svelte";
 import StorageMeter from "#lib/ui/StorageMeter.svelte";
+import { prefs } from "#lib/core/prefs.svelte.ts";
+import { TARGET } from "#lib/platform/target.ts";
 import { artworkAt } from "#platform";
+
+const touch = TARGET === "android";
 
 let {
 	summary,
@@ -69,24 +73,42 @@ let {
 	onremovepicked: () => void;
 	onbrowse: () => void;
 } = $props();
+
+type PickState = "true" | "mixed" | "false";
+const stateOf = (keys: string[]): PickState => {
+	const n = keys.filter((k) => picked.has(k)).length;
+	return n === 0 ? "false" : n === keys.length ? "true" : "mixed";
+};
+const toggleAll = (keys: string[]) => {
+	const all = stateOf(keys) === "true";
+	for (const k of keys) if (picked.has(k) === all) onpick(k);
+};
+const keysOf = (cards: Card[]) => cards.map((c) => c.key);
 </script>
+
+{#snippet tri(keys: string[], name: string, margin: string)}
+	{@const st = stateOf(keys)}
+	<!-- biome-ignore lint/a11y/useSemanticElements: a native checkbox has no mixed look to restyle. -->
+	<button
+		type="button"
+		class="tri"
+		style:margin
+		role="checkbox"
+		aria-checked={st === "mixed" ? "mixed" : st === "true"}
+		aria-label={(st === "true" ? i18n.dl_unselect_all_of : i18n.dl_select_all_of)({ name })}
+		onclick={() => toggleAll(keys)}
+	>
+		<span class="box" class:on={st === "true"} class:part={st === "mixed"} aria-hidden="true">
+			<Icon name="tick" size={13} stroke={3} />
+			<Icon name="minus" size={13} stroke={3} />
+		</span>
+	</button>
+{/snippet}
 
 <div class="page">
 	<div class="top">
 		<div class="titles">
-			<div class="title-row">
-				<h1>{i18n.shell_downloads()}</h1>
-				{#if groups.length > 0}
-					<Button
-						variant="secondary"
-						size="sm"
-						icon={selecting ? "x" : "circle-check"}
-						onclick={onselecting}
-					>
-						{selecting ? i18n.dl_select_done() : i18n.dl_select()}
-					</Button>
-				{/if}
-			</div>
+			<h1>{i18n.shell_downloads()}</h1>
 			<span class="summary">{summary}</span>
 		</div>
 		{#if meter}
@@ -94,35 +116,13 @@ let {
 				<StorageMeter usedPct={meter.usedPct} otherPct={meter.otherPct} labels={meter.labels} />
 			</div>
 		{/if}
+		{#if touch}
+			<p class="wifi">
+				<Icon name="wifi" size={15} stroke={1.75} />
+				{prefs.wifiOnly ? i18n.dl_wifi_note_on() : i18n.dl_wifi_note_off()}
+			</p>
+		{/if}
 	</div>
-
-	{#if selecting}
-		<div class="selbar" role="toolbar" aria-label={i18n.dl_selection()}>
-			<span class="selcount"
-				>{pickedCount
-					? (pickedCount === 1 ? i18n.dl_selected_one : i18n.dl_selected_other)({
-							count: pickedCount,
-						})
-					: i18n.dl_pick_none()}</span
-			>
-			{#if pickedCount}
-				<span class="selsize">{pickedSize}</span>
-			{/if}
-			<span class="spacer"></span>
-			<Button variant="secondary" size="sm" onclick={onpickall}>
-				{allPicked ? i18n.dl_select_clear() : i18n.dl_select_all()}
-			</Button>
-			<Button
-				variant="danger"
-				size="sm"
-				icon="trash-2"
-				disabled={!pickedCount}
-				onclick={onremovepicked}
-			>
-				{i18n.dl_remove_one()}
-			</Button>
-		</div>
-	{/if}
 
 	{#if !online}
 		<Banner
@@ -172,20 +172,39 @@ let {
 
 	{#if groups.length > 0}
 		<section class="done">
-			<h2>{i18n.dl_on_device()}</h2>
+			<div class="shead">
+				<h2>{i18n.dl_on_device()}</h2>
+				<button type="button" class="select" aria-pressed={selecting} onclick={onselecting}>
+					{selecting ? i18n.dl_select_done() : i18n.dl_select()}
+				</button>
+			</div>
 			{#each groups as g (g.key)}
 				<div class="group">
-					<button type="button" class="ghead" onclick={g.open}>
-						<span class="poster"><Art src={artworkAt(g.poster)} kind="poster" /></span>
-						<span class="gtext">
-							<span class="gname">{g.title}</span>
-							<span class="gsub">{g.sub}</span>
-						</span>
-						<Icon name="chevron-right" size={18} stroke={2} />
-					</button>
+					<div class="grow">
+						{#if selecting}
+							{@render tri(
+								g.seasons.flatMap((s) => keysOf(s.cards)),
+								g.title,
+								"-4px -4px 0",
+							)}
+						{/if}
+						<button type="button" class="ghead" onclick={g.open}>
+							<span class="poster"><Art src={artworkAt(g.poster)} kind="poster" /></span>
+							<span class="gtext">
+								<span class="gname">{g.title}</span>
+								<span class="gsub">{g.sub}</span>
+							</span>
+							<Icon name="chevron-right" size={18} stroke={2} />
+						</button>
+					</div>
 					{#each g.seasons as s (s.label ?? "")}
 						{#if s.label}
-							<span class="season">{s.label}</span>
+							<div class="srow">
+								{#if selecting}
+									{@render tri(keysOf(s.cards), s.label, "0 -4px")}
+								{/if}
+								<span class="season">{s.label}</span>
+							</div>
 						{/if}
 						{#each s.cards as c (c.key)}
 							{@const on = picked.has(c.key)}
@@ -238,6 +257,29 @@ let {
 		</section>
 	{/if}
 
+	{#if selecting}
+		<div class="selbar" role="toolbar" aria-label={i18n.dl_selection()}>
+			<span class="selinfo">
+				<span class="selcount"
+					>{pickedCount
+						? (pickedCount === 1 ? i18n.dl_selected_one : i18n.dl_selected_other)({
+								count: pickedCount,
+							})
+						: i18n.dl_pick_what()}</span
+				>
+				{#if pickedCount}
+					<span class="selsize">{pickedSize}</span>
+				{/if}
+			</span>
+			<button type="button" class="selall" onclick={onpickall}>
+				{allPicked ? i18n.dl_select_clear() : i18n.dl_select_all()}
+			</button>
+			<Button variant="danger" icon="trash-2" disabled={!pickedCount} onclick={onremovepicked}>
+				{i18n.dl_remove_one()}
+			</Button>
+		</div>
+	{/if}
+
 	{#if empty}
 		<div class="none">
 			<EmptyState icon="download" title={i18n.dl_empty_title()} text={i18n.dl_empty_text()}>
@@ -280,12 +322,6 @@ let {
 	gap: 4px;
 }
 
-.title-row {
-	display: flex;
-	align-items: center;
-	gap: 12px;
-}
-
 h1 {
 	margin: 0;
 	font-size: 30px;
@@ -304,24 +340,39 @@ h1 {
 
 .selbar {
 	position: sticky;
-	top: calc(env(safe-area-inset-top) + 8px);
+	bottom: calc(var(--tabs-h, env(safe-area-inset-bottom)) + 10px);
 	z-index: 10;
+	align-self: center;
+	width: 100%;
+	max-width: 560px;
+	box-sizing: border-box;
 	display: flex;
-	flex-wrap: wrap;
 	align-items: center;
-	gap: 10px;
-	padding: 10px 12px 10px 16px;
-	border-radius: 12px;
-	background: color-mix(in srgb, var(--bg-elevated) 92%, transparent);
-	backdrop-filter: blur(12px);
+	gap: 8px;
+	padding: 8px 8px 8px 16px;
+	border-radius: var(--radius-lg);
+	background: color-mix(in srgb, var(--bg-elevated) 94%, transparent);
+	backdrop-filter: blur(16px) saturate(150%);
 	box-shadow:
 		inset 0 0 0 1px var(--border-strong),
-		var(--shadow-3);
+		var(--shadow-4);
+	animation: slp-rise 200ms var(--ease);
+}
+
+.selinfo {
+	flex: 1;
+	min-width: 0;
+	display: flex;
+	flex-direction: column;
+	gap: 1px;
 }
 
 .selcount {
 	font-size: 14px;
 	font-weight: 600;
+	white-space: nowrap;
+	overflow: hidden;
+	text-overflow: ellipsis;
 }
 
 .selsize {
@@ -329,8 +380,66 @@ h1 {
 	color: var(--fg-subtle);
 }
 
-.spacer {
-	flex: 1;
+.selall,
+.select {
+	flex: none;
+	border: 0;
+	border-radius: var(--radius-md);
+	background: transparent;
+	color: var(--accent-text);
+	font-size: 13.5px;
+	font-weight: 600;
+	white-space: nowrap;
+	cursor: pointer;
+}
+
+.selall {
+	height: 44px;
+	padding: 0 12px;
+}
+
+.select {
+	height: 32px;
+	margin: -8px -10px -8px 0;
+	padding: 0 10px;
+}
+
+.selall:active,
+.select:active {
+	background: var(--surface-2);
+}
+
+.shead {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: 12px;
+	margin: 0 0 6px;
+}
+
+.grow,
+.srow {
+	display: flex;
+	align-items: center;
+	gap: 10px;
+}
+
+.srow {
+	min-height: 32px;
+	padding: 6px 0 0;
+}
+
+.tri {
+	flex: none;
+	width: 32px;
+	height: 32px;
+	display: grid;
+	place-items: center;
+	padding: 0;
+	border: 0;
+	border-radius: 50%;
+	background: transparent;
+	cursor: pointer;
 }
 
 section {
@@ -356,6 +465,10 @@ h2 {
 
 .active h2 {
 	margin-bottom: 4px;
+}
+
+.shead h2 {
+	margin: 0;
 }
 
 .arow {
@@ -464,6 +577,8 @@ h2 {
 }
 
 .ghead {
+	flex: 1;
+	min-width: 0;
 	display: flex;
 	align-items: center;
 	gap: 12px;
@@ -507,7 +622,7 @@ h2 {
 }
 
 .season {
-	padding: 8px 0 2px;
+	padding: 0;
 	font: 500 10.5px var(--font-mono);
 	letter-spacing: 0.12em;
 	text-transform: uppercase;
@@ -634,7 +749,29 @@ h2 {
 	background: var(--accent);
 }
 
-.box.on :global(.sl-ico) {
+.box.on :global(.sl-ico:first-child) {
 	opacity: 1;
+}
+
+.box :global(.sl-ico) {
+	grid-area: 1 / 1;
+}
+
+.box.part {
+	border-color: var(--accent);
+	background: var(--accent-soft);
+}
+
+.box.part :global(.sl-ico:last-child) {
+	opacity: 1;
+	color: var(--accent-text);
+}
+.wifi {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	margin: 0;
+	font-size: 12.5px;
+	color: var(--fg-subtle);
 }
 </style>

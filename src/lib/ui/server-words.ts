@@ -203,7 +203,7 @@ export const serverWords = (): Words => ({
 		one(count)
 			? i18n.server_restart_note_one({ count, keys })
 			: i18n.server_restart_note_other({ count, keys }),
-	streamSummary: (count, mbps) => i18n.server_stream_summary({ count, mbps }),
+	streamSummary: (video, audio, mbps) => i18n.server_stream_summary({ video, audio, mbps }),
 	mbps: (n) => i18n.server_mbps({ n }),
 	you: (name) => i18n.server_you({ name }),
 	cannotDecode: (kind, codec) => i18n.server_cannot_decode({ kind, codec }),

@@ -1,4 +1,5 @@
 <script lang="ts">
+import { prefs } from "#lib/core/prefs.svelte.ts";
 import { goto } from "#lib/ui/nav.ts";
 import { afterNavigate, beforeNavigate } from "$app/navigation";
 import { page } from "$app/state";
@@ -57,6 +58,8 @@ import {
 	playbackPort,
 	reachable,
 	syncOffline,
+	setWifiOnly,
+	takeLaunchRoute,
 	title as fetchTitle,
 	watchState,
 } from "#platform";
@@ -287,6 +290,10 @@ $effect(() => {
 	hadLaunch = has;
 });
 
+$effect(() => {
+	if (canDownload) setWifiOnly(prefs.wifiOnly).catch(() => {});
+});
+
 onMount(() => {
 	const stops: (() => void)[] = [];
 	if (canDownload) {
@@ -304,14 +311,29 @@ onMount(() => {
 			() => (gone = true),
 		);
 	}
+	const openLaunchRoute = () => {
+		if (canDownload)
+			takeLaunchRoute().then(
+				(path) => {
+					if (path) goto(path);
+				},
+				() => {},
+			);
+	};
+	openLaunchRoute();
 	const onVisible = () => {
-		if (document.visibilityState !== "visible" || onboarding) return;
+		if (document.visibilityState !== "visible") return;
+		openLaunchRoute();
+		if (onboarding) return;
 		loadActivity(ACTIVITY_PORT);
 		if (account.me?.role === "Admin") loadPendingPairs(adminPort);
 	};
 	document.addEventListener("visibilitychange", onVisible);
+	// A tap on the notification while the app is already in front fires no visibilitychange.
+	window.addEventListener("focus", openLaunchRoute);
 	return () => {
 		document.removeEventListener("visibilitychange", onVisible);
+		window.removeEventListener("focus", openLaunchRoute);
 		for (const stop of stops) stop();
 	};
 });

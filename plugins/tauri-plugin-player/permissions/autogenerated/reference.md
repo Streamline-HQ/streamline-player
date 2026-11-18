@@ -21,6 +21,8 @@ Allows controlling the native player and listening to its events
 - `allow-viewport`
 - `allow-subtitleLift`
 - `allow-voice`
+- `allow-requestNotifications`
+- `allow-pendingRoute`
 - `allow-registerListener`
 - `allow-register-listener`
 - `allow-removeListener`
@@ -168,6 +170,32 @@ Denies the pause command without any pre-configured scope.
 <tr>
 <td>
 
+`player:allow-pendingRoute`
+
+</td>
+<td>
+
+Enables the pendingRoute command without any pre-configured scope.
+
+</td>
+</tr>
+
+<tr>
+<td>
+
+`player:deny-pendingRoute`
+
+</td>
+<td>
+
+Denies the pendingRoute command without any pre-configured scope.
+
+</td>
+</tr>
+
+<tr>
+<td>
+
 `player:allow-play`
 
 </td>
@@ -291,6 +319,32 @@ Enables the remove_listener command without any pre-configured scope.
 <td>
 
 Denies the remove_listener command without any pre-configured scope.
+
+</td>
+</tr>
+
+<tr>
+<td>
+
+`player:allow-requestNotifications`
+
+</td>
+<td>
+
+Enables the requestNotifications command without any pre-configured scope.
+
+</td>
+</tr>
+
+<tr>
+<td>
+
+`player:deny-requestNotifications`
+
+</td>
+<td>
+
+Denies the requestNotifications command without any pre-configured scope.
 
 </td>
 </tr>

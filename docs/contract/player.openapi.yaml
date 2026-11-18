@@ -1338,21 +1338,22 @@ components:
       required: [id, kind, at, read]
       properties:
         id: { type: string }
-        kind: { type: string, enum: [episodes, season, movie, upgrade, download, device, server, scan] }
+        kind: { type: string, enum: [episodes, season, movie, upgrade, removed, download, device, server, scan] }
         at: { type: string, description: ISO 8601, UTC }
         read: { type: boolean }
         title:
           type: object
-          description: episodes, season, movie, upgrade, download.
+          description: episodes, season, movie, upgrade, removed, download.
           required: [kind, id]
           properties:
             kind: { type: string, enum: [movies, series] }
             id: { type: integer }
-        season: { type: integer, description: "episodes, season, a download of an episode." }
-        episodes: { type: array, items: { type: integer }, description: "episodes: the numbers added. download: the one episode." }
+        name: { type: string, description: "removed: the title's name, since the title may leave the library with its last file." }
+        season: { type: integer, description: "episodes, season, a download or a removal of an episode." }
+        episodes: { type: array, items: { type: integer }, description: "episodes: the numbers added. download, removed: the one episode." }
         episode_count: { type: integer, description: season. }
         file: { $ref: "#/components/schemas/FileSummary", description: "movie, upgrade: the file now in the library." }
-        previous: { $ref: "#/components/schemas/FileSummary", description: "upgrade: the file it replaced." }
+        previous: { $ref: "#/components/schemas/FileSummary", description: "upgrade: the file it replaced. removed: the file that went." }
         device:
           type: object
           description: "device, and download: the device that made it."

@@ -1,5 +1,6 @@
 import type { PlaybackPort, Session, Tracks } from "#lib/core/playback/port.ts";
 import { reportUnreachable } from "#lib/core/online.svelte.ts";
+import { FORM_FACTOR } from "#lib/platform/target.ts";
 import { decodeHere } from "#lib/core/prefs.svelte.ts";
 import type {
 	AuthMethods,
@@ -199,13 +200,30 @@ export const voice = (language: string) =>
 export const onPlayer = <T = undefined>(event: string, cb: (e: T) => void) =>
 	addPluginListener<T>("player", event, cb).then((h) => () => h.unregister());
 
-/** Only the desktop app downloads; Android and iOS builds have no queue behind these calls. */
-export const canDownload: boolean = !/Android|iPhone|iPad/.test(navigator.userAgent);
+/** Desktop, Android phones and tablets download; iOS and Android TV have no queue behind these calls. */
+export const canDownload: boolean = /Android/.test(navigator.userAgent)
+	? FORM_FACTOR !== "tv"
+	: !/iPhone|iPad/.test(navigator.userAgent);
 export const downloads = () => invoke<DownloadEntry[]>("list_downloads");
 export const onDownloads = (cb: (e: DownloadsEvent) => void): Promise<() => void> =>
 	listen<DownloadsEvent>("downloads", (e) => cb(e.payload));
-export const startDownloads = (items: DownloadRequest[], capabilities: unknown) =>
-	invoke("start_downloads", { items, capabilities });
+export const startDownloads = async (items: DownloadRequest[], capabilities: unknown) => {
+	if (/Android/.test(navigator.userAgent)) {
+		try {
+			await invoke("plugin:player|requestNotifications");
+		} catch {
+			// A refused notification permission must not block the download.
+		}
+	}
+	return invoke("start_downloads", { items, capabilities });
+};
+/** Hands the queue the "Download on Wi-Fi only" setting; it holds transfers on a metered connection. */
+export const setWifiOnly = (on: boolean) => invoke("set_wifi_only", { on });
+/** The route a tapped download notification asked for, once. */
+export const takeLaunchRoute = (): Promise<string | null> =>
+	/Android/.test(navigator.userAgent)
+		? invoke<{ path: string | null }>("plugin:player|pendingRoute").then((r) => r.path)
+		: Promise.resolve(null);
 export const removeDownloads = (keys: string[]) => invoke("remove_downloads", { keys });
 export const retryDownload = (key: string) => invoke("retry_download", { key });
 export const downloadStorage = () => invoke<DownloadStorage>("download_storage");

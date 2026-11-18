@@ -18,6 +18,8 @@ const COMMANDS: &[&str] = &[
     "viewport",
     "subtitleLift",
     "voice",
+    "requestNotifications",
+    "pendingRoute",
     "registerListener",
     "register_listener",
     "removeListener",

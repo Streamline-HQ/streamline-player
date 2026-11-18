@@ -416,6 +416,15 @@ def activity_events():
                 "file": {"resolution": "2160p", "hdr": "HDR10", "audio": "Atmos"},
             },
             {
+                "id": "a12",
+                "kind": "removed",
+                "at": at(4 * hour + 10 * minute),
+                "read": True,
+                "title": {"kind": "movies", "id": 9999},
+                "name": "The Wild Defending Itself",
+                "previous": {"size": 1041976513},
+            },
+            {
                 "id": "a3",
                 "kind": "upgrade",
                 "at": at(5 * hour + 45 * minute),

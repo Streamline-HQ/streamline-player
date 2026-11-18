@@ -461,6 +461,7 @@ onMount(() => {
 					i18n.dl_settings_quality_desc(),
 				)}
 				{@render flag(i18n.dl_settings_pick(), "dlPick", i18n.dl_settings_pick_desc())}
+				{@render flag(i18n.dl_settings_wifi_only(), "wifiOnly")}
 				<PhoneRow
 					label={i18n.dl_settings_storage()}
 					desc={offlineItems === 1

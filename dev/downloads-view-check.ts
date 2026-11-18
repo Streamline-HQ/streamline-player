@@ -43,7 +43,10 @@ const w: Words = {
 	preparing: (n) => `Preparing on the server · ${n}%`,
 	queued: (n) => `Queued · #${n}`,
 	waiting: "Waiting for the server",
+	waitingWifi: "Waiting for Wi-Fi",
 	queuedShort: "Queued",
+	of: (got, total) => `${got} of ${total}`,
+	wifi: "",
 	cause: (c) =>
 		({
 			prepare_failed: "The server couldn’t prepare it",

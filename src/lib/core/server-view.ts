@@ -303,7 +303,7 @@ export type Words = {
 	changeCount(n: number): string;
 	changesWaiting(n: number): string;
 	restartNote(n: number, keys: string): string;
-	streamSummary(transcoding: number, mbps: string): string;
+	streamSummary(video: number, audio: number, mbps: string): string;
 	mbps(n: string): string;
 	you(name: string): string;
 	cannotDecode(kind: string, codec: string): string;
@@ -505,9 +505,12 @@ export function sections(
 			]
 		: [];
 
-	const nTrans = d.streams.filter((x) => x.mode === "transcode").length;
+	const nVideo = d.streams.filter((x) => x.mode === "transcode").length;
+	const nAudio = d.streams.filter((x) => x.mode === "audio").length;
 	const mbps = (d.streams.reduce((a, x) => a + x.bitrate, 0) / 1e6).toFixed(1);
-	const streamSum = d.streams.length ? w.streamSummary(nTrans, w.mbps(mbps)) : w.t("tile_nobody");
+	const streamSum = d.streams.length
+		? w.streamSummary(nVideo, nAudio, w.mbps(mbps))
+		: w.t("tile_nobody");
 
 	const streamRows: Row[] = d.streams.map((x) => {
 		const title = find(x.title.kind, x.title.id) ?? null;

@@ -136,6 +136,7 @@ export type ActivityKind =
 	| "season"
 	| "movie"
 	| "upgrade"
+	| "removed"
 	| "download"
 	| "device"
 	| "server"
@@ -147,6 +148,8 @@ export type ActivityEvent = {
 	at: string;
 	read: boolean;
 	title?: { kind: Kind; id: number };
+	/** A removed title's name: it may have left the library with its last file. */
+	name?: string;
 	season?: number;
 	/** The numbers added; a download's is the one episode. */
 	episodes?: number[];
@@ -286,7 +289,7 @@ export type DownloadJob = {
 };
 
 export type DownloadState = "queued" | "preparing" | "downloading" | "waiting" | "failed" | "done";
-export type DownloadError = "prepare_failed" | "no_space" | "gone";
+export type DownloadError = "prepare_failed" | "no_space" | "gone" | "wifi";
 export type DownloadEntry = {
 	/** "movies:3" or "series:1:2:4": kind, title id, season, episode. */
 	key: string;
