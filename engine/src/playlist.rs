@@ -24,16 +24,26 @@ pub fn boundaries(plan: &Plan, a: &Analysis) -> Vec<f64> {
             out
         }
         VideoAction::Copy { .. } => vec![0.0],
+        // The encoder counts its six seconds from the video's first frame, which the output
+        // keeps at its place after the file's earliest stream.
         VideoAction::Transcode { .. } => {
+            let lead = video_start(plan, a) - container_start(a);
             let mut out = vec![0.0];
             let mut n = 1.0;
-            while n * TRANSCODE_SEGMENT_SECS < a.duration {
-                out.push(n * TRANSCODE_SEGMENT_SECS);
+            while lead + n * TRANSCODE_SEGMENT_SECS < a.duration {
+                out.push(round_micros(lead + n * TRANSCODE_SEGMENT_SECS));
                 n += 1.0;
             }
             out
         }
     }
+}
+
+fn video_start(plan: &Plan, a: &Analysis) -> f64 {
+    a.video
+        .iter()
+        .find(|v| v.index == plan.video_index)
+        .map_or_else(|| container_start(a), |v| v.start_time)
 }
 
 /// ffmpeg 9.0.2's fftools/ffmpeg_demux.c pulls an input `-ss` back by 3/23 s ("dts_heuristic")
@@ -74,7 +84,7 @@ pub fn landing_pts(a: &Analysis, seek: f64) -> f64 {
 /// starts at the file's earliest stream. A copy run starts on the keyframe the demuxer seeks to,
 /// so the target makes up for ffmpeg's pull-back and lands on segment `i`'s keyframe whatever the
 /// GOP length: Matroska and MP4 take the last keyframe at or before the target pts, MPEG-TS the
-/// first whose dts is at or after it. A transcode's bounds count from the video's first frame.
+/// first whose dts is at or after it.
 pub fn seek_time(plan: &Plan, a: &Analysis, bounds: &[f64], i: u32) -> f64 {
     let container_start = container_start(a);
     let pull_back = if pulls_seek_back(a) {
@@ -83,14 +93,7 @@ pub fn seek_time(plan: &Plan, a: &Analysis, bounds: &[f64], i: u32) -> f64 {
         0.0
     };
     match plan.video {
-        VideoAction::Transcode { .. } => {
-            let video_start = a
-                .video
-                .iter()
-                .find(|v| v.index == plan.video_index)
-                .map_or(container_start, |v| v.start_time);
-            round_micros(bounds[i as usize] + video_start - container_start)
-        }
+        VideoAction::Transcode { .. } => bounds[i as usize],
         VideoAction::Copy { .. } => {
             let Some(key) = a.keyframes.get(i as usize) else {
                 return bounds[i as usize];

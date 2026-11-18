@@ -1151,3 +1151,26 @@ async fn decisions_answer_for_a_missing_file_and_refuse_too_many_options() {
     assert_eq!(status, StatusCode::BAD_REQUEST, "{v}");
     assert_eq!(v["code"], "invalid_request");
 }
+
+#[tokio::test]
+async fn transcode_playlist_keeps_the_time_of_a_late_video() {
+    if !have_ffmpeg() {
+        return;
+    }
+    let e = env().await;
+    let src = e.root.join("late.mkv");
+    make_late_video_mkv(&src);
+    let sid = id(44);
+    let extra = json!({"max_bitrate": 2_000_000});
+    e.start(&sid, &src, caps_json("h264", "mp4"), extra).await;
+    let bounds = e.bounds(&sid).await;
+    let init = e.hls(&sid, "init.mp4").await;
+    for i in [1, 3] {
+        let pts = first_video_pts(&e, &sid, &init, i).await;
+        assert!(
+            (pts - bounds[i]).abs() < 0.001,
+            "seg_{i}: the playlist says {}, its video starts at {pts}",
+            bounds[i]
+        );
+    }
+}
