@@ -47,6 +47,9 @@ import type { Decision } from "#lib/core/types.ts";
 import { m as i18n } from "#lib/paraglide/messages.js";
 
 const HEARTBEAT_MS = 10_000;
+// The tracks refine the pick; the film starts without them when the server is slow to read the file.
+const TRACKS_WAIT_MS = 4000;
+const TRACKS_RETRY_MS = 10_000;
 const MBIT = 1_000_000;
 const STALL_CHECK_MS = 4000;
 const STALL_GUESS_MS = 12_000;
@@ -103,6 +106,7 @@ export class Playback {
 	#statsTimer: ReturnType<typeof setInterval> | undefined;
 	#startId = 0;
 	#gone = false;
+	#tracksTimer: ReturnType<typeof setTimeout> | undefined;
 	#paused = false;
 	#lastRecovery = 0;
 	#subTouched = false;
@@ -265,6 +269,7 @@ export class Playback {
 			clearInterval(beat);
 			clearInterval(this.#retryTimer);
 			clearInterval(this.#statsTimer);
+			clearTimeout(this.#tracksTimer);
 			for (const l of listeners) l.then((off) => off());
 			this.#startId++;
 			this.#gone = true;
@@ -523,7 +528,10 @@ export class Playback {
 	}
 
 	async refreshTracks() {
+		clearTimeout(this.#tracksTimer);
 		this.tracks = await this.#port.mediaTracks(this.#item.mediaId).catch(() => this.tracks);
+		if (this.#gone) return;
+		if (!this.tracks) this.#tracksTimer = setTimeout(() => this.refreshTracks(), TRACKS_RETRY_MS);
 		if (this.tracks && !this.#picked) {
 			this.#picked = true;
 			this.audioPick =
@@ -533,6 +541,11 @@ export class Playback {
 					audioLang: prefs.audioLang,
 					chosen: this.#item.choice?.audio,
 				})?.index ?? null;
+			// The film started on the file's first audio while the tracks were still coming.
+			if (this.session && this.audioPick !== (this.tracks.audio[0]?.index ?? null)) {
+				this.start();
+				return;
+			}
 		}
 		this.#autoForced();
 		this.#watch();
@@ -613,7 +626,10 @@ export class Playback {
 			if (!this.#picked)
 				this.quality = presetOf(this.network === "home" ? prefs.qHome : prefs.qAway);
 			const capabilities = await this.#port.capabilities();
-			await this.refreshTracks();
+			await Promise.race([
+				this.refreshTracks(),
+				new Promise((done) => setTimeout(done, TRACKS_WAIT_MS)),
+			]);
 			if (id !== this.#startId) return;
 			if (this.autoPick === undefined)
 				this.autoPick = autoCap(
@@ -621,15 +637,17 @@ export class Playback {
 					this.preview && this.preview.bitRate / MBIT,
 					this.originalPlays,
 				);
-			const started = await this.#port.startSession(
-				this.#item.mediaId,
-				capabilities,
-				at,
-				this.#sessionTracks(),
-			);
+			const asked = this.#sessionTracks();
+			const started = await this.#port.startSession(this.#item.mediaId, capabilities, at, asked);
 			// The viewer left while the server was still answering.
 			if (id !== this.#startId) {
 				this.#port.stopSession(started.session_id).catch(() => {});
+				return;
+			}
+			// The late tracks brought another audio pick while the server was answering.
+			if (asked.audio_index !== this.audioPick) {
+				this.#port.stopSession(started.session_id).catch(() => {});
+				await this.start(at);
 				return;
 			}
 			this.session = started;

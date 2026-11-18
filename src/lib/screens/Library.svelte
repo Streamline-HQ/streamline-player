@@ -1,6 +1,6 @@
 <script lang="ts">
 import { isTablet } from "#lib/platform/form-factor.svelte.ts";
-import { isNew } from "#lib/core/browse.ts";
+import { isNew, years } from "#lib/core/browse.ts";
 import { addedText, badges, sizeText } from "#lib/core/format.ts";
 import { dl } from "#lib/core/downloads.svelte.ts";
 import { lib, loadLibrary, loadSeasons } from "#lib/core/library.svelte.ts";
@@ -123,7 +123,6 @@ function seeAll(r: Rail) {
 	document.querySelector(".content")?.scrollTo({ top: 0 });
 }
 
-const years = (t: Title) => t.first_aired ?? String(t.year);
 const sub = (t: Title) => {
 	if (kind === "series")
 		return [

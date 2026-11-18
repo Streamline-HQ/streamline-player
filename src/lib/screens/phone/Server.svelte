@@ -1,4 +1,6 @@
 <script lang="ts">
+import { pushState, replaceState } from "$app/navigation";
+import { page } from "$app/state";
 import { admin } from "#lib/core/admin.svelte.ts";
 import type { Section, SectionKey, Tone } from "#lib/core/server-view.ts";
 import { m as i18n } from "#lib/paraglide/messages.js";
@@ -33,14 +35,17 @@ let {
 
 const getScroll = useScroll();
 
-let view = $state<SectionKey | null>(null);
+// The open section rides the history entry, so the system back gesture returns to the list.
+const view = $derived((page.state as { section?: SectionKey }).section ?? null);
 const index = $derived(secs.findIndex((s) => s.key === view));
 const current = $derived(index >= 0 ? secs[index] : null);
 const previous = $derived(index > 0 ? secs[index - 1] : null);
 const next = $derived(index >= 0 ? (secs[index + 1] ?? null) : null);
 
 function open(key: SectionKey | null) {
-	view = key;
+	if (key === null) history.back();
+	else if (view) replaceState("", { section: key });
+	else pushState("", { section: key });
 	getScroll?.()?.scrollTo({ top: 0 });
 }
 

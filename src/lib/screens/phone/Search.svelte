@@ -2,6 +2,7 @@
 import "#lib/ui/card.css";
 import { lib, loadLibrary } from "#lib/core/library.svelte.ts";
 import { loadErrorText } from "#lib/core/load-error.ts";
+import { years } from "#lib/core/browse.ts";
 import { runtime } from "#lib/core/format.ts";
 import {
 	genreTiles,
@@ -76,7 +77,6 @@ const hits = $derived(searchTitles(all, q));
 const tiles = $derived(genreTiles(all).slice(0, GENRE_TILES));
 const empty = $derived(lib.loaded && all.length === 0);
 
-const years = (t: Hit) => t.first_aired ?? String(t.year);
 const seasons = (t: Hit) => {
 	const n = t.total_seasons ?? t.seasons?.length ?? 0;
 	return n === 1 ? i18n.common_seasons_one({ count: n }) : i18n.common_seasons_other({ count: n });

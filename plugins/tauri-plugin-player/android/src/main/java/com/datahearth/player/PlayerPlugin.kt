@@ -217,6 +217,7 @@ class PlayerPlugin(private val activity: Activity) : Plugin(activity) {
 
     private fun attach(webView: WebView) {
         webView.setBackgroundColor(Color.TRANSPARENT)
+        fillScreen(false)
 
         val content = webView.parent as? ViewGroup
             ?: activity.findViewById(android.R.id.content)
@@ -452,13 +453,13 @@ class PlayerPlugin(private val activity: Activity) : Plugin(activity) {
         }
     }
 
-    /** A hand-held screen hides its bars for the film, and a phone turns to it. */
+    /** A hand-held screen hides its bars for the film; a phone turns to it and stands upright everywhere else. */
     private fun fillScreen(on: Boolean) {
         if (activity.packageManager.hasSystemFeature(PackageManager.FEATURE_LEANBACK)) return
         if (activity.resources.configuration.smallestScreenWidthDp < 600) {
             activity.requestedOrientation =
                 if (on) ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE
-                else ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED
+                else ActivityInfo.SCREEN_ORIENTATION_PORTRAIT
         }
         val bars = WindowCompat.getInsetsController(activity.window, activity.window.decorView)
         if (on) {

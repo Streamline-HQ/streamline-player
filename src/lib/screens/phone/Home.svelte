@@ -12,6 +12,7 @@ import {
 	topGenre,
 } from "#lib/core/browse.ts";
 import { dl } from "#lib/core/downloads.svelte.ts";
+import { years } from "#lib/core/browse.ts";
 import { badges, left, runtime, stillPos } from "#lib/core/format.ts";
 import { lib, loadLibrary } from "#lib/core/library.svelte.ts";
 import { loadErrorText } from "#lib/core/load-error.ts";
@@ -79,7 +80,6 @@ const arrivedEpisodes = (id: number) =>
 
 const seasons = (n: number) =>
 	n === 1 ? i18n.common_seasons_one({ count: n }) : i18n.common_seasons_other({ count: n });
-const years = (t: Title) => t.first_aired ?? String(t.year);
 const resLabel = (t: Title) => badges(t.file_summary)[0];
 const movieSub = (t: Title) => [t.year, resLabel(t)].filter(Boolean).join(" · ");
 const showSub = (t: Title) =>

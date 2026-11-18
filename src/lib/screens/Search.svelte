@@ -2,6 +2,7 @@
 import { isTablet } from "#lib/platform/form-factor.svelte.ts";
 import { loadErrorText } from "#lib/core/load-error.ts";
 import { lib, loadLibrary } from "#lib/core/library.svelte.ts";
+import { stars, years } from "#lib/core/browse.ts";
 import { runtime } from "#lib/core/format.ts";
 import { getLocale } from "#lib/paraglide/runtime.js";
 import {
@@ -96,7 +97,6 @@ const tiles = $derived(genreTiles(all));
 const empty = $derived(lib.loaded && all.length === 0);
 
 const rating = (n: number) => n.toLocaleString(getLocale());
-const years = (t: Hit) => t.first_aired ?? String(t.year);
 const seasons = (t: Hit) => {
 	const n = t.total_seasons ?? t.seasons?.length ?? 0;
 	return n === 1 ? i18n.common_seasons_one({ count: n }) : i18n.common_seasons_other({ count: n });
@@ -107,12 +107,12 @@ const sub = (t: Hit) =>
 		: [t.year, t.runtime ? runtime(t.runtime) : ""].filter(Boolean).join(" · ");
 const meta = (t: Hit) =>
 	(t.kind === "series"
-		? [years(t), t.network, `★ ${rating(t.rating)}`]
+		? [years(t), t.network, stars(t.rating, rating(t.rating))]
 		: [
 				t.year,
 				t.runtime ? runtime(t.runtime) : "",
 				t.file_summary?.resolution,
-				`★ ${rating(t.rating)}`,
+				stars(t.rating, rating(t.rating)),
 			]
 	)
 		.filter(Boolean)

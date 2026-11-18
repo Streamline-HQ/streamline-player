@@ -90,8 +90,43 @@ async fn kept_picture(app: &AppHandle, path: &str) -> Result<Vec<u8>, String> {
         }
         kept.entry(path.to_owned()).or_default().clone()
     };
-    let api = app.state::<Api>();
-    cell.get_or_try_init(|| api.picture(path)).await.cloned()
+    cell.get_or_try_init(|| stored_picture(app, path))
+        .await
+        .cloned()
+}
+
+/// How long a stored picture is used without asking again: the `max-age` the server sends with it.
+#[cfg(target_os = "android")]
+const PICTURE_FRESH: std::time::Duration = std::time::Duration::from_secs(86_400);
+
+/// Pictures outlive the app on disk, so a screen seen before draws at once; a stale one still
+/// serves when the server cannot be reached.
+#[cfg(target_os = "android")]
+async fn stored_picture(app: &AppHandle, path: &str) -> Result<Vec<u8>, String> {
+    let file = app.path().app_cache_dir().map(|dir| {
+        dir.join("pictures")
+            .join(path.trim_start_matches('/').replace('/', "_"))
+    });
+    let stored = file.as_ref().ok().and_then(|f| {
+        let age = std::fs::metadata(f).ok()?.modified().ok()?.elapsed().ok()?;
+        Some((std::fs::read(f).ok()?, age))
+    });
+    if let Some((bytes, age)) = &stored {
+        if *age < PICTURE_FRESH {
+            return Ok(bytes.clone());
+        }
+    }
+    match app.state::<Api>().picture(path).await {
+        Ok(bytes) => {
+            if let Ok(f) = &file {
+                // A picture that cannot be stored is only fetched again next time.
+                let _ = f.parent().map(std::fs::create_dir_all);
+                let _ = std::fs::write(f, &bytes);
+            }
+            Ok(bytes)
+        }
+        Err(e) => stored.map(|(bytes, _)| bytes).ok_or(e),
+    }
 }
 
 #[cfg_attr(not(target_os = "android"), allow(unused_variables))]

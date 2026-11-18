@@ -1,5 +1,5 @@
 <script lang="ts">
-import { isNew } from "#lib/core/browse.ts";
+import { isNew, years } from "#lib/core/browse.ts";
 import { addedText, badges } from "#lib/core/format.ts";
 import { dl } from "#lib/core/downloads.svelte.ts";
 import { lib, loadLibrary, loadSeasons } from "#lib/core/library.svelte.ts";
@@ -91,7 +91,6 @@ function seeAll(r: Rail) {
 	document.querySelector(".content")?.scrollTo({ top: 0 });
 }
 
-const years = (t: Title) => t.first_aired ?? String(t.year);
 const runtime = (m: number) =>
 	i18n.common_runtime_hm({ h: Math.floor(m / 60), m: String(m % 60).padStart(2, "0") });
 const railSub = (t: Title) => {

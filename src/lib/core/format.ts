@@ -1,3 +1,4 @@
+import { stars } from "#lib/core/browse.ts";
 import { m as i18n } from "#lib/paraglide/messages.js";
 import { getLocale } from "#lib/paraglide/runtime.js";
 import { dateLocale } from "#lib/core/date-locale.ts";
@@ -72,13 +73,15 @@ export function badges(q?: FileSummary) {
 }
 
 export const meta = (kind: Kind, t: Title) => {
-	const stars = `★ ${t.rating.toLocaleString(getLocale())}`;
+	const rated = stars(t.rating, t.rating.toLocaleString(getLocale()));
 	if (kind !== "series")
-		return [t.year, runtime(t.runtime ?? 0), t.certification, stars].filter(Boolean).join(" · ");
+		return [t.year, runtime(t.runtime ?? 0), t.certification, rated].filter(Boolean).join(" · ");
 	const count = t.total_seasons ?? t.seasons?.length ?? 0;
 	const seasons =
 		count === 1 ? i18n.common_seasons_one({ count }) : i18n.common_seasons_other({ count });
-	return `${t.first_aired ? `${t.first_aired.slice(0, 4)}\u2013` : t.year} · ${seasons} · ${stars}`;
+	return [t.first_aired ? `${t.first_aired.slice(0, 4)}\u2013` : t.year, seasons, rated]
+		.filter(Boolean)
+		.join(" · ");
 };
 
 /** Episodes in play order, each with its season number. */

@@ -98,23 +98,25 @@ export function topGenre(titles: Title[]): string | null {
 export const watchedTitle = (t: Title, kind: Kind, watch: Watch[]) =>
 	watchInfo(t, kind, watch).watched;
 
+/** A series' years. The contract is a span ("2022–"); a server that sends the first air date gets its year. */
+export const years = (t: { first_aired?: string; year: number }) =>
+	t.first_aired?.replace(/^(\d{4})-\d{2}-\d{2}.*$/, "$1") ?? String(t.year);
+
+/** The rating as printed on a meta line; a title nobody rated has none. */
+export const stars = (rating: number, text: string) => (rating > 0 ? `★ ${text}` : "");
+
 export function metaLine(t: Title, kind: Kind, f: MetaFormat): string[] {
-	const stars = `★ ${f.rating(t.rating)}`;
+	const rated = stars(t.rating, f.rating(t.rating));
 	if (kind === "movies") {
 		return [
 			String(t.year),
 			t.runtime ? f.runtime(t.runtime) : "",
 			t.certification ?? "",
-			stars,
+			rated,
 		].filter(Boolean);
 	}
 	const count = t.total_seasons ?? t.seasons?.length ?? 0;
-	return [
-		t.first_aired ?? String(t.year),
-		count ? f.seasons(count) : "",
-		t.network ?? "",
-		stars,
-	].filter(Boolean);
+	return [years(t), count ? f.seasons(count) : "", t.network ?? "", rated].filter(Boolean);
 }
 
 export function arrivalDay(date: string, now: Date): "today" | "yesterday" | null {

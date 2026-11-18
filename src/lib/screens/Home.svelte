@@ -11,6 +11,7 @@ import {
 	recentlyAdded,
 	topGenre,
 } from "#lib/core/browse.ts";
+import { years } from "#lib/core/browse.ts";
 import { badges, left, runtime, stillPos } from "#lib/core/format.ts";
 import { dl } from "#lib/core/downloads.svelte.ts";
 import { lib, loadLibrary } from "#lib/core/library.svelte.ts";
@@ -73,7 +74,6 @@ const fmt = {
 	rating: (n: number) => n.toLocaleString(getLocale()),
 };
 const resLabel = (t: Title) => badges(t.file_summary)[0];
-const years = (t: Title) => t.first_aired ?? String(t.year);
 
 const playResume = (r: (typeof resume)[number]) => goto(playUrl(r.kind, r.id, r.episodeId, true));
 const open = (kind: Kind, id: number, season?: number) =>
