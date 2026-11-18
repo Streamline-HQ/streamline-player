@@ -1211,8 +1211,9 @@ const labels = {
 	pointer-events: none;
 	background: linear-gradient(
 		180deg,
-		rgba(0, 0, 0, 0.62) 0%,
-		rgba(0, 0, 0, 0) 22%,
+		rgba(0, 0, 0, 0.8) 0%,
+		rgba(0, 0, 0, 0.55) 10%,
+		rgba(0, 0, 0, 0) 26%,
 		rgba(0, 0, 0, 0) 62%,
 		var(--player-scrim) 100%
 	);

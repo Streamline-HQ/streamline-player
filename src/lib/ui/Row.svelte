@@ -107,7 +107,9 @@ h2 {
 .note {
 	margin-right: 6px;
 	font: 400 12px var(--font-mono);
-	color: var(--fg-subtle);
+	/* Home's first row sits on the hero's picture: the count needs more than the subtle grey. */
+	color: var(--fg-muted);
+	text-shadow: 0 1px 6px rgba(0, 0, 0, 0.7);
 	white-space: nowrap;
 }
 
@@ -119,18 +121,18 @@ h2 {
 	padding: 0;
 	border-radius: 50%;
 	border: 1px solid var(--border-strong);
-	background: transparent;
-	color: var(--fg-muted);
+	background: var(--player-glass);
+	color: var(--fg);
 	cursor: pointer;
 }
 
 .arrow:disabled {
-	opacity: 0.35;
+	opacity: 0.5;
 	cursor: default;
 }
 
 .arrow:hover:not(:disabled) {
-	background: color-mix(in srgb, var(--fg) 8%, transparent);
+	background: color-mix(in srgb, var(--player-glass-strong), white 12%);
 	color: var(--fg);
 }
 

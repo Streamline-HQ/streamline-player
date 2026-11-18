@@ -53,7 +53,10 @@ function at(e: PointerEvent) {
 			if ((e.currentTarget as HTMLElement).hasPointerCapture(e.pointerId)) at(e);
 		}}
 	>
-		<div class="rail"><div class="level" style:width="{shown}%"></div></div>
+		<div class="rail">
+			<div class="level" style:width="{shown}%"></div>
+			<div class="dot" style:left="{shown}%"></div>
+		</div>
 	</div>
 </div>
 
@@ -104,6 +107,16 @@ function at(e: PointerEvent) {
 	top: 0;
 	bottom: 0;
 	border-radius: 2px;
+	background: var(--player-ink);
+}
+
+.dot {
+	position: absolute;
+	top: 50%;
+	width: 12px;
+	height: 12px;
+	margin: -6px 0 0 -6px;
+	border-radius: 50%;
 	background: var(--player-ink);
 }
 </style>

@@ -417,7 +417,7 @@ const heads: { label: () => string; sort?: Sort; end?: boolean }[] = [
 						>
 							{view.genre ?? i18n.library_genre_all()}
 							<span class="chev" class:open={genreMenu}
-								><Icon name="chevron-down" size={13} stroke={2} /></span
+								><Icon name="chevron-down" size={14} stroke={2} /></span
 							>
 						</button>
 						{#if genrePanel.mounted}
@@ -661,17 +661,16 @@ h1 {
 }
 
 .genre-btn {
-	height: 32px;
+	height: 38px;
 	display: flex;
 	align-items: center;
-	gap: 7px;
-	padding: 0 10px 0 12px;
-	border-radius: var(--radius-full);
+	gap: 8px;
+	padding: 0 12px;
+	border-radius: var(--radius-md);
 	border: 1px solid var(--border-strong);
-	background: transparent;
+	background: var(--surface);
 	color: var(--fg-muted);
 	font-size: 13px;
-	font-weight: 500;
 	white-space: nowrap;
 	cursor: pointer;
 	transition:
@@ -681,6 +680,7 @@ h1 {
 }
 
 .genre-btn:hover {
+	background: rgba(255, 255, 255, 0.08);
 	color: var(--fg);
 }
 
@@ -702,7 +702,7 @@ h1 {
 .genre-panel {
 	position: absolute;
 	left: 0;
-	top: 40px;
+	top: 44px;
 	z-index: 6;
 	transform-origin: top left;
 	opacity: 0;

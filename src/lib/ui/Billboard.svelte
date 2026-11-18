@@ -296,7 +296,7 @@ p {
 	padding: 0 18px;
 	border: 1px solid rgba(255, 255, 255, 0.16);
 	border-radius: var(--radius-md);
-	background: var(--player-chip);
+	background: var(--player-glass-strong);
 	backdrop-filter: blur(12px);
 	-webkit-backdrop-filter: blur(12px);
 	color: var(--player-ink);
@@ -306,7 +306,7 @@ p {
 }
 
 .glass:hover {
-	background: rgba(255, 255, 255, 0.14);
+	background: color-mix(in srgb, var(--player-glass-strong), white 12%);
 }
 
 .glass :global(.sl-ico) {

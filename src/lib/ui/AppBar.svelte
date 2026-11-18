@@ -233,8 +233,11 @@ nav {
 	gap: 8px;
 	border: 1px solid var(--border);
 	border-radius: var(--radius-md);
-	background: color-mix(in srgb, var(--bg-card) 40%, transparent);
-	color: var(--fg-subtle);
+	/* Near solid: over a bright hero a see-through field leaves its label unreadable. */
+	background: color-mix(in srgb, var(--bg-card) 88%, transparent);
+	backdrop-filter: blur(12px);
+	-webkit-backdrop-filter: blur(12px);
+	color: var(--fg-muted);
 	font-size: 13px;
 	white-space: nowrap;
 	overflow: hidden;
@@ -242,7 +245,7 @@ nav {
 }
 
 .sl-searchbtn:hover {
-	background: color-mix(in srgb, var(--bg-hover) 55%, transparent);
+	background: color-mix(in srgb, var(--bg-hover) 92%, transparent);
 	color: var(--fg);
 }
 

@@ -245,7 +245,7 @@ const bell = $derived(bellLabel(unread(), activityWords()));
 const modifier = mac ? "⌘" : "Ctrl";
 
 const tabs = $derived([
-	{ id: "home", label: i18n.nav_home(), on: route === "/" || route === "/admin" },
+	{ id: "home", label: i18n.nav_home(), on: route === "/" },
 	{ id: "movies", label: i18n.nav_movies(), on: route === "/library/[kind]" && kind !== "series" },
 	{ id: "shows", label: i18n.nav_shows(), on: route === "/library/[kind]" && kind === "series" },
 ]);
