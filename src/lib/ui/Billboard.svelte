@@ -182,12 +182,20 @@ const frameStyle = (i: number) => {
 .fade {
 	position: absolute;
 	inset: 0;
-	background: linear-gradient(
-		0deg,
-		var(--bg-deep) 0%,
-		color-mix(in srgb, var(--bg-deep) 60%, transparent) 22%,
-		transparent 48%
-	);
+	/* The second layer darkens the side the text sits on: a bright backdrop drowned the meta line and the overview. */
+	background:
+		linear-gradient(
+			0deg,
+			var(--bg-deep) 0%,
+			color-mix(in srgb, var(--bg-deep) 60%, transparent) 22%,
+			transparent 48%
+		),
+		linear-gradient(
+			90deg,
+			color-mix(in srgb, var(--bg-deep) 82%, transparent) 0%,
+			color-mix(in srgb, var(--bg-deep) 58%, transparent) 34%,
+			transparent 64%
+		);
 }
 
 .body {
