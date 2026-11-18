@@ -337,6 +337,8 @@
 	"library_watch_state": "Watch state",
 	"library_watched": "Watched",
 	"nav_home": "Home",
+	"nav_library": "Library",
+	"nav_main": "Main",
 	"nav_movies": "Movies",
 	"nav_search": "Search",
 	"nav_settings": "Settings",

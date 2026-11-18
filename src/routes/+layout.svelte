@@ -9,8 +9,10 @@ import { page } from "$app/state";
 import { appPath, goto } from "#lib/ui/nav.ts";
 import { toast } from "#lib/core/toast.svelte.ts";
 import { m as i18n } from "#lib/paraglide/messages.js";
+import { isPhone } from "#lib/platform/form-factor.svelte.ts";
 import { FORM_FACTOR, IS_WEB } from "#lib/platform/target.ts";
 import DesktopShell from "#lib/shells/desktop/Shell.svelte";
+import PhoneShell from "#lib/shells/phone/Shell.svelte";
 import TvShell from "#lib/shells/tv/Shell.svelte";
 import { authState, init, onSignedOut } from "#platform";
 import { onMount } from "svelte";
@@ -65,6 +67,8 @@ onMount(() => {
 
 {#if FORM_FACTOR === "tv"}
 	<TvShell>{@render content()}</TvShell>
+{:else if isPhone()}
+	<PhoneShell>{@render content()}</PhoneShell>
 {:else}
 	<DesktopShell web={IS_WEB}>{@render content()}</DesktopShell>
 {/if}
