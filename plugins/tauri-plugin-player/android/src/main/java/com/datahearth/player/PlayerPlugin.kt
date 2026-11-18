@@ -4,6 +4,8 @@ import android.app.Activity
 import android.content.ActivityNotFoundException
 import android.content.Context
 import android.content.Intent
+import android.content.pm.ActivityInfo
+import android.content.pm.PackageManager
 import android.graphics.Color
 import android.graphics.Rect
 import android.os.Handler
@@ -16,6 +18,9 @@ import android.view.SurfaceView
 import android.view.ViewGroup
 import android.view.Window
 import android.webkit.WebView
+import androidx.core.view.WindowCompat
+import androidx.core.view.WindowInsetsCompat
+import androidx.core.view.WindowInsetsControllerCompat
 import java.util.concurrent.atomic.AtomicLong
 import android.widget.FrameLayout
 import androidx.activity.OnBackPressedCallback
@@ -54,6 +59,11 @@ import app.tauri.annotation.TauriPlugin
 import app.tauri.plugin.Invoke
 import app.tauri.plugin.JSObject
 import app.tauri.plugin.Plugin
+
+@InvokeArg
+class ViewportArgs {
+    var full: Boolean = false
+}
 
 @InvokeArg
 class LoadArgs {
@@ -429,6 +439,34 @@ class PlayerPlugin(private val activity: Activity) : Plugin(activity) {
     fun stop(invoke: Invoke) = onPlayer(invoke) {
         it.stop()
         it.clearMediaItems()
+        fillScreen(false)
+    }
+
+    /** The page says whether the player fills the screen or sits in a corner of the app. */
+    @Command
+    fun viewport(invoke: Invoke) {
+        val full = invoke.parseArgs(ViewportArgs::class.java).full
+        main.post {
+            fillScreen(full)
+            invoke.resolve()
+        }
+    }
+
+    /** A hand-held screen hides its bars for the film, and a phone turns to it. */
+    private fun fillScreen(on: Boolean) {
+        if (activity.packageManager.hasSystemFeature(PackageManager.FEATURE_LEANBACK)) return
+        if (activity.resources.configuration.smallestScreenWidthDp < 600) {
+            activity.requestedOrientation =
+                if (on) ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE
+                else ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED
+        }
+        val bars = WindowCompat.getInsetsController(activity.window, activity.window.decorView)
+        if (on) {
+            bars.systemBarsBehavior = WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
+            bars.hide(WindowInsetsCompat.Type.systemBars())
+        } else {
+            bars.show(WindowInsetsCompat.Type.systemBars())
+        }
     }
 
     /** Android's own listening dialog: it needs no microphone permission of ours. */
@@ -500,6 +538,7 @@ class PlayerPlugin(private val activity: Activity) : Plugin(activity) {
     fun restoreDisplay(invoke: Invoke) {
         main.post {
             displaySwitched = false
+            fillScreen(false)
             activity.window.attributes = activity.window.attributes.apply { preferredDisplayModeId = 0 }
             invoke.resolve()
         }

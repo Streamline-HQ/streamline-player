@@ -965,7 +965,7 @@ const labels = $derived({
 	display: flex;
 	align-items: center;
 	gap: 8px;
-	padding: 14px 56px 0 60px;
+	padding: calc(14px + env(safe-area-inset-top)) 56px 0 60px;
 }
 
 .top.live,
@@ -1073,7 +1073,7 @@ const labels = $derived({
 	left: 0;
 	right: 0;
 	bottom: 0;
-	padding: 0 60px 16px;
+	padding: 0 60px calc(16px + env(safe-area-inset-bottom));
 	display: flex;
 	flex-direction: column;
 	gap: 2px;

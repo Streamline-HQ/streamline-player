@@ -247,13 +247,16 @@ pub async fn pair_start(app: AppHandle, api: tauri::State<'_, Api>) -> Result<Va
 
 /// Opens a web page in the system browser; anything but http(s) is refused.
 #[tauri::command]
-pub async fn open_external(url: String) -> Result<(), String> {
+pub async fn open_external(app: AppHandle, url: String) -> Result<(), String> {
+    use tauri_plugin_opener::OpenerExt;
     let parsed = reqwest::Url::parse(&url).map_err(|e| e.to_string())?;
     if !matches!(parsed.scheme(), "http" | "https") {
         return Err(format!("not a web address: {url}"));
     }
     blocking(move || {
-        tauri_plugin_opener::open_url(parsed.as_str(), None::<&str>).map_err(|e| e.to_string())
+        app.opener()
+            .open_url(parsed.as_str(), None::<&str>)
+            .map_err(|e| e.to_string())
     })
     .await
 }
@@ -360,7 +363,14 @@ pub async fn sign_in(app: AppHandle, api: tauri::State<'_, Api>) -> Result<Value
         let _ = older.send(());
     }
     let device = json!({ "client_id": client_id(&app), "name": name, "platform": platform });
-    let key = sign_in_flow(&api.http, &server, device, open_external, cancelled).await?;
+    let key = sign_in_flow(
+        &api.http,
+        &server,
+        device,
+        |url| open_external(app.clone(), url),
+        cancelled,
+    )
+    .await?;
     let stored = {
         let (app, key) = (app.clone(), key.clone());
         blocking(move || store_key(&app, &key)).await

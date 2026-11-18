@@ -195,6 +195,10 @@ const enter = (node: Element, o?: { duration?: number }) => (sheet ? slide(node,
 	border-bottom: 1px solid var(--border);
 }
 
+.menu.sheet .head {
+	padding-top: calc(8px + env(safe-area-inset-top));
+}
+
 .title {
 	height: 40px;
 	display: flex;

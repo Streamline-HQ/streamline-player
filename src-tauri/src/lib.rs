@@ -59,7 +59,51 @@ async fn artwork(app: AppHandle, path: String) -> tauri::http::Response<Vec<u8>>
     if let Some(bytes) = app.state::<Downloads>().0.local_artwork(&path) {
         return jpeg(Ok(bytes));
     }
+    // The account's own photo changes under one path, told apart by a query only.
+    #[cfg(target_os = "android")]
+    if !path.starts_with("/users/") {
+        return jpeg(kept_picture(&app, &path).await);
+    }
     jpeg(app.state::<Api>().picture(&path).await)
+}
+
+/// Android's WebView asks for pictures one at a time, waits for each, keeps none, and holds the
+/// app's own pages in the same queue. The page names the pictures it is about to draw
+/// (`warm_artwork`), so they are fetched together and answered from here.
+#[cfg(target_os = "android")]
+#[derive(Default)]
+struct Pictures(
+    Mutex<std::collections::HashMap<String, std::sync::Arc<tokio::sync::OnceCell<Vec<u8>>>>>,
+);
+
+// ponytail: everything is dropped at once when full; an LRU if the reload shows.
+#[cfg(target_os = "android")]
+const PICTURES_KEPT: usize = 300;
+
+#[cfg(target_os = "android")]
+async fn kept_picture(app: &AppHandle, path: &str) -> Result<Vec<u8>, String> {
+    let pictures = app.state::<Pictures>();
+    let cell = {
+        let mut kept = pictures.0.lock().unwrap();
+        if kept.len() >= PICTURES_KEPT {
+            kept.clear();
+        }
+        kept.entry(path.to_owned()).or_default().clone()
+    };
+    let api = app.state::<Api>();
+    cell.get_or_try_init(|| api.picture(path)).await.cloned()
+}
+
+#[cfg_attr(not(target_os = "android"), allow(unused_variables))]
+#[tauri::command]
+fn warm_artwork(app: AppHandle, paths: Vec<String>) {
+    #[cfg(target_os = "android")]
+    for path in paths {
+        let app = app.clone();
+        tauri::async_runtime::spawn(async move {
+            let _ = kept_picture(&app, &path).await;
+        });
+    }
 }
 
 fn jpeg(bytes: Result<Vec<u8>, String>) -> tauri::http::Response<Vec<u8>> {
@@ -761,13 +805,25 @@ async fn sync_offline(queue: tauri::State<'_, Downloads>) -> Result<usize, Strin
 pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_player::init())
+        .plugin(tauri_plugin_opener::init())
         .setup(|app| {
+            let http = reqwest::Client::builder()
+                .connect_timeout(std::time::Duration::from_secs(10))
+                .read_timeout(std::time::Duration::from_secs(30));
+            // ponytail: reqwest's default verifier asks Android for its trust store and panics
+            // unless the app ships rustls-platform-verifier's Kotlin half and initialises it.
+            // Mozilla's roots stand in, so a certificate authority the person installed on the
+            // device is not trusted; wire the platform verifier if someone needs that.
+            #[cfg(target_os = "android")]
+            let http = http.tls_certs_only(
+                webpki_root_certs::TLS_SERVER_ROOT_CERTS
+                    .iter()
+                    .filter_map(|c| reqwest::Certificate::from_der(c).ok()),
+            );
+            #[cfg(target_os = "android")]
+            app.manage(Pictures::default());
             app.manage(Api {
-                http: reqwest::Client::builder()
-                    .connect_timeout(std::time::Duration::from_secs(10))
-                    .read_timeout(std::time::Duration::from_secs(30))
-                    .build()
-                    .expect("the default TLS backend builds"),
+                http: http.build().expect("the default TLS backend builds"),
                 app: app.handle().clone(),
                 conn: RwLock::default(),
                 pairing: Mutex::default(),
@@ -802,7 +858,10 @@ pub fn run() {
         // while this process, and the file naming the session, live on.
         .on_page_load(|webview, payload| {
             if payload.event() == tauri::webview::PageLoadEvent::Started {
-                stop_left_over_session(webview.app_handle());
+                // Off this thread: on Android it is the UI thread, and resolving the data
+                // directory there waits for an answer that only the UI thread can give.
+                let app = webview.app_handle().clone();
+                tauri::async_runtime::spawn_blocking(move || stop_left_over_session(&app));
             }
         })
         .register_asynchronous_uri_scheme_protocol("artwork", |ctx, request, responder| {
@@ -821,6 +880,7 @@ pub fn run() {
             auth::auth_methods,
             auth::open_external,
             auth::sign_out,
+            warm_artwork,
             server_host,
             library,
             title,

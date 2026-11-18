@@ -31,6 +31,7 @@ import type {
 	Title,
 	Watch,
 } from "#lib/core/types.ts";
+import { TARGET } from "#lib/platform/target.ts";
 import { addPluginListener, convertFileSrc, invoke as rawInvoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { getCurrentWindow } from "@tauri-apps/api/window";
@@ -110,13 +111,29 @@ export const setWatched = (mediaId: string, watched: boolean) =>
 
 // `convertFileSrc` would percent-encode the slashes of a whole path.
 const ARTWORK = convertFileSrc("", "artwork");
+// Android's WebView fetches the `artwork` scheme one picture at a time, so the app is told what
+// is coming and fetches it together (see `warm_artwork`).
+const warmed = new Set<string>();
+let warming: string[] = [];
+function picture(path: string) {
+	if (TARGET === "android" && !path.startsWith("users/") && !warmed.has(path)) {
+		warmed.add(path);
+		if (!warming.length)
+			queueMicrotask(() => {
+				invoke("warm_artwork", { paths: warming }).catch(() => {});
+				warming = [];
+			});
+		warming.push(`/${path.split("?")[0]}`);
+	}
+	return `${ARTWORK}${path}`;
+}
 export const artwork = (kind: Kind, id: number, name: "poster" | "backdrop") =>
-	`${ARTWORK}${kind}/${id}/${name}.jpg`;
+	picture(`${kind}/${id}/${name}.jpg`);
 /** A picture by the path a download saved it under, as the `artwork` scheme takes it. */
-export const artworkAt = (path: string) => `${ARTWORK}${path.replace(/^\//, "")}`;
+export const artworkAt = (path: string) => picture(path.replace(/^\//, ""));
 export const myPicture = (version: number) =>
-	Promise.resolve(`${ARTWORK}users/me/photo.jpg?v=${version}`);
-export const headshot = (person: string) => `${ARTWORK}people/${person}/photo.jpg`;
+	Promise.resolve(picture(`users/me/photo.jpg?v=${version}`));
+export const headshot = (person: string) => picture(`people/${person}/photo.jpg`);
 
 /** Movies and shows together; ids are only unique within a kind. */
 export const everything = async () => {

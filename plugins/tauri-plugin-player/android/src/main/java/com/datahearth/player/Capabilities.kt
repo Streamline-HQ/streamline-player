@@ -131,8 +131,9 @@ object Capabilities {
             put("codec", name)
             put("profiles", JSONArray(names.toList()))
             put("max_level", maxLevel)
-            put("max_width", minOf(v.maxOf { it.supportedWidths.upper }, modes.maxOf { it.physicalWidth }))
-            put("max_height", minOf(v.maxOf { it.supportedHeights.upper }, modes.maxOf { it.physicalHeight }))
+            // A phone's panel is described upright; a film plays across its long side.
+            put("max_width", minOf(v.maxOf { it.supportedWidths.upper }, modes.maxOf { maxOf(it.physicalWidth, it.physicalHeight) }))
+            put("max_height", minOf(v.maxOf { it.supportedHeights.upper }, modes.maxOf { minOf(it.physicalWidth, it.physicalHeight) }))
             put("max_fps", minOf(v.maxOf { it.supportedFrameRates.upper.toDouble() }, modes.maxOf { it.refreshRate.toDouble() }))
         }
     }
