@@ -206,6 +206,7 @@ const frameStyle = (i: number) => {
 	flex-direction: column;
 	gap: 14px;
 	color: var(--player-ink);
+	text-shadow: 0 1px 12px rgba(0, 0, 0, 0.4);
 }
 
 .eyebrow {
@@ -264,6 +265,7 @@ p {
 	align-items: center;
 	gap: 10px;
 	margin-top: 6px;
+	text-shadow: none;
 }
 
 .cta {
@@ -302,11 +304,11 @@ p {
 	white-space: nowrap;
 	height: 46px;
 	padding: 0 18px;
-	border: 1px solid rgba(255, 255, 255, 0.16);
+	border: 1px solid rgba(255, 255, 255, 0.22);
 	border-radius: var(--radius-md);
-	background: var(--player-glass-strong);
-	backdrop-filter: blur(12px);
-	-webkit-backdrop-filter: blur(12px);
+	background: rgba(255, 255, 255, 0.14);
+	backdrop-filter: blur(16px) saturate(160%);
+	-webkit-backdrop-filter: blur(16px) saturate(160%);
 	color: var(--player-ink);
 	font-size: 15px;
 	font-weight: 500;
@@ -314,7 +316,7 @@ p {
 }
 
 .glass:hover {
-	background: color-mix(in srgb, var(--player-glass-strong), white 12%);
+	background: rgba(255, 255, 255, 0.22);
 }
 
 .glass :global(.sl-ico) {
