@@ -64,32 +64,35 @@ pub async fn run(
     a: &Analysis,
     out: &Path,
 ) -> Result<Value, JobError> {
+    // Subtitle packets are spread over the whole file, so every run reads all of it:
+    // one run for every track, never one per track.
+    let mut cmd = ffmpeg(ffmpeg_bin);
+    cmd.arg("-i").arg(input);
     let mut tracks = Vec::new();
+    let mut first = None;
     for s in &a.subtitles {
         let outs = outputs(s);
         if outs.is_empty() {
             continue;
         }
-        let mut cmd = ffmpeg(ffmpeg_bin);
-        cmd.arg("-i").arg(input);
+        first.get_or_insert(s.index);
         for (file, opts) in &outs {
             cmd.arg("-map")
                 .arg(format!("0:{}", s.index))
                 .args(*opts)
                 .arg(out.join(file));
         }
-        let (ok, stderr) = run_quiet(cmd).await?;
-        if !ok {
-            return Err(JobError::Ffmpeg {
-                index: s.index,
-                stderr,
-            });
-        }
         tracks.push(json!({
             "index": s.index,
             "codec": s.codec,
             "files": outs.iter().map(|(f, _)| f).collect::<Vec<_>>(),
         }));
+    }
+    if let Some(index) = first {
+        let (ok, stderr) = run_quiet(cmd).await?;
+        if !ok {
+            return Err(JobError::Ffmpeg { index, stderr });
+        }
     }
 
     let mut fonts = Vec::new();
@@ -192,13 +195,18 @@ mod tests {
         std::fs::create_dir_all(&dir).unwrap();
         let ass = dir.join("s.ass");
         std::fs::write(&ass, ASS).unwrap();
+        let srt = dir.join("s.srt");
+        std::fs::write(&srt, "1\n00:00:00,000 --> 00:00:01,500\nHello\n").unwrap();
         let mkv = dir.join("in.mkv");
         let made = StdCommand::new("ffmpeg")
             .args(["-nostdin", "-y", "-v", "error", "-f", "lavfi", "-i"])
             .arg("testsrc2=size=160x90:rate=10:duration=2")
             .arg("-i")
             .arg(&ass)
-            .args(["-map", "0", "-map", "1", "-c:v", "mpeg4", "-c:s", "ass"])
+            .arg("-i")
+            .arg(&srt)
+            .args(["-map", "0", "-map", "1", "-map", "2", "-c:v", "mpeg4"])
+            .args(["-c:s:0", "ass", "-c:s:1", "srt"])
             .arg("-attach")
             .arg(&ttf)
             .args(["-metadata:s:t", "mimetype=application/x-truetype-font"])
@@ -217,16 +225,22 @@ mod tests {
         let v = run(Path::new("ffmpeg"), &mkv, &a, &out).await.unwrap();
 
         let n = a.subtitles[0].index;
+        let m = a.subtitles[1].index;
         let font = format!("fonts/{}", ttf.file_name().unwrap().to_string_lossy());
         assert_eq!(
             v,
             json!({
-                "tracks": [{"index": n, "codec": "ass", "files": [format!("{n}.ass"), format!("{n}.vtt")]}],
+                "tracks": [
+                    {"index": n, "codec": "ass", "files": [format!("{n}.ass"), format!("{n}.vtt")]},
+                    {"index": m, "codec": "subrip", "files": [format!("{m}.srt"), format!("{m}.vtt")]},
+                ],
                 "fonts": [font],
             })
         );
         assert!(out.join(format!("{n}.ass")).is_file());
         assert!(out.join(format!("{n}.vtt")).is_file());
+        assert!(out.join(format!("{m}.srt")).is_file());
+        assert!(out.join(format!("{m}.vtt")).is_file());
         assert!(out.join(&font).is_file());
         std::fs::remove_dir_all(dir).ok();
     }
