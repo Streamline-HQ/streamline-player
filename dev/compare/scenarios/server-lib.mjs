@@ -82,8 +82,6 @@ export async function server(ctx, side) {
   out.heading = { title: await text(app.locator("nav h1")), host: (await text(app.locator("nav .host"))).length > 0 };
   expect("heading", out.heading, { title: "Server", host: true });
   expect("status dot", await app.locator("nav .host .dot").evaluate((el) => getComputedStyle(el).backgroundColor), "rgb(34, 197, 94)");
-  out.back = await text(app.locator("nav .back"));
-  expect("back label", out.back, "Your settings");
   out.nav = await app.locator("nav .group").evaluateAll((gs) =>
     gs.map((g) => ({
       name: g.querySelector(".name")?.textContent.trim() ?? "",

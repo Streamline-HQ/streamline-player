@@ -555,7 +555,6 @@
 	"server_ask_stop_ph_you": "Shown to whoever is watching when playback stops",
 	"server_ask_stop_title": "Stop {name}’s stream?",
 	"server_ask_stop_title_you": "Stop your stream?",
-	"server_back": "Your settings",
 	"server_blk_app_links": "Apps",
 	"server_blk_apps": "Apps and TVs",
 	"server_blk_browsers": "Browsers",

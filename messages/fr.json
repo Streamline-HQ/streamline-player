@@ -555,7 +555,6 @@
 	"server_ask_stop_ph_you": "Affiché à la personne qui regarde quand la lecture s’arrête",
 	"server_ask_stop_title": "Arrêter la lecture de {name} ?",
 	"server_ask_stop_title_you": "Arrêter votre lecture ?",
-	"server_back": "Vos réglages",
 	"server_blk_app_links": "Applications",
 	"server_blk_apps": "Applications et TV",
 	"server_blk_browsers": "Navigateurs",

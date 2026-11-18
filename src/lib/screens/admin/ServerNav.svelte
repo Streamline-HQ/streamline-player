@@ -10,10 +10,8 @@ let {
 	host,
 	dot,
 	title,
-	backLabel,
 	label,
 	top,
-	onback,
 	onopen,
 }: {
 	groups: { name: string; items: Item[] }[];
@@ -21,19 +19,14 @@ let {
 	host: string;
 	dot: string;
 	title: string;
-	backLabel: string;
 	label: string;
 	top: number;
-	onback: () => void;
 	onopen: (key: SectionKey) => void;
 } = $props();
 </script>
 
 <nav aria-label={label} style:top="{top}px" style:max-height="calc(100vh - 104px)">
 	<div class="who">
-		<button type="button" class="back" onclick={onback}>
-			<Icon name="chevron-left" size={14} stroke={2} />{backLabel}
-		</button>
 		<h1>{title}</h1>
 		<span class="host"><span class="dot" style:background={dot}></span>{host}</span>
 	</div>
@@ -78,29 +71,6 @@ nav {
 	display: flex;
 	flex-direction: column;
 	gap: 6px;
-}
-
-.back {
-	align-self: flex-start;
-	height: 28px;
-	display: flex;
-	align-items: center;
-	gap: 4px;
-	padding: 0 8px 0 4px;
-	margin-left: -4px;
-	border: 0;
-	border-radius: 7px;
-	background: transparent;
-	color: var(--fg-subtle);
-	font: inherit;
-	font-size: 12.5px;
-	font-weight: 500;
-	cursor: pointer;
-}
-
-.back:hover {
-	color: var(--fg);
-	background: var(--surface);
 }
 
 h1 {

@@ -451,10 +451,8 @@ onMount(() => {
 			{host}
 			dot={TONES[health.tone].fg}
 			title={i18n.settings_server()}
-			backLabel={i18n.server_back()}
 			label={i18n.server_nav_label()}
 			top={TOP}
-			onback={() => goto("/settings")}
 			onopen={jump}
 		/>
 		<main>
