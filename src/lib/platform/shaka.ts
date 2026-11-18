@@ -139,7 +139,8 @@ async function drawStyled(url: string, fonts: string[]) {
 		video: el,
 		canvas,
 		subUrl: url,
-		fonts,
+		// The caller's list is reactive state, and a proxy cannot be posted to the worker.
+		fonts: [...fonts],
 		timeOffset: -subtitleOffset,
 		// The file's own fonts only: asking the browser for the viewer's installed fonts
 		// prompts for a permission, and looking them up online tells a third party what plays.
