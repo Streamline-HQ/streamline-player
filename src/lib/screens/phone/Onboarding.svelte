@@ -44,7 +44,7 @@ let focused = $state(false);
 			}}
 		>
 			<div class="main server">
-				<Mark size={56} />
+				<Mark size={56} radius={14} ring={false} />
 				<div class="head">
 					<h1>{i18n.welcome_title_server()}</h1>
 					<p class="lead">{i18n.welcome_lead_server()}</p>
@@ -93,7 +93,7 @@ let focused = $state(false);
 				{#if p.step}
 					<span class="eyebrow">{i18n.welcome_step_2()} · {p.host}</span>
 				{:else}
-					<Mark size={56} />
+					<Mark size={56} radius={14} ring={false} />
 				{/if}
 				<h1>{i18n.signin_title()}</h1>
 				<p class="lead">{p.lead}</p>
