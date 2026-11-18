@@ -5,7 +5,15 @@ let {
 	title,
 	text,
 	remaining,
-}: { on: boolean; eyebrow: string; title: string; text: string; remaining: string } = $props();
+	bottom = 128,
+}: {
+	on: boolean;
+	eyebrow: string;
+	title: string;
+	text: string;
+	remaining: string;
+	bottom?: number;
+} = $props();
 
 // What the card last said while it showed: the remaining time ticks on as playback resumes, and
 // rewriting the text every frame makes the way out stutter.
@@ -15,7 +23,7 @@ $effect(() => {
 });
 </script>
 
-<div class="card paused" class:on aria-hidden={!on}>
+<div class="card paused" class:on aria-hidden={!on} style:bottom="{bottom}px">
 	<span class="eyebrow">{held.eyebrow}</span>
 	<span class="title">{held.title}</span>
 	<span class="text">{held.text}</span>
@@ -26,7 +34,6 @@ $effect(() => {
 .card {
 	position: absolute;
 	left: 28px;
-	bottom: 128px;
 	width: min(460px, 46%);
 	display: flex;
 	flex-direction: column;

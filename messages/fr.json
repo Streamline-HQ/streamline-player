@@ -423,6 +423,7 @@
 	"player_play_now": "Lire maintenant",
 	"player_preparing": "Préparation…",
 	"player_quality": "Qualité",
+	"player_quality_and_speed": "Qualité et vitesse",
 	"player_quality_same_as_original": "Identique à l’original · le fichier fait {size}",
 	"player_renderer_web_view": "vue web",
 	"player_reset": "Réinitialiser",

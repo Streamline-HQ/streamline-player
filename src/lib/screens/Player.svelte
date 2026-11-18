@@ -49,6 +49,8 @@ import {
 	subtitleRows,
 } from "#lib/core/player-panels.ts";
 import { prefs, setPref as savePref } from "#lib/core/prefs.svelte.ts";
+import { isTablet } from "#lib/platform/form-factor.svelte.ts";
+import PlayerChrome from "#lib/screens/tablet/PlayerChrome.svelte";
 import type { DownloadEntry, Kind } from "#lib/core/types.ts";
 import { m as i18n } from "#lib/paraglide/messages.js";
 import { getLocale } from "#lib/paraglide/runtime.js";
@@ -103,6 +105,9 @@ const MAX_EXTRAPOLATION = 1.5;
 const VOLUME_STEP = 0.05;
 const CUE_BOTTOM = { shown: 140, hidden: 48 };
 const CARD_BOTTOM = { shown: 130, hidden: 40 };
+const TABLET_CUE_BOTTOM = { shown: 130, hidden: 48 };
+const TABLET_CARD_BOTTOM = { shown: 110, hidden: 40 };
+const QUALITY_AND_SPEED: Tab[] = ["quality", "speed"];
 const MENU_SWITCH_MS = 170;
 const SUB_STEP = 0.1;
 const AUDIO_STEP = 10;
@@ -149,6 +154,7 @@ let skL = $state<Flash>({ ph: "idle", amt: 0, rot: 0 });
 let skR = $state<Flash>({ ph: "idle", amt: 0, rot: 0 });
 let frameAt = $state(0);
 let menu = $state<Tab | null>(null);
+let menuGroup = $state<Tab[] | null>(null);
 let styleOpen = $state(false);
 
 let lastMove = Date.now();
@@ -159,6 +165,8 @@ let menuTimer: ReturnType<typeof setTimeout> | undefined;
 let run: SeekFlash | null = null;
 let fromApp = false;
 let leaving = false;
+let pressClosedMenu = false;
+let pressedOn = false;
 
 afterNavigate(({ from }) => {
 	// Another episode replaces this entry, so the page that opened the player stays the one behind it.
@@ -172,6 +180,7 @@ beforeNavigate(({ to }) => {
 
 const pb = $derived(launch && nowPlaying.launch?.key === launch.key ? nowPlaying.pb : null);
 const view = $derived(launch?.view ?? null);
+const tablet = $derived(isTablet());
 const controlsOn = $derived(!!pb && (controls || (!pb.playing && !pb.buffering) || !!menu));
 const showBar = $derived(controlsOn && !pb?.ended && !pb?.halt);
 
@@ -386,19 +395,40 @@ function toPip() {
 
 function openMenu(tab: Tab) {
 	clearTimeout(menuTimer);
-	if (menu === tab) return closeMenu();
+	const group = tablet && QUALITY_AND_SPEED.includes(tab) ? QUALITY_AND_SPEED : null;
+	if (menu === tab || (menu && group?.includes(menu))) return closeMenu();
 	show();
 	if (!menu) {
 		menu = tab;
+		menuGroup = group;
 		return;
 	}
 	menu = null;
-	menuTimer = setTimeout(() => (menu = tab), MENU_SWITCH_MS);
+	menuTimer = setTimeout(() => {
+		menu = tab;
+		menuGroup = group;
+	}, MENU_SWITCH_MS);
 }
 
 function closeMenu() {
 	clearTimeout(menuTimer);
 	menu = null;
+	menuGroup = null;
+}
+
+// A touch fires mousemove before its click and that shows the controls, so the tap reads the
+// state from its press.
+function pressSurface() {
+	pressedOn = controlsOn && !!pb?.playing;
+}
+
+function tapSurface() {
+	if (pressClosedMenu) {
+		pressClosedMenu = false;
+		return;
+	}
+	controls = !pressedOn;
+	lastMove = Date.now();
 }
 
 function exit() {
@@ -477,7 +507,11 @@ onMount(() => {
 	// No click-catcher over the bar, so its buttons keep their cursor: a press outside the panel closes it.
 	const outside = (e: PointerEvent) => {
 		const t = e.target as Element | null;
-		if (menu && !t?.closest("[data-menu-panel], [data-menu-btn]")) closeMenu();
+		if (menu && !t?.closest("[data-menu-panel], [data-menu-btn]")) {
+			closeMenu();
+			pressClosedMenu = true;
+			setTimeout(() => (pressClosedMenu = false), 400);
+		}
 	};
 	document.addEventListener("pointerdown", outside, true);
 	const sync = () =>
@@ -536,12 +570,14 @@ const upNextFrac = $derived(
 const skipOn = $derived(
 	!!pb && ((pb.introOn && !prefs.autoSkip) || pb.creditsOn) && !pb.ended && !pb.halt,
 );
-const cardBottom = $derived(controlsOn ? CARD_BOTTOM.shown : CARD_BOTTOM.hidden);
-const cueBottom = $derived(controlsOn ? CUE_BOTTOM.shown : CUE_BOTTOM.hidden);
+const cardRule = $derived(tablet ? TABLET_CARD_BOTTOM : CARD_BOTTOM);
+const cueRule = $derived(tablet ? TABLET_CUE_BOTTOM : CUE_BOTTOM);
+const cardBottom = $derived(controlsOn ? cardRule.shown : cardRule.hidden);
+const cueBottom = $derived(controlsOn ? cueRule.shown : cueRule.hidden);
 
 $effect(() => {
 	if (!pb) return;
-	const px = showBar ? CUE_BOTTOM.shown - CUE_BOTTOM.hidden : 0;
+	const px = showBar ? cueRule.shown - cueRule.hidden : 0;
 	playbackPort.command("subtitleLift", { px }).catch(() => {});
 });
 
@@ -852,6 +888,55 @@ const menuButtons = $derived.by(() => {
 	];
 });
 
+const tabletButtons = $derived.by(() => {
+	const off = !pb || pb.ended || !!pb.halt;
+	return [
+		{
+			id: "subtitles",
+			icon: pb?.subPick === null ? CaptionsOff : Captions,
+			label: i18n.player_subtitles(),
+			active: menu === "subs" || pb?.subPick !== null,
+			onclick: () => openMenu("subs"),
+		},
+		{
+			id: "audio",
+			icon: AudioLines,
+			label: i18n.player_audio(),
+			active: menu === "audio",
+			onclick: () => openMenu("audio"),
+		},
+		{
+			id: "quality",
+			icon: Settings,
+			label: i18n.player_quality_and_speed(),
+			active: menu === "quality" || menu === "speed",
+			onclick: () => openMenu("quality"),
+		},
+		{
+			id: "pip",
+			icon: PictureInPicture2,
+			label: i18n.player_pip(),
+			active: false,
+			disabled: off,
+			onclick: toPip,
+		},
+	];
+});
+// A movie's sub line leads with its year.
+const tabletSub = $derived(
+	view?.season
+		? i18n.common_episode_code({ season: view.season, episode: view.episode ?? 0 })
+		: (view?.sub?.split(" · ")[0] ?? ""),
+);
+const tabletBadge = $derived.by(() => {
+	const s = pb?.session;
+	if (!s) return "";
+	if (!prefs.techDetails) return modeLabel;
+	const { width, height, hdr, dv_profile } = s.video;
+	const range = dv_profile !== undefined ? " DV" : hdr === "sdr" ? "" : " HDR";
+	return `${resBadge(width, height)}${range} · ${modeName(s.mode).toLowerCase()}`;
+});
+
 const labels = {
 	play: i18n.player_play(),
 	pause: i18n.player_pause(),
@@ -880,8 +965,9 @@ const labels = {
 			class="surface"
 			tabindex="-1"
 			aria-label={pb.playing ? labels.pause : labels.play}
-			onclick={togglePlay}
-			ondblclick={() => toggleFullscreen()}
+			onpointerdown={tablet ? pressSurface : undefined}
+			onclick={tablet ? tapSurface : togglePlay}
+			ondblclick={tablet ? undefined : () => toggleFullscreen()}
 		></button>
 		{#if !pb.picture && !pb.ended && !pb.halt}
 			<div
@@ -911,24 +997,26 @@ const labels = {
 			</div>
 		{/if}
 
-		{#if osd}
+		{#if osd && !(tablet && showBar)}
 			<Osd text={osd} />
 		{/if}
 
-		<div class="pf" aria-hidden="true">
-			<div class="disc {pf}">
-				{#if pfPause}
-					<Pause size={36} fill="currentColor" strokeWidth={0} />
-				{:else}
-					<Play size={36} fill="currentColor" strokeWidth={0} />
-				{/if}
+		{#if !tablet}
+			<div class="pf" aria-hidden="true">
+				<div class="disc {pf}">
+					{#if pfPause}
+						<Pause size={36} fill="currentColor" strokeWidth={0} />
+					{:else}
+						<Play size={36} fill="currentColor" strokeWidth={0} />
+					{/if}
+				</div>
 			</div>
-		</div>
+		{/if}
 		{#each [
 			{ f: skL, side: "left" },
 			{ f: skR, side: "right" },
 		] as s (s.side)}
-			<div class="sk {s.side}" aria-hidden="true">
+			<div class="sk {s.side}" class:half={tablet} aria-hidden="true">
 				<div class="disc sdisc {s.f.ph}" style:--dir={s.side === "left" ? -14 : 14}>
 					<span
 						class="sk-ico"
@@ -946,81 +1034,134 @@ const labels = {
 			</div>
 		{/each}
 
-		<div class="chrome" class:off={!showBar} style:opacity={showBar ? 1 : 0}>
-			<div class="top" style:pointer-events={showBar ? "auto" : "none"}>
-				<button type="button" class="back" aria-label={i18n.common_back()} onclick={exit}>
-					<ArrowLeft size={20} strokeWidth={2} />
-				</button>
-				<div class="heading">
-					<span class="name">{launch.item.titleName}</span>
-					<span class="sub">{view.sub ?? view.eyebrow}</span>
-				</div>
-				<div class="grow"></div>
-				{#if modeLabel}
-					<button
-						type="button"
-						class="pill"
-						class:on={pb.stats}
-						aria-label={i18n.player_stats_title()}
-						onclick={() => pb.setStats(!pb.stats)}
-					>
-						<Tip text={i18n.player_stats_title()} key="I" />
-						{#if prefs.techDetails}
-							<span
-								class="dot"
-								style:background={pb.full ? "var(--status-available)" : "var(--status-downloading)"}
-							></span>
-						{/if}
-						{modeLabel}
-					</button>
-				{/if}
-			</div>
-
-			<PausedCard
-				on={paused && showBar}
-				eyebrow={pb.chapterName
-					? i18n.player_paused_in({ chapter: pb.chapterName })
-					: i18n.player_paused()}
-				title={view.heading}
-				text={view.synopsis}
-				remaining={i18n.player_paused_left({
-					remain: clock(duration - shown, duration),
-					time: endsAt(new Date(), duration - shown, pb.speed, getLocale()),
-				})}
-			/>
-
-			<div class="bottom" style:pointer-events={showBar ? "auto" : "none"}>
-				<Scrubber
-					{segs}
-					chapters={chapterTitles}
-					position={shown}
-					buffered={pb.buffered}
-					{duration}
-					still={view.still}
-					trickplay={pb.trickplay}
-					label={i18n.player_seek()}
-					onseek={(at) => pb.seekTo(at)}
-					onhovering={(on) => (hovering = on)}
-					onactivity={show}
-				/>
-				<PlayerBar
+		{#if tablet}
+			<div class="chrome" class:off={!showBar} style:opacity={showBar ? 1 : 0}>
+				<PlayerChrome
+					live={showBar}
+					title={launch.item.titleName}
+					sub={tabletSub}
+					buttons={tabletButtons}
 					playing={pb.playing}
-					volume={nowPlaying.volume}
-					muted={nowPlaying.muted}
+					{paused}
+					pausedEyebrow={pb.chapterName
+						? i18n.player_paused_in({ chapter: pb.chapterName })
+						: i18n.player_paused()}
+					pausedTitle={view.heading}
+					pausedText={view.synopsis}
+					pausedLeft={i18n.player_paused_left({
+						remain: clock(duration - shown, duration),
+						time: endsAt(new Date(), duration - shown, pb.speed, getLocale()),
+					})}
+					scrub={{
+						segs,
+						chapters: chapterTitles,
+						position: shown,
+						buffered: pb.buffered,
+						duration,
+						still: view.still,
+						trickplay: pb.trickplay,
+						label: i18n.player_seek(),
+						onseek: (at) => pb.seekTo(at),
+						onhovering: (on) => (hovering = on),
+						onactivity: show,
+					}}
 					current={clock(shown, duration)}
-					total={clock(duration, duration)}
+					remaining={clock(duration - shown, duration)}
+					badge={tabletBadge}
+					badgeDot={prefs.techDetails
+						? pb.full
+							? "var(--status-available)"
+							: "var(--status-downloading)"
+						: null}
 					chapter={pb.chapterName}
 					hasNext={!!view.next}
-					buttons={menuButtons}
-					{labels}
+					labels={{ ...labels, backTitle: i18n.common_back(), stats: i18n.player_stats_title() }}
+					onback={exit}
 					ontoggle={togglePlay}
 					onseek={seek}
+					onstats={() => pb.setStats(!pb.stats)}
 					onnext={goNext}
-					onvolume={(v) => volume(v, true)}
-					onmute={mute}
 				/>
 			</div>
-		</div>
+		{:else}
+			<div class="chrome" class:off={!showBar} style:opacity={showBar ? 1 : 0}>
+				<div class="top" style:pointer-events={showBar ? "auto" : "none"}>
+					<button type="button" class="back" aria-label={i18n.common_back()} onclick={exit}>
+						<ArrowLeft size={20} strokeWidth={2} />
+					</button>
+					<div class="heading">
+						<span class="name">{launch.item.titleName}</span>
+						<span class="sub">{view.sub ?? view.eyebrow}</span>
+					</div>
+					<div class="grow"></div>
+					{#if modeLabel}
+						<button
+							type="button"
+							class="pill"
+							class:on={pb.stats}
+							aria-label={i18n.player_stats_title()}
+							onclick={() => pb.setStats(!pb.stats)}
+						>
+							<Tip text={i18n.player_stats_title()} key="I" />
+							{#if prefs.techDetails}
+								<span
+									class="dot"
+									style:background={pb.full
+										? "var(--status-available)"
+										: "var(--status-downloading)"}
+								></span>
+							{/if}
+							{modeLabel}
+						</button>
+					{/if}
+				</div>
+
+				<PausedCard
+					on={paused && showBar}
+					eyebrow={pb.chapterName
+						? i18n.player_paused_in({ chapter: pb.chapterName })
+						: i18n.player_paused()}
+					title={view.heading}
+					text={view.synopsis}
+					remaining={i18n.player_paused_left({
+						remain: clock(duration - shown, duration),
+						time: endsAt(new Date(), duration - shown, pb.speed, getLocale()),
+					})}
+				/>
+
+				<div class="bottom" style:pointer-events={showBar ? "auto" : "none"}>
+					<Scrubber
+						{segs}
+						chapters={chapterTitles}
+						position={shown}
+						buffered={pb.buffered}
+						{duration}
+						still={view.still}
+						trickplay={pb.trickplay}
+						label={i18n.player_seek()}
+						onseek={(at) => pb.seekTo(at)}
+						onhovering={(on) => (hovering = on)}
+						onactivity={show}
+					/>
+					<PlayerBar
+						playing={pb.playing}
+						volume={nowPlaying.volume}
+						muted={nowPlaying.muted}
+						current={clock(shown, duration)}
+						total={clock(duration, duration)}
+						chapter={pb.chapterName}
+						hasNext={!!view.next}
+						buttons={menuButtons}
+						{labels}
+						ontoggle={togglePlay}
+						onseek={seek}
+						onnext={goNext}
+						onvolume={(v) => volume(v, true)}
+						onmute={mute}
+					/>
+				</div>
+			</div>
+		{/if}
 
 		<SkipButton
 			on={skipOn}
@@ -1053,6 +1194,9 @@ const labels = {
 				rows={menuRows}
 				note={menuNote}
 				night={menu === "audio"}
+				top={tablet}
+				tabs={menuGroup?.map((id) => ({ id, label: MENU_TITLES[id](), on: menu === id }))}
+				ontab={(id) => (menu = id as Tab)}
 				onpick={pickRow}
 				onclose={closeMenu}
 			>
@@ -1098,6 +1242,7 @@ const labels = {
 				title={i18n.player_stats_title()}
 				closeLabel={i18n.player_close_stats()}
 				rows={statList}
+				left={tablet}
 				onclose={() => pb.setStats(false)}
 			/>
 		{/if}
@@ -1287,6 +1432,10 @@ const labels = {
 	display: grid;
 	place-items: center;
 	pointer-events: none;
+}
+
+.sk.half {
+	width: 50%;
 }
 
 .sk.left {

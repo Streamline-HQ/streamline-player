@@ -9,6 +9,9 @@ let {
 	rows,
 	note,
 	night = false,
+	tabs,
+	top = false,
+	ontab,
 	onpick,
 	onclose,
 	children,
@@ -17,6 +20,11 @@ let {
 	rows: Row[];
 	note?: { text: string; color: string };
 	night?: boolean;
+	/** One button covering several panels: the tabs stand in for the title. */
+	tabs?: { id: string; label: string; on: boolean }[];
+	/** Opens down from under the top bar instead of up from the bottom bar. */
+	top?: boolean;
+	ontab?: (id: string) => void;
 	onpick: (id: string) => void;
 	onclose: () => void;
 	children?: Snippet;
@@ -43,12 +51,16 @@ function onkeydown(e: KeyboardEvent) {
 // Grows out of the bar's buttons, which sit under its bottom right corner.
 const pop = (_: Element, { duration = 110 } = {}) => ({
 	duration,
-	css: (t: number) => `opacity:${t};transform:scale(${0.92 + 0.08 * t})`,
+	css: (t: number) =>
+		top
+			? `opacity:${t};transform:translateY(${(1 - t) * -8}px) scale(${0.98 + 0.02 * t})`
+			: `opacity:${t};transform:scale(${0.92 + 0.08 * t})`,
 });
 </script>
 
 <div
 	class="menu"
+	class:top
 	role="dialog"
 	aria-label={title}
 	data-menu-panel="1"
@@ -59,7 +71,15 @@ const pop = (_: Element, { duration = 110 } = {}) => ({
 	out:pop|global={{ duration: 80 }}
 >
 	<div class="head">
-		<span class="title">{title}</span>
+		{#if tabs}
+			{#each tabs as t (t.id)}
+				<button type="button" class="tab" class:on={t.on} onclick={() => ontab?.(t.id)}>
+					{t.label}<span class="line"></span>
+				</button>
+			{/each}
+		{:else}
+			<span class="title">{title}</span>
+		{/if}
 		<div class="grow"></div>
 		<button type="button" class="close" aria-label={i18n.player_close()} onclick={onclose}>
 			<X size={16} strokeWidth={2} />
@@ -135,6 +155,15 @@ const pop = (_: Element, { duration = 110 } = {}) => ({
 	transform-origin: 100% 100%;
 }
 
+.menu.top {
+	right: 24px;
+	top: 70px;
+	bottom: auto;
+	width: 360px;
+	max-height: calc(100% - 190px);
+	transform-origin: 100% 0;
+}
+
 .head {
 	display: flex;
 	align-items: center;
@@ -151,6 +180,44 @@ const pop = (_: Element, { duration = 110 } = {}) => ({
 	font-size: 14px;
 	font-weight: 600;
 	color: var(--player-ink);
+}
+
+.tab {
+	position: relative;
+	height: 40px;
+	padding: 0 11px;
+	border: 0;
+	border-radius: 8px 8px 0 0;
+	background: transparent;
+	color: var(--fg-subtle);
+	font-size: 13px;
+	font-weight: 500;
+	white-space: nowrap;
+	cursor: pointer;
+}
+
+.tab:hover,
+.tab.on {
+	color: var(--player-ink);
+}
+
+.tab.on {
+	font-weight: 600;
+}
+
+.line {
+	position: absolute;
+	left: 10px;
+	right: 10px;
+	bottom: 0;
+	height: 2px;
+	border-radius: 2px;
+	background: var(--player-accent);
+	opacity: 0;
+}
+
+.tab.on .line {
+	opacity: 1;
 }
 
 .grow {

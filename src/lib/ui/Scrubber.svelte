@@ -14,6 +14,7 @@ let {
 	still,
 	trickplay = null,
 	label,
+	thin = false,
 	onseek,
 	onhovering,
 	onactivity,
@@ -26,6 +27,8 @@ let {
 	still: string;
 	trickplay?: Trickplay | null;
 	label: string;
+	/** The touch layout: a flat chaptered track with no handle, a smaller hit area. */
+	thin?: boolean;
 	onseek: (seconds: number) => void;
 	onhovering: (on: boolean) => void;
 	onactivity: () => void;
@@ -82,6 +85,7 @@ function setHover(v: number | null) {
 
 <div
 	class="scrub"
+	class:thin
 	role="slider"
 	tabindex="-1"
 	aria-label={label}
@@ -112,7 +116,7 @@ function setHover(v: number | null) {
 		if (drag === null) setHover(null);
 	}}
 >
-	<div class="track" style:height="{grown ? 7 : 4}px">
+	<div class="track" style:height="{thin ? (grown ? 6 : 3) : grown ? 7 : 4}px">
 		{#each segs as s}
 			<div class="seg" style:flex={s.to - s.from}>
 				<div class="buf" style:width="{within(buffered, s)}%"></div>
@@ -120,7 +124,9 @@ function setHover(v: number | null) {
 			</div>
 		{/each}
 	</div>
-	<div class="thumb" style:transform="translateX({pct}cqw)"></div>
+	{#if !thin}
+		<div class="thumb" style:transform="translateX({pct}cqw)"></div>
+	{/if}
 	{#if peek && hover !== null}
 		<div class="peek" style:left="{Math.max(7, Math.min(93, hover * 100))}%">
 			<div class="frame" bind:clientWidth={frameWidth} bind:clientHeight={frameHeight}>
@@ -242,5 +248,25 @@ function setHover(v: number | null) {
 	border-radius: var(--radius-sm);
 	background: var(--player-scrim);
 	white-space: nowrap;
+}
+
+.thin {
+	height: 18px;
+}
+
+.thin .track {
+	gap: 2px;
+}
+
+.thin .seg {
+	border-radius: 0;
+}
+
+.thin .peek {
+	bottom: 24px;
+}
+
+.thin .frame {
+	width: 176px;
 }
 </style>

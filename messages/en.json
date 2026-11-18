@@ -423,6 +423,7 @@
 	"player_play_now": "Play now",
 	"player_preparing": "Preparing…",
 	"player_quality": "Quality",
+	"player_quality_and_speed": "Quality and speed",
 	"player_quality_same_as_original": "Same as Original · the file is {size}",
 	"player_renderer_web_view": "web view",
 	"player_reset": "Reset",
