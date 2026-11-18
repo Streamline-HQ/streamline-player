@@ -1,4 +1,5 @@
 <script lang="ts">
+import { loadErrorText } from "#lib/core/load-error.ts";
 import {
 	arrivalDay,
 	continueWatching,
@@ -168,7 +169,9 @@ const genreTitles = $derived(
 				...lib.shows
 					.filter((t) => t.genres.includes(genre))
 					.map((t) => ({ kind: "series" as Kind, t })),
-			]
+				// The whole genre is hundreds of cards on a real library, mounted at once on every visit
+				// to Home, which froze it for a second or two. The Library's genre filter lists them all.
+			].slice(0, ROW_LIMIT)
 		: [],
 );
 const empty = $derived(lib.loaded && lib.movies.length + lib.shows.length === 0);
@@ -183,7 +186,7 @@ onMount(() => {
 <div class="home">
 	{#if lib.error !== null}
 		<div class="state">
-			<EmptyState icon="film" title={i18n.home_error_title()} text={lib.error}>
+			<EmptyState icon="film" title={i18n.home_error_title()} text={loadErrorText(lib.error)}>
 				{#snippet action()}
 					<div class="failed-actions">
 						<Button variant="secondary" onclick={() => loadLibrary(port, true)}>
