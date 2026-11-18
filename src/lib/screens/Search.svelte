@@ -17,7 +17,9 @@ import Button from "#lib/ui/Button.svelte";
 import EmptyState from "#lib/ui/EmptyState.svelte";
 import Icon from "#lib/ui/Icon.svelte";
 import { goto } from "#lib/ui/nav.ts";
+import { gridNav } from "#lib/ui/grid-nav.ts";
 import PosterCard from "#lib/ui/PosterCard.svelte";
+import { titleCard } from "#lib/screens/title-card.svelte.ts";
 import SearchField from "#lib/ui/SearchField.svelte";
 import { artwork, home, library, title, watchState } from "#platform";
 import { afterNavigate } from "$app/navigation";
@@ -33,6 +35,12 @@ const urlQ = $derived(page.url.searchParams.get("q") ?? "");
 const initialQ = page.url.searchParams.get("q") ?? "";
 let text = $state(initialQ);
 let input = $state<HTMLInputElement>();
+let box = $state<HTMLElement>();
+const onNavKey = gridNav(
+	() => box,
+	() => input,
+);
+const now = new Date();
 let recent = $state(loadRecent());
 let pushed = initialQ;
 let timer: ReturnType<typeof setTimeout> | undefined;
@@ -124,7 +132,9 @@ onMount(() => {
 });
 </script>
 
-<div class="search" style:padding="{TOP}px {PAD_X}px 56px">
+<svelte:window onkeydown={onNavKey} />
+
+<div class="search" style:padding="{TOP}px {PAD_X}px 56px" bind:this={box}>
 	<SearchField
 		bind:value={text}
 		bind:input
@@ -154,7 +164,7 @@ onMount(() => {
 				<div class="recent">
 					<h2 class="eyebrow">{i18n.search_recent()}</h2>
 					{#each recent as r (r)}
-						<button type="button" onclick={() => ask(r, false)}>
+						<button type="button" data-nav onclick={() => ask(r, false)}>
 							<Icon name="history" size={16} stroke={1.75} />{r}
 						</button>
 					{/each}
@@ -164,7 +174,7 @@ onMount(() => {
 				<h2 class="eyebrow">{i18n.search_browse_genre()}</h2>
 				<div class="tiles">
 					{#each tiles as g (g.name)}
-						<button type="button" class="genre-tile" onclick={() => ask(g.name, false)}>
+						<button type="button" class="genre-tile" data-nav onclick={() => ask(g.name, false)}>
 							<img
 								src={artwork(g.cover.kind, g.cover.id, "poster")}
 								alt=""
@@ -191,7 +201,7 @@ onMount(() => {
 					count: hits.length,
 				})}
 			</div>
-			<button type="button" class="top" onclick={() => open(top)}>
+			<button type="button" class="top" data-nav onclick={() => open(top)}>
 				<img
 					src={artwork(top.kind, top.id, "poster")}
 					alt=""
@@ -213,6 +223,9 @@ onMount(() => {
 								title={t.title}
 								sub={sub(t)}
 								src={artwork(t.kind, t.id, "poster")}
+								{...titleCard(t.kind, t, now)}
+								badge={undefined}
+								nav
 								onclick={() => open(t)}
 							/>
 						{/each}

@@ -3,16 +3,22 @@ export { skeleton };
 </script>
 
 <script lang="ts">
-import Tip from "#lib/ui/Tip.svelte";
+import "#lib/ui/card.css";
+import type { WatchInfo } from "#lib/core/watch-info.ts";
+import { m as i18n } from "#lib/paraglide/messages.js";
 import DownloadButton from "#lib/ui/DownloadButton.svelte";
 import Icon from "#lib/ui/Icon.svelte";
+import Tip from "#lib/ui/Tip.svelte";
+import WatchGlyph from "#lib/ui/WatchGlyph.svelte";
 import type { ComponentProps } from "svelte";
+
+type Action = { label: string; onclick: () => void };
 
 let {
 	title,
 	poster,
-	watched,
-	progress,
+	info,
+	leftLabel,
 	year,
 	res,
 	hdr,
@@ -21,6 +27,7 @@ let {
 	size,
 	added,
 	playLabel,
+	reset,
 	mark,
 	lang,
 	download,
@@ -29,8 +36,8 @@ let {
 }: {
 	title: string;
 	poster?: string;
-	watched: boolean;
-	progress: number;
+	info: WatchInfo;
+	leftLabel?: string;
 	year: string;
 	res: string;
 	hdr: string;
@@ -39,7 +46,8 @@ let {
 	size: string;
 	added: string;
 	playLabel?: string;
-	mark?: { on: boolean; label: string; onclick: () => void };
+	reset?: Action;
+	mark?: Action & { on: boolean };
 	lang?: { own: boolean; label: string; onclick: (trigger: HTMLElement) => void };
 	download?: Pick<ComponentProps<typeof DownloadButton>, "look" | "label" | "onclick">;
 	onplay?: () => void;
@@ -47,35 +55,57 @@ let {
 } = $props();
 
 let broken = $state(false);
+
+const line = $derived(
+	info.watched
+		? { icon: "check-check" as const, tone: "watched", text: i18n.library_watched() }
+		: info.pct
+			? {
+					icon: "circle-play" as const,
+					tone: "progress",
+					text: i18n.row_state_progress({ pct: info.pct }),
+				}
+			: {
+					icon: "eye" as const,
+					tone: "",
+					text: info.unread ? i18n.row_state_unread() : i18n.row_state_started(),
+				},
+);
 </script>
 
 <!-- A row's stand-in while a long list mounts: its size, from the same rules, and its title as text the browser's find can match. -->
 {#snippet skeleton(title: string)}
 	<div class="row skeleton">
-		<span class="thumb"></span>
+		<span class="thumb slp-art slp-mk--thumb"></span>
 		<span class="main">
-			<span class="line"><span class="title">{title}</span></span>
+			<span class="title">{title}</span>
 		</span>
 	</div>
 {/snippet}
 
 <div class="row">
 	<button type="button" class="hit" aria-label={title} {onclick}></button>
-	<span class="thumb">
+	<span class="thumb slp-art slp-mk--thumb">
 		{#if poster && !broken}
 			<img src={poster} alt="" loading="lazy" onerror={() => (broken = true)}>
 		{/if}
+		{#if info.unread}
+			<span class="slp-corner" aria-hidden="true"></span>
+		{/if}
 	</span>
 	<span class="main">
-		<span class="line">
-			<span class="title">{title}</span>
-			{#if watched}
-				<span class="seen"><Icon name="tick" size={13} stroke={2.5} /></span>
+		<span class="title">{title}</span>
+		<span class="state {line.tone}">
+			<Icon name={line.icon} size={12} stroke={2.2} />{line.text}
+			{#if info.left > 0}
+				<span class="slp-count slp-count--inline" role="img" aria-label={leftLabel}
+					>{info.left}</span
+				>
+			{/if}
+			{#if info.inProgress}
+				<span class="slp-track"><b style:width="{info.pct}%"></b></span>
 			{/if}
 		</span>
-		{#if progress > 0 && !watched}
-			<span class="bar"><span style:width="{progress}%"></span></span>
-		{/if}
 	</span>
 	<span class="cell muted">{year}</span>
 	<span class="cell">{res}</span>
@@ -85,20 +115,27 @@ let broken = $state(false);
 	<span class="cell subtle end">{added}</span>
 	<span class="tools">
 		{#if onplay}
-			<button type="button" class="tool" aria-label={playLabel} title={playLabel} onclick={onplay}>
+			<button type="button" class="tool play" aria-label={playLabel} onclick={onplay}>
+				<Tip text={playLabel} />
 				<Icon name="play" filled size={15} />
+			</button>
+		{/if}
+		{#if reset}
+			<button type="button" class="tool" aria-label={reset.label} onclick={reset.onclick}>
+				<Tip text={reset.label} />
+				<Icon name="rotate-ccw" size={15} stroke={1.8} />
 			</button>
 		{/if}
 		{#if mark}
 			<button
 				type="button"
-				class="tool"
+				class="tool mark"
 				class:on={mark.on}
 				aria-label={mark.label}
 				onclick={mark.onclick}
 			>
 				<Tip text={mark.label} />
-				<Icon name={mark.on ? "check-check" : "eye"} size={16} stroke={1.75} />
+				<WatchGlyph on={mark.on} size={15} stroke={1.8} />
 			</button>
 		{/if}
 		{#if lang}
@@ -111,12 +148,12 @@ let broken = $state(false);
 				onclick={(e) => lang.onclick(e.currentTarget)}
 			>
 				<Tip text={lang.label} />
-				<Icon name="languages" size={16} stroke={1.8} />
+				<Icon name="languages" size={15} stroke={1.8} />
 			</button>
 		{/if}
 		{#if download}
 			<DownloadButton
-				variant="poster"
+				variant="row"
 				look={download.look}
 				label={download.label}
 				onclick={download.onclick}
@@ -171,13 +208,6 @@ let broken = $state(false);
 	justify-content: flex-end;
 	align-items: center;
 	gap: 2px;
-	opacity: 0;
-	transition: opacity 120ms var(--ease);
-}
-
-.row:hover .tools,
-.row:focus-within .tools {
-	opacity: 1;
 }
 
 .tools > :global(*) {
@@ -185,9 +215,10 @@ let broken = $state(false);
 }
 
 .tool {
+	position: relative;
 	flex: none;
-	width: 34px;
-	height: 34px;
+	width: 32px;
+	height: 32px;
 	display: grid;
 	place-items: center;
 	padding: 0;
@@ -203,7 +234,24 @@ let broken = $state(false);
 	color: var(--fg);
 }
 
-.tool.on {
+.tool.play {
+	color: var(--fg);
+}
+
+.tool.play :global(.sl-ico) {
+	margin-left: 2px;
+}
+
+.tool.mark {
+	transition: color 180ms;
+}
+
+.tool.mark:hover {
+	color: var(--fg-subtle);
+}
+
+.tool.on,
+.tool.on:hover {
 	color: var(--status-available);
 }
 
@@ -212,32 +260,13 @@ let broken = $state(false);
 }
 
 .thumb {
-	display: block;
 	width: 32px;
-	aspect-ratio: 2 / 3;
-	border-radius: 4px;
-	overflow: hidden;
-	background: var(--bg-card);
-}
-
-img {
-	width: 100%;
-	height: 100%;
-	object-fit: cover;
-	display: block;
 }
 
 .main {
 	display: flex;
 	flex-direction: column;
 	gap: 4px;
-	min-width: 0;
-}
-
-.line {
-	display: flex;
-	align-items: center;
-	gap: 8px;
 	min-width: 0;
 }
 
@@ -249,24 +278,21 @@ img {
 	text-overflow: ellipsis;
 }
 
-.seen {
-	flex: none;
-	display: grid;
+.state {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	font: 400 11px var(--font-mono);
+	color: var(--fg-subtle);
+	white-space: nowrap;
+}
+
+.state.watched {
 	color: var(--status-available);
 }
 
-.bar {
-	width: 120px;
-	height: 3px;
-	border-radius: 2px;
-	background: rgba(255, 255, 255, 0.12);
-	overflow: hidden;
-}
-
-.bar > span {
-	display: block;
-	height: 100%;
-	background: var(--accent);
+.state.progress {
+	color: var(--accent-text);
 }
 
 .cell {

@@ -39,6 +39,7 @@ import { IS_WEB, TARGET } from "#lib/platform/target.ts";
 import { adminPort } from "#lib/screens/admin/port.ts";
 import { downloadsPort } from "#lib/screens/downloads-port.ts";
 import DownloadPicker from "#lib/ui/DownloadPicker.svelte";
+import CardLangPopover from "#lib/screens/CardLangPopover.svelte";
 import DownloadPopover from "#lib/ui/DownloadPopover.svelte";
 import { downloadWords } from "#lib/ui/download-words.ts";
 import { keyAction } from "#lib/shells/desktop/shortcuts.ts";
@@ -735,6 +736,8 @@ if (import.meta.env.DEV)
 				onconfirm={confirmPick}
 			/>
 		{/if}
+
+		<CardLangPopover barHeight={showBar ? 64 : 0} />
 
 		{#if popover.mounted && lastPopover && popView}
 			<button

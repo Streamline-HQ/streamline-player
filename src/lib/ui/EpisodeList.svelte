@@ -1,5 +1,6 @@
 <script lang="ts">
 import Tip from "#lib/ui/Tip.svelte";
+import WatchGlyph from "#lib/ui/WatchGlyph.svelte";
 import Art from "#lib/ui/Art.svelte";
 import DownloadButton from "#lib/ui/DownloadButton.svelte";
 import Icon from "#lib/ui/Icon.svelte";
@@ -87,7 +88,7 @@ let {
 			onclick={seasonMark.onclick}
 		>
 			<Tip text={seasonMark.label} />
-			<Icon name={seasonMark.watched ? "check-check" : "eye"} size={17} stroke={1.8} />
+			<WatchGlyph on={seasonMark.watched} size={17} stroke={1.8} />
 		</button>
 		<button
 			type="button"
@@ -128,9 +129,6 @@ let {
 					{#if e.isNew}
 						<span class="new">{newLabel}</span>
 					{/if}
-					{#if e.state === "watched"}
-						<span class="seen"><Icon name="tick" size={13} stroke={2.5} /></span>
-					{/if}
 					{#if e.state === "progress"}
 						<span class="bar-p"><span style:width="{e.pct}%"></span></span>
 					{/if}
@@ -154,7 +152,7 @@ let {
 								onclick={() => onmark(e.key)}
 							>
 								<Tip text={e.markLabel} />
-								<Icon name={e.state === "watched" ? "check-check" : "eye"} size={17} stroke={1.8} />
+								<WatchGlyph on={e.state === "watched"} size={17} stroke={1.8} />
 							</button>
 							<button
 								type="button"
@@ -239,6 +237,7 @@ section {
 
 .round,
 .tiny {
+	position: relative;
 	flex: none;
 	display: grid;
 	place-items: center;
@@ -260,7 +259,7 @@ section {
 .round.season-mark {
 	margin-left: 6px;
 	color: var(--fg-muted);
-	transition: color 180ms;
+	transition: color 260ms var(--ease);
 }
 
 .round:not(.season-mark):hover {
@@ -351,19 +350,6 @@ section {
 	color: var(--accent-text);
 }
 
-.seen {
-	position: absolute;
-	right: 8px;
-	top: 8px;
-	display: grid;
-	place-items: center;
-	width: 22px;
-	height: 22px;
-	border-radius: 50%;
-	background: color-mix(in srgb, var(--bg-deep) 80%, transparent);
-	color: var(--status-available);
-}
-
 .bar-p {
 	position: absolute;
 	left: 0;
@@ -452,7 +438,7 @@ section {
 
 .tiny.mark {
 	margin-left: auto;
-	transition: color 180ms;
+	transition: color 260ms var(--ease);
 }
 
 .tiny.lang.own {

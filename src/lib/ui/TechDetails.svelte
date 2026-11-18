@@ -18,6 +18,7 @@ let {
 	audio,
 	subsTitle,
 	subs,
+	subsNote,
 	ontoggle,
 }: {
 	label: string;
@@ -29,7 +30,9 @@ let {
 	audio: string[];
 	subsTitle: string;
 	/** Only a movie lists its subtitles here. */
-	subs?: string;
+	/** A movie's subtitle tracks, one per line; `burns` says the platform can only burn it in. */
+	subs?: { name: string; format: string; burns: boolean }[];
+	subsNote?: string;
 	ontoggle: () => void;
 } = $props();
 </script>
@@ -71,7 +74,14 @@ let {
 					{#if subs !== undefined}
 						<div class="card pad">
 							<div class="cap">{subsTitle}</div>
-							<div class="subs">{subs}</div>
+							{#each subs as sb, i (i)}
+								<div class="sub">
+									<span>{sb.name}</span><span class="fmt" class:burns={sb.burns}>{sb.format}</span>
+								</div>
+							{/each}
+							{#if subsNote}
+								<div class="note">{subsNote}</div>
+							{/if}
 						</div>
 					{/if}
 				</div>
@@ -86,6 +96,10 @@ section {
 	flex-direction: column;
 	border-top: 1px solid var(--border);
 	border-bottom: 1px solid var(--border);
+}
+
+.fact:last-child {
+	border-bottom: 0;
 }
 
 .toggle {
@@ -156,6 +170,7 @@ section {
 .body {
 	display: grid;
 	grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr);
+	align-items: start;
 	gap: 16px;
 	padding: 4px 0 24px;
 	opacity: 0;
@@ -276,9 +291,27 @@ section {
 	color: var(--fg-muted);
 }
 
-.subs {
+.sub {
+	display: flex;
+	align-items: baseline;
+	gap: 8px;
 	font-size: 13px;
-	line-height: 1.6;
 	color: var(--fg-muted);
+}
+
+.fmt {
+	font: 400 11px var(--font-mono);
+	color: var(--fg-subtle);
+}
+
+.fmt.burns {
+	color: var(--status-warning);
+}
+
+.note {
+	margin-top: 2px;
+	font-size: 11.5px;
+	line-height: 1.45;
+	color: var(--fg-subtle);
 }
 </style>

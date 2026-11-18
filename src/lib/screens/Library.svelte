@@ -1,72 +1,49 @@
 <script lang="ts">
-import { loadErrorText } from "#lib/core/load-error.ts";
-import { isNew, watchedTitle } from "#lib/core/browse.ts";
+import { isNew } from "#lib/core/browse.ts";
 import { addedText, badges, sizeText } from "#lib/core/format.ts";
-import { clickGroup, clickOne } from "#lib/core/download-ask.svelte.ts";
-import { episodeItem, episodeKey, movieItem, movieKey } from "#lib/core/download-items.ts";
-import { bulkState, buttonState } from "#lib/core/downloads-view.ts";
-import { dl, entry } from "#lib/core/downloads.svelte.ts";
-import { lib, loadLibrary, loadSeasons, applyWatch } from "#lib/core/library.svelte.ts";
+import { dl } from "#lib/core/downloads.svelte.ts";
+import { lib, loadLibrary, loadSeasons } from "#lib/core/library.svelte.ts";
 import {
-	setWatch,
+	browseRails,
 	FLAGS,
 	genres,
-	episodeFor,
-	playHref,
-	progressOf,
-	SORTS,
-	type Sort,
-	toggleFlag,
-	WATCH_FLAGS,
-	watchFlag,
+	MENU_SORTS,
+	pickSort,
 	type Flag,
 	type Layout,
+	type Rail,
+	type Sort,
+	setWatch,
+	sortDirection,
+	toggleFlag,
 	type View,
 	viewFromQuery,
 	viewToQuery,
 	visible,
+	WATCH_FLAGS,
+	watchFlag,
 } from "#lib/core/library-view.ts";
-import {
-	audioLanguages,
-	type Choice,
-	defaultChoice,
-	loadChoices,
-	saveChoices,
-	subtitleLanguages,
-} from "#lib/core/playback/choice.ts";
-import { languageLabel } from "#lib/core/playback/names.ts";
-import type { Tracks } from "#lib/core/playback/port.ts";
-import { isAnime, language } from "#lib/core/playback/rules.ts";
-import { myLanguage, prefs } from "#lib/core/prefs.svelte.ts";
-import { toast } from "#lib/core/toast.svelte.ts";
+import { loadErrorText } from "#lib/core/load-error.ts";
+import { prefs } from "#lib/core/prefs.svelte.ts";
 import type { Kind, Title } from "#lib/core/types.ts";
 import { m as i18n } from "#lib/paraglide/messages.js";
-import { askPort } from "#lib/screens/downloads-port.ts";
+import BackdropCard from "#lib/ui/BackdropCard.svelte";
 import Button from "#lib/ui/Button.svelte";
-import { downloadWords } from "#lib/ui/download-words.ts";
 import Chip from "#lib/ui/Chip.svelte";
 import { dismiss } from "#lib/ui/dismiss.ts";
 import EmptyState from "#lib/ui/EmptyState.svelte";
 import FilterMenu from "#lib/ui/FilterMenu.svelte";
-import LanguagePopover from "#lib/ui/LanguagePopover.svelte";
-import Icon from "#lib/ui/Icon.svelte";
+import Icon, { type IconName } from "#lib/ui/Icon.svelte";
 import { goto } from "#lib/ui/nav.ts";
 import PosterCard, { skeleton as posterSkeleton } from "#lib/ui/PosterCard.svelte";
 import { presence } from "#lib/ui/presence.svelte.ts";
 import { progressive } from "#lib/ui/progressive.svelte.ts";
+import Row from "#lib/ui/Row.svelte";
 import SegmentedControl from "#lib/ui/SegmentedControl.svelte";
 import SortMenu from "#lib/ui/SortMenu.svelte";
 import TitleRow, { skeleton as rowSkeleton } from "#lib/ui/TitleRow.svelte";
-import {
-	artwork,
-	canDownload,
-	home,
-	library,
-	playbackPort,
-	setWatched,
-	title,
-	watchState,
-} from "#platform";
+import { titleCard } from "#lib/screens/title-card.svelte.ts";
+import { artwork, canDownload, home, library, title, watchState } from "#platform";
 import { page } from "$app/state";
 import { onMount, untrack } from "svelte";
 
@@ -74,19 +51,23 @@ const PAD_X = 56;
 const TOP = 92;
 const MIN_COL = 196;
 const ALL = "__all";
-const LIST_COLS = "32px minmax(0,2.2fr) 74px 58px 104px minmax(0,1.4fr) 76px 84px 150px";
+const LIST_COLS = "32px minmax(0,2.2fr) 74px 58px 104px minmax(0,1.4fr) 76px 84px 170px";
 const port = { library, watchState, home, title };
 
 let { kind }: { kind: Kind } = $props();
 
 const now = new Date();
 const view = $derived(viewFromQuery(new URLSearchParams(page.url.search)));
+const isAll = $derived(view.tab === "all");
 const base = $derived(kind === "movies" ? lib.movies : lib.shows);
 const items = $derived(visible(base, kind, lib.watch, view));
+const rails = $derived(
+	isAll ? [] : browseRails(base, kind, lib.watch, (t: Title) => isNew(t, now)),
+);
 const genreList = $derived(genres(base, kind, lib.watch, view.flags));
 const flaggedTotal = $derived(visible(base, kind, lib.watch, { ...view, genre: null }).length);
 const rows = progressive(
-	() => items,
+	() => (isAll ? items : []),
 	() => `${kind}:${view.layout}`,
 );
 const shown = $derived(items.slice(0, rows.drawn));
@@ -96,12 +77,21 @@ let genreMenu = $state(false);
 const genrePanel = presence(() => genreMenu, 170);
 
 const watchPick = $derived(watchFlag(view.flags));
+const extraFlag: Flag = $derived(kind === "movies" ? "short" : "binge");
 const flagLabel: Record<Flag, string> = {
 	unwatched: i18n.library_unwatched(),
 	progress: i18n.library_in_progress(),
 	watched: i18n.library_watched(),
 	uhd: "4K",
 	hdr: "HDR",
+	short: i18n.rail_short(),
+	binge: i18n.library_binge(),
+};
+const watchIcon: Record<string, IconName> = {
+	[ALL]: "layers",
+	unwatched: "eye",
+	progress: "circle-play",
+	watched: "check-check",
 };
 const sortLabel = (s: Sort) =>
 	({
@@ -110,11 +100,26 @@ const sortLabel = (s: Sort) =>
 		year: i18n.library_sort_year(),
 		rating: i18n.library_sort_rating(),
 		size: i18n.library_sort_size(),
+		resolution: i18n.library_sort_resolution(),
+		hdr: "HDR",
+		audio: i18n.library_col_audio(),
 	})[s];
+const sortIcon: Record<string, IconName> = {
+	added: "clock",
+	title: "type",
+	year: "calendar",
+	rating: "star",
+	size: "hard-drive",
+};
 
 function set(patch: Partial<View>) {
 	const q = viewToQuery({ ...view, ...patch });
 	goto(`/library/${kind}${q ? `?${q}` : ""}`, { replace: true, reset: false });
+}
+
+function seeAll(r: Rail) {
+	set(r.seeAll);
+	document.querySelector(".content")?.scrollTo({ top: 0 });
 }
 
 const years = (t: Title) => t.first_aired ?? String(t.year);
@@ -130,219 +135,47 @@ const sub = (t: Title) => {
 		: badges(q).slice(0, 2).join(" ");
 	return [t.year, tech].filter(Boolean).join(" · ");
 };
-
-const play = (t: Title) => goto(playHref(t, kind, lib.watch));
-
-const markFor = (t: Title, watched: boolean) => ({
-	on: watched,
-	label: watched
-		? i18n.library_mark_unwatched({ title: t.title })
-		: i18n.library_mark_watched({ title: t.title }),
-	onclick: () => toggleMark(t),
-});
-
-const langFor = (t: Title) =>
-	kind === "movies"
-		? {
-				own: !!choices[`movies:${t.id}`],
-				label: langLabel(t),
-				onclick: (el: HTMLElement) => openLang(t, el),
-			}
-		: undefined;
-
-function playLabel(t: Title) {
-	if (kind === "movies")
-		return progressOf(t, kind, lib.watch) > 0
-			? i18n.library_resume_title({ title: t.title })
-			: i18n.library_play_title({ title: t.title });
-	const ep = episodeFor(t, lib.watch);
-	return ep && "number" in ep
-		? i18n.library_play_episode({ title: t.title, season: ep.season, episode: ep.number })
-		: i18n.library_play_title({ title: t.title });
-}
-
-const dlWords = $derived(downloadWords());
-
-function dlFor(t: Title) {
-	if (!canDownload) return undefined;
-	if (kind === "movies") {
-		const key = movieKey(t);
-		const e = entry(key);
-		const look = buttonState(e, t.title, dlWords);
-		const label = !e
-			? look.label
-			: e.state === "done"
-				? i18n.dl_label_downloaded({ title: t.title })
-				: i18n.dl_label_downloading({ title: t.title });
-		return {
-			look,
-			label,
-			onclick: (ev: MouseEvent) =>
-				clickOne(
-					askPort,
-					ev,
-					key,
-					t.title,
-					async () => movieItem(await title("movies", t.id), lib.watch),
-					t.genres,
-				),
-		};
+const runtime = (m: number) =>
+	i18n.common_runtime_hm({ h: Math.floor(m / 60), m: String(m % 60).padStart(2, "0") });
+const railSub = (t: Title) => {
+	if (kind === "series") {
+		const count = t.total_seasons ?? t.seasons?.length ?? 0;
+		return `${years(t)} · ${count === 1 ? i18n.common_seasons_one({ count }) : i18n.common_seasons_other({ count })}`;
 	}
-	const files = (t.seasons ?? []).flatMap((s) =>
-		s.episodes.filter((e) => e.has_file).map((e) => ({ ...e, season: s.number })),
-	);
-	if (!files.length) return undefined;
-	const keys = files.map((e) => episodeKey(t, e));
-	const st = bulkState(keys, entry, t.title, "series", dlWords);
-	return {
-		look: st,
-		label: st.label,
-		onclick: (ev: MouseEvent) =>
-			clickGroup(
-				askPort,
-				ev,
-				st.act,
-				keys,
-				t.title,
-				() =>
-					files
-						.filter((e) => st.missing.includes(episodeKey(t, e)))
-						.map((e) => episodeItem(t, e, lib.watch)),
-				t.genres,
-			),
-	};
-}
-
-const POPOVER_W = 280;
-const POPOVER_H = 420;
-const BAR = 64;
-let box = $state<HTMLElement>();
-let choices = $state(loadChoices());
-type Open = { t: Title; tracks: Tracks | null; draft: Choice; x: number; y: number; up: boolean };
-let lang = $state<Open | null>(null);
-const popover = presence(() => lang !== null, 190);
-let lastLang = $state.raw<Open | null>(null);
-$effect(() => {
-	if (lang) lastLang = lang;
-});
-const shownLang = $derived(lang ?? lastLang);
-
-const languageNamed = (name: string, from: { language: string }[]) => {
-	const hit = from.find((x) => language(x.language) === name);
-	return hit ? languageLabel(hit.language) : name;
+	return [t.year, t.runtime ? runtime(t.runtime) : ""].filter(Boolean).join(" · ");
 };
-const subsShort = (c: Choice) =>
-	c.subs === "off"
-		? i18n.detail_subs_none()
-		: c.subs === "forced"
-			? i18n.detail_subs_forced()
-			: i18n.detail_subs_language({ language: c.subs });
-const langLabel = (t: Title) => {
-	const own = choices[`movies:${t.id}`];
-	return own
-		? i18n.detail_lang_label({ audio: own.audio, subs: subsShort(own) })
-		: i18n.detail_lang_title();
-};
-
-async function openLang(t: Title, el: HTMLElement) {
-	if (lang?.t.id === t.id) {
-		lang = null;
-		return;
-	}
-	let tracks: Tracks | null = null;
-	try {
-		const media = (await title(kind, t.id)).media_files?.[0]?.id;
-		if (media) tracks = await playbackPort.mediaTracks(media);
-	} catch {
-		// The popover then says the tracks are not ready.
-	}
-	if (!box || !el.isConnected) return;
-	const draft =
-		choices[`movies:${t.id}`] ??
-		(tracks
-			? defaultChoice(tracks.audio, {
-					audioLang: prefs.audioLang,
-					anime: isAnime(t.genres ?? []),
-					animeRule: prefs.animeRule,
-					subsMode: prefs.subsMode,
-					myLanguage: myLanguage(),
-				})
-			: { audio: "", subs: "forced" });
-	const b = box.getBoundingClientRect();
-	const r = el.getBoundingClientRect();
-	const host = el.closest(".content")?.getBoundingClientRect();
-	const bottom = host?.bottom ?? window.innerHeight;
-	const top = (host?.top ?? 0) + BAR + 8;
-	const up = r.bottom + POPOVER_H > bottom && r.top - POPOVER_H >= top;
-	let y = up ? r.top - b.top - 6 : r.bottom - b.top + 6;
-	// No room below nor above: slide it up beside the card, clear of the app bar.
-	if (!up && r.bottom + POPOVER_H > bottom)
-		y = Math.max(top - b.top, Math.min(y, bottom - b.top - 8 - POPOVER_H));
-	lang = {
-		t,
-		tracks,
-		draft: { ...draft },
-		x: Math.max(12, Math.min(box.offsetWidth - POPOVER_W - 12, r.right - b.left - POPOVER_W + 8)),
-		y,
-		up,
-	};
-}
-
-function applyLang() {
-	if (!lang) return;
-	choices = { ...choices, [`movies:${lang.t.id}`]: lang.draft };
-	saveChoices(choices);
-	lang = null;
-}
-
-$effect(() => {
-	if (!lang) return;
-	const onPress = (e: PointerEvent) => {
-		const el = e.target as Element | null;
-		if (el?.closest('[role="dialog"]') || el?.closest("[data-lang-trigger]")) return;
-		lang = null;
-	};
-	const onKey = (e: KeyboardEvent) => {
-		if (e.key !== "Escape") return;
-		e.stopPropagation();
-		lang = null;
-	};
-	document.addEventListener("pointerdown", onPress, true);
-	window.addEventListener("keydown", onKey, true);
-	return () => {
-		document.removeEventListener("pointerdown", onPress, true);
-		window.removeEventListener("keydown", onKey, true);
-	};
-});
-
-async function toggleMark(t: Title) {
-	const was = watchedTitle(t, kind, lib.watch);
-	try {
-		const d = await title(kind, t.id);
-		const targets =
-			kind === "movies"
-				? (d.media_files ?? []).slice(0, 1).map((f) => ({ media: f.id, ref: { movie_id: t.id } }))
-				: (d.seasons ?? []).flatMap((s) =>
-						s.episodes
-							.filter((e) => e.has_file)
-							.map((e) => ({
-								media: e.media_file_id,
-								ref: { series_id: t.id, season: s.number, episode_id: e.id },
-							})),
-					);
-		await Promise.all(targets.map((x) => setWatched(x.media, !was)));
-		for (const x of targets) applyWatch(x.media, !was, x.ref);
-		toast(
-			kind === "series"
-				? was
-					? i18n.detail_marked_series_unwatched()
-					: i18n.detail_marked_series_watched()
-				: was
-					? i18n.detail_marked_unwatched()
-					: i18n.detail_marked_watched(),
-		);
-	} catch {}
-}
+const newest = $derived(
+	base.reduce<Title | null>(
+		(a, t) => (!a || Date.parse(t.added_at) > Date.parse(a.added_at) ? t : a),
+		null,
+	),
+);
+const eyebrow = (t: Title) =>
+	t === newest ? i18n.rail_added_today() : i18n.rail_added({ date: addedText(t.added_at, now) });
+const railTitle = (r: Rail) =>
+	({
+		recent: i18n.home_recently_added(),
+		top: i18n.rail_top(),
+		unstarted: i18n.rail_unstarted(),
+		genre: r.genre ?? "",
+		uhd: i18n.rail_uhd(),
+		short: i18n.rail_short(),
+		binge: i18n.rail_binge(),
+	})[r.id];
+const railNote = (r: Rail) =>
+	({
+		recent: i18n.home_new_count({ count: r.count }),
+		top: i18n.rail_top_note(),
+		unstarted: i18n.rail_titles({ count: r.count }),
+		genre: i18n.rail_titles({ count: r.count }),
+		uhd: i18n.rail_uhd_note({ count: r.count }),
+		short: i18n.rail_short_note(),
+		binge: i18n.rail_binge_note(),
+	})[r.id];
+const episodes = (t: Title) =>
+	t.seasons
+		? t.seasons.flatMap((s) => s.episodes).filter((e) => e.has_file).length
+		: (t.episodes?.total ?? 0);
 
 const open = (t: Title) => goto(`/detail/${kind}/${t.id}`);
 const empty = $derived(lib.loaded && base.length === 0);
@@ -356,18 +189,18 @@ onMount(() => {
 	loadLibrary(port, lib.loaded);
 });
 
-const heads: { label: () => string; sort?: Sort; end?: boolean }[] = [
+const heads: { label: () => string; sort: Sort; end?: boolean }[] = [
 	{ label: () => i18n.library_sort_title(), sort: "title" },
 	{ label: () => i18n.library_sort_year(), sort: "year" },
-	{ label: () => i18n.library_col_res() },
-	{ label: () => "HDR" },
-	{ label: () => i18n.library_col_audio() },
+	{ label: () => i18n.library_col_res(), sort: "resolution" },
+	{ label: () => "HDR", sort: "hdr" },
+	{ label: () => i18n.library_col_audio(), sort: "audio" },
 	{ label: () => i18n.library_sort_size(), sort: "size", end: true },
 	{ label: () => i18n.library_col_added(), sort: "added", end: true },
 ];
 </script>
 
-<div class="library" style:--cols={LIST_COLS} bind:this={box}>
+<div class="library" style:--cols={LIST_COLS}>
 	{#if lib.error !== null}
 		<div class="state">
 			<EmptyState icon="film" title={i18n.home_error_title()} text={loadErrorText(lib.error)}>
@@ -401,102 +234,170 @@ const heads: { label: () => string; sort?: Sort; end?: boolean }[] = [
 				<div class="heading">
 					<h1>{kind === "movies" ? i18n.nav_movies() : i18n.nav_shows()}</h1>
 					<span class="count"
-						>{kind === "movies"
-							? i18n.library_count_movies({ count: items.length, total: base.length })
-							: i18n.library_count_shows({ count: items.length, total: base.length })}</span
+						>{#if isAll}
+							{kind === "movies"
+								? i18n.library_count_movies({ count: items.length, total: base.length })
+								: i18n.library_count_shows({ count: items.length, total: base.length })}
+						{:else}
+							{kind === "movies"
+								? i18n.library_total_movies({ count: base.length })
+								: i18n.library_total_shows({ count: base.length })}
+						{/if}</span
 					>
 				</div>
-				<div class="tools">
-					<div class="genre" use:dismiss={() => (genreMenu = false)}>
-						<button
-							type="button"
-							class="genre-btn"
-							class:on={view.genre !== null}
-							aria-haspopup="listbox"
-							aria-expanded={genreMenu}
-							onclick={() => (genreMenu = !genreMenu)}
-						>
-							{view.genre ?? i18n.library_genre_all()}
-							<span class="chev" class:open={genreMenu}
-								><Icon name="chevron-down" size={14} stroke={2} /></span
+				{#if isAll}
+					<div class="tools">
+						<div class="genre" use:dismiss={() => (genreMenu = false)}>
+							<button
+								type="button"
+								class="genre-btn"
+								class:on={view.genre !== null}
+								aria-haspopup="listbox"
+								aria-expanded={genreMenu}
+								onclick={() => (genreMenu = !genreMenu)}
 							>
-						</button>
-						{#if genrePanel.mounted}
-							<div class="genre-panel" class:shown={genrePanel.shown && genreMenu}>
-								<FilterMenu
-									options={[
-										{ value: ALL, label: i18n.library_all(), count: flaggedTotal },
-										...genreList.map((g) => ({ value: g.name, label: g.name, count: g.count })),
-									]}
-									value={view.genre ?? ALL}
-									label={i18n.library_genre()}
-									placeholder={i18n.library_genre_search()}
-									emptyLabel={i18n.library_genre_none()}
-									onchange={(v) => {
-										set({ genre: v === ALL ? null : v });
-										genreMenu = false;
-									}}
-								/>
-							</div>
-						{/if}
+								{view.genre ?? i18n.library_genre_all()}
+								<span class="chev" class:open={genreMenu}
+									><Icon name="chevron-down" size={13} stroke={2} /></span
+								>
+							</button>
+							{#if genrePanel.mounted}
+								<div class="genre-panel" class:shown={genrePanel.shown && genreMenu}>
+									<FilterMenu
+										options={[
+											{ value: ALL, label: i18n.library_all(), count: flaggedTotal },
+											...genreList.map((g) => ({ value: g.name, label: g.name, count: g.count })),
+										]}
+										value={view.genre ?? ALL}
+										label={i18n.library_genre()}
+										placeholder={i18n.library_genre_search()}
+										emptyLabel={i18n.library_genre_none()}
+										onchange={(v) => {
+											set({ genre: v === ALL ? null : v });
+											genreMenu = false;
+										}}
+									/>
+								</div>
+							{/if}
+						</div>
+						<SortMenu
+							label={i18n.library_watch_state()}
+							icon="eye"
+							align="left"
+							title={watchPick ? undefined : i18n.library_watch_state()}
+							value={watchPick ?? ALL}
+							options={[
+								{ value: ALL, label: i18n.library_all(), icon: watchIcon[ALL] },
+								...WATCH_FLAGS.map((f) => ({ value: f, label: flagLabel[f], icon: watchIcon[f] })),
+							]}
+							onchange={(v) => set({ flags: setWatch(view.flags, v === ALL ? null : (v as Flag)) })}
+						/>
+						<fieldset class="flags" aria-label={i18n.library_show_only()}>
+							{#each FLAGS.filter(
+								(f) =>
+									!WATCH_FLAGS.includes(f) && (f === extraFlag || (f !== "short" && f !== "binge")),
+							) as f (f)}
+								<Chip
+									pressed={view.flags.includes(f)}
+									onclick={() => set({ flags: toggleFlag(view.flags, f) })}
+								>
+									{flagLabel[f]}
+								</Chip>
+							{/each}
+						</fieldset>
+						<span class="rule"></span>
+						<SegmentedControl
+							label={i18n.library_layout()}
+							value={view.layout}
+							options={[
+								{ value: "grid", label: i18n.library_layout_grid(), icon: "layout-grid" },
+								{ value: "list", label: i18n.library_layout_list(), icon: "list" },
+							]}
+							onchange={(layout: Layout) => set({ layout })}
+						/>
+						<SortMenu
+							label={i18n.library_sort_by()}
+							value={view.sort}
+							current={sortLabel(view.sort)}
+							ascending={sortDirection(view.sort, view.sortRev) === "ascending"}
+							options={MENU_SORTS.map((s) => ({
+								value: s,
+								label: sortLabel(s),
+								icon: sortIcon[s],
+							}))}
+							onchange={(sort: Sort) => set(pickSort(view, sort))}
+						/>
 					</div>
-					<SortMenu
-						label={i18n.library_watch_state()}
-						icon="eye"
-						title={watchPick ? undefined : i18n.library_watch_state()}
-						value={watchPick ?? ALL}
-						options={[
-							{ value: ALL, label: i18n.library_all() },
-							...WATCH_FLAGS.map((f) => ({ value: f, label: flagLabel[f] })),
-						]}
-						onchange={(v) => set({ flags: setWatch(view.flags, v === ALL ? null : (v as Flag)) })}
-					/>
-					<fieldset class="flags" aria-label={i18n.library_show_only()}>
-						{#each FLAGS.filter((f) => !WATCH_FLAGS.includes(f)) as f (f)}
-							<Chip
-								pressed={view.flags.includes(f)}
-								onclick={() => set({ flags: toggleFlag(view.flags, f) })}
-							>
-								{flagLabel[f]}
-							</Chip>
-						{/each}
-					</fieldset>
-					<span class="rule"></span>
-					<SegmentedControl
-						label={i18n.library_layout()}
-						value={view.layout}
-						options={[
-							{ value: "grid", label: i18n.library_layout_grid(), icon: "layout-grid" },
-							{ value: "list", label: i18n.library_layout_list(), icon: "list" },
-						]}
-						onchange={(layout: Layout) => set({ layout })}
-					/>
-					<SortMenu
-						label={i18n.library_sort_by()}
-						value={view.sort}
-						options={SORTS.map((s) => ({ value: s, label: sortLabel(s) }))}
-						onchange={(sort: Sort) => set({ sort })}
-					/>
-				</div>
+				{/if}
 			</div>
+			<nav class="tabs" aria-label={i18n.library_view_label()}>
+				{#each [
+					["browse", i18n.library_tab_browse()],
+					["all", kind === "movies" ? i18n.library_tab_all_movies() : i18n.library_tab_all_shows()],
+				] as [tab, label] (tab)}
+					<button
+						type="button"
+						class="tab"
+						aria-current={view.tab === tab ? "page" : undefined}
+						onclick={() => set({ tab: tab as View["tab"] })}
+					>
+						{label}<span class="line"></span>
+					</button>
+				{/each}
+			</nav>
 
-			{#if items.length && view.layout === "grid"}
+			{#if !isAll}
+				<div class="rails" style:margin="4px -{PAD_X}px 0">
+					{#each rails as r (`${r.id}:${r.genre ?? ""}`)}
+						<Row
+							title={railTitle(r)}
+							note={railNote(r)}
+							padX={PAD_X}
+							gap={r.wide ? 16 : 18}
+							prevLabel={i18n.home_scroll_left()}
+							nextLabel={i18n.home_scroll_right()}
+							seeAll={{ label: i18n.rail_see_all(), onclick: () => seeAll(r) }}
+						>
+							{#each r.titles as t (t.id)}
+								{@const card = titleCard(kind, t, now)}
+								{#if r.wide}
+									<div class="cell" style:width="320px">
+										<BackdropCard
+											title={t.title}
+											sub={railSub(t)}
+											eyebrow={eyebrow(t)}
+											backdrop={artwork(kind, t.id, "backdrop")}
+											poster={artwork(kind, t.id, "poster")}
+											info={card.info}
+											leftLabel={card.leftLabel}
+											onclick={() => open(t)}
+										/>
+									</div>
+								{:else}
+									<div class="cell" style:width="168px">
+										<PosterCard
+											title={t.title}
+											sub={railSub(t)}
+											src={artwork(kind, t.id, "poster")}
+											{...card}
+											badge={undefined}
+											onclick={() => open(t)}
+										/>
+									</div>
+								{/if}
+							{/each}
+						</Row>
+					{/each}
+				</div>
+			{:else if items.length && view.layout === "grid"}
 				<div class="grid" style:--min="{MIN_COL}px" style:padding-bottom="{rows.after}px" use:track>
 					{#each shown as t (t.id)}
 						{#if rows.real(t.id)}
-							{@const watched = watchedTitle(t, kind, lib.watch)}
 							<PosterCard
 								title={t.title}
 								sub={sub(t)}
 								src={artwork(kind, t.id, "poster")}
-								badge={isNew(t, now) ? i18n.home_new() : undefined}
-								{watched}
-								progress={progressOf(t, kind, lib.watch)}
-								playLabel={playLabel(t)}
-								mark={markFor(t, watched)}
-								lang={langFor(t)}
-								download={dlFor(t)}
-								onplay={() => play(t)}
+								{...titleCard(kind, t, now)}
 								onclick={() => open(t)}
 							/>
 						{:else}
@@ -509,39 +410,45 @@ const heads: { label: () => string; sort?: Sort; end?: boolean }[] = [
 					<div class="head">
 						<span></span>
 						{#each heads as h, i (i)}
+							{@const on = h.sort === view.sort}
 							<button
 								type="button"
 								class="th"
 								class:end={h.end}
-								class:sorted={h.sort === view.sort}
-								class:inert={!h.sort}
-								onclick={() => h.sort && set({ sort: h.sort })}
+								class:sorted={on}
+								class:up={on && sortDirection(h.sort, view.sortRev) === "ascending"}
+								onclick={() => set(pickSort(view, h.sort))}
 							>
 								{h.label()}<Icon name="chevron-down" size={11} stroke={2.5} />
 							</button>
 						{/each}
+						<span></span>
 					</div>
 					<div class="rows" style:padding-bottom="{rows.after}px" use:track>
 						{#each shown as t (t.id)}
 							{#if rows.real(t.id)}
 								{@const q = t.file_summary}
+								{@const card = titleCard(kind, t, now)}
 								<TitleRow
 									title={t.title}
 									poster={artwork(kind, t.id, "poster")}
-									watched={watchedTitle(t, kind, lib.watch)}
-									progress={progressOf(t, kind, lib.watch)}
+									info={card.info}
+									leftLabel={card.leftLabel}
 									year={kind === "series" ? years(t) : String(t.year)}
 									res={q?.resolution ?? ""}
 									hdr={q?.hdr || "SDR"}
 									hdrOn={!!q?.hdr}
 									audio={[q?.audio, q?.channels].filter(Boolean).join(" ")}
-									size={sizeText(q?.size)}
+									size={kind === "series"
+										? i18n.library_eps({ count: episodes(t) })
+										: sizeText(q?.size)}
 									added={addedText(t.added_at, now)}
-									playLabel={playLabel(t)}
-									mark={markFor(t, watchedTitle(t, kind, lib.watch))}
-									lang={langFor(t)}
-									download={dlFor(t)}
-									onplay={() => play(t)}
+									playLabel={card.playLabel}
+									reset={card.reset}
+									mark={card.mark}
+									lang={card.lang}
+									download={card.download}
+									onplay={card.onplay}
 									onclick={() => open(t)}
 								/>
 							{:else}
@@ -560,39 +467,6 @@ const heads: { label: () => string; sort?: Sort; end?: boolean }[] = [
 				</EmptyState>
 			{/if}
 		</div>
-	{/if}
-	{#if popover.mounted && shownLang}
-		{@const audio = audioLanguages(shownLang.tracks?.audio ?? [])}
-		<LanguagePopover
-			heading={shownLang.t.title}
-			title={i18n.detail_lang_title()}
-			audioLabel={i18n.player_audio()}
-			subsLabel={i18n.player_subtitles()}
-			audio={audio.map((name) => ({
-				value: name,
-				label: languageNamed(name, shownLang.tracks?.audio ?? []),
-			}))}
-			subs={[
-				{ value: "off", label: i18n.player_subtitles_off() },
-				{ value: "forced", label: i18n.detail_forced_only() },
-				...subtitleLanguages(shownLang.tracks?.subtitles ?? []).map((name) => ({
-					value: name,
-					label: languageNamed(name, shownLang.tracks?.subtitles ?? []),
-				})),
-			]}
-			draft={shownLang.draft}
-			hint=""
-			applyLabel={i18n.detail_apply()}
-			unavailable={audio.length ? undefined : i18n.detail_lang_unavailable()}
-			x={shownLang.x}
-			y={shownLang.y}
-			up={shownLang.up}
-			shown={popover.shown && lang !== null}
-			onpick={(patch) => {
-				if (lang) lang.draft = { ...lang.draft, ...patch };
-			}}
-			onapply={applyLang}
-		/>
 	{/if}
 </div>
 
@@ -662,31 +536,31 @@ h1 {
 }
 
 .genre-btn {
-	height: 38px;
+	height: 36px;
 	display: flex;
 	align-items: center;
 	gap: 8px;
-	padding: 0 12px;
-	border-radius: var(--radius-md);
-	border: 1px solid var(--border-strong);
-	background: var(--surface);
+	padding: 0 10px 0 12px;
+	border: 0;
+	border-radius: 10px;
+	box-shadow: inset 0 0 0 1px var(--border);
+	background: color-mix(in srgb, var(--fg) 4%, transparent);
 	color: var(--fg-muted);
 	font-size: 13px;
+	font-weight: 500;
 	white-space: nowrap;
 	cursor: pointer;
 	transition:
 		background var(--dur-fast),
-		border-color var(--dur-fast),
 		color var(--dur-fast);
 }
 
 .genre-btn:hover {
-	background: rgba(255, 255, 255, 0.08);
 	color: var(--fg);
 }
 
 .genre-btn.on {
-	border-color: color-mix(in srgb, var(--accent) 45%, transparent);
+	box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--accent) 45%, transparent);
 	background: var(--accent-soft);
 	color: var(--fg);
 }
@@ -703,7 +577,7 @@ h1 {
 .genre-panel {
 	position: absolute;
 	left: 0;
-	top: 44px;
+	top: 40px;
 	z-index: 6;
 	transform-origin: top left;
 	opacity: 0;
@@ -738,6 +612,60 @@ h1 {
 	height: 22px;
 	background: var(--border-strong);
 	margin: 0 6px;
+}
+
+.tabs {
+	display: flex;
+	gap: 22px;
+	margin-top: -4px;
+	border-bottom: 1px solid var(--border);
+}
+
+.tab {
+	position: relative;
+	padding: 0 0 12px;
+	border: 0;
+	background: transparent;
+	color: var(--fg-muted);
+	font-size: 14px;
+	font-weight: 500;
+	cursor: pointer;
+}
+
+.tab:hover,
+.tab[aria-current="page"] {
+	color: var(--fg);
+}
+
+.tab[aria-current="page"] {
+	font-weight: 600;
+}
+
+.line {
+	position: absolute;
+	left: 0;
+	right: 0;
+	bottom: -1px;
+	height: 2px;
+	border-radius: 2px;
+	background: var(--accent);
+	opacity: 0;
+	transition: opacity var(--dur-fast);
+}
+
+[aria-current="page"] > .line {
+	opacity: 1;
+}
+
+.rails {
+	display: flex;
+	flex-direction: column;
+	gap: 30px;
+}
+
+.cell {
+	flex: none;
+	scroll-snap-align: start;
 }
 
 .grid {
@@ -781,16 +709,21 @@ h1 {
 	justify-content: flex-end;
 }
 
+.th:hover {
+	color: var(--fg-muted);
+}
+
 .th.sorted {
 	color: var(--fg);
 }
 
-.th.inert {
-	cursor: default;
-}
-
 .th :global(.sl-ico) {
 	opacity: 0;
+	transition: transform var(--dur-fast) var(--ease);
+}
+
+.th.up :global(.sl-ico) {
+	transform: rotate(180deg);
 }
 
 .th.sorted :global(.sl-ico) {

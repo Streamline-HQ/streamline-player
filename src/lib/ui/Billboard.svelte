@@ -1,6 +1,5 @@
 <script lang="ts">
 import Art from "#lib/ui/Art.svelte";
-import Chip from "#lib/ui/Chip.svelte";
 import Icon from "#lib/ui/Icon.svelte";
 import { useScroll } from "#lib/ui/scroll.ts";
 import { onMount } from "svelte";
@@ -114,7 +113,7 @@ const frameStyle = (i: number) => {
 			<div class="meta">
 				<span>{slide.meta}</span>
 				{#each slide.chips as c}
-					<Chip>{c}</Chip>
+					<span class="chip">{c}</span>
 				{/each}
 			</div>
 			<p>{slide.overview}</p>
@@ -304,11 +303,11 @@ p {
 	white-space: nowrap;
 	height: 46px;
 	padding: 0 18px;
-	border: 1px solid rgba(255, 255, 255, 0.22);
+	border: 1px solid rgba(255, 255, 255, 0.16);
 	border-radius: var(--radius-md);
-	background: rgba(255, 255, 255, 0.14);
-	backdrop-filter: blur(16px) saturate(160%);
-	-webkit-backdrop-filter: blur(16px) saturate(160%);
+	background: var(--player-chip);
+	backdrop-filter: blur(12px);
+	-webkit-backdrop-filter: blur(12px);
 	color: var(--player-ink);
 	font-size: 15px;
 	font-weight: 500;
@@ -316,7 +315,16 @@ p {
 }
 
 .glass:hover {
-	background: rgba(255, 255, 255, 0.22);
+	background: rgba(255, 255, 255, 0.14);
+}
+
+.chip {
+	padding: 2px 8px;
+	border: 1px solid rgba(255, 255, 255, 0.28);
+	border-radius: 6px;
+	font: 400 11.5px var(--font-mono);
+	color: var(--fg);
+	white-space: nowrap;
 }
 
 .glass :global(.sl-ico) {

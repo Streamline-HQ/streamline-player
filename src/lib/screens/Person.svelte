@@ -1,5 +1,6 @@
 <script lang="ts">
 import { monogram, seasonSpan } from "#lib/core/format.ts";
+import { lib, loadLibrary } from "#lib/core/library.svelte.ts";
 import type { Credit, Person } from "#lib/core/types.ts";
 import { m as i18n } from "#lib/paraglide/messages.js";
 import Icon from "#lib/ui/Icon.svelte";
@@ -7,7 +8,16 @@ import { goto } from "#lib/ui/nav.ts";
 import NotFound from "#lib/ui/NotFound.svelte";
 import PersonHeader from "#lib/ui/PersonHeader.svelte";
 import PosterCard from "#lib/ui/PosterCard.svelte";
-import { artwork, headshot, person as fetchPerson } from "#platform";
+import { titleCard } from "#lib/screens/title-card.svelte.ts";
+import {
+	artwork,
+	headshot,
+	home,
+	library,
+	person as fetchPerson,
+	title,
+	watchState,
+} from "#platform";
 import { afterNavigate } from "$app/navigation";
 import EmptyState from "#lib/ui/EmptyState.svelte";
 import Button from "#lib/ui/Button.svelte";
@@ -49,6 +59,15 @@ async function load(i: string) {
 $effect(() => {
 	load(id);
 });
+
+// A deep link lands here first: the cards' watch state comes from the library.
+$effect(() => {
+	loadLibrary({ library, watchState, home, title }, lib.loaded);
+});
+
+const now = new Date();
+const titleOf = (c: Credit) =>
+	(c.kind === "movies" ? lib.movies : lib.shows).find((t) => t.id === c.id);
 
 const back = () => (fromApp ? history.back() : goto("/"));
 
@@ -110,12 +129,14 @@ const subOf = (c: Credit) =>
 		</div>
 		<div class="grid" style:--min="{MIN_COL}px">
 			{#each list as c (`${c.kind}:${c.id}`)}
+				{@const t = titleOf(c)}
 				<PosterCard
 					title={c.title}
-					character={c.character}
+					note={c.character}
 					sub={subOf(c)}
-					accent={c.kind === "series"}
 					src={artwork(c.kind, c.id, "poster")}
+					{...t ? titleCard(c.kind, t, now) : {}}
+					badge={undefined}
 					onclick={() => open(c)}
 				/>
 			{/each}

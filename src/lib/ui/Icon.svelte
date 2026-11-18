@@ -7,12 +7,14 @@ import {
 	Bell,
 	Captions,
 	Check,
+	Calendar,
 	CheckCheck,
 	ChevronDown,
 	ChevronLeft,
 	ChevronRight,
 	CircleAlert,
 	CircleCheck,
+	Clock,
 	CircleArrowDown,
 	CirclePlay,
 	Cpu,
@@ -45,6 +47,7 @@ import {
 	RefreshCw,
 	RotateCcw,
 	RotateCw,
+	SkipBack,
 	Search,
 	Server,
 	Settings,
@@ -52,8 +55,10 @@ import {
 	Smartphone,
 	Sparkles,
 	Square,
+	Star,
 	Tablet,
 	Text,
+	Type,
 	Trash2,
 	TriangleAlert,
 	Tv,
@@ -79,6 +84,8 @@ const ICONS = {
 	"chevron-down": ChevronDown,
 	"chevron-left": ChevronLeft,
 	"chevron-right": ChevronRight,
+	calendar: Calendar,
+	clock: Clock,
 	cpu: Cpu,
 	download: Download,
 	"external-link": ExternalLink,
@@ -109,6 +116,7 @@ const ICONS = {
 	"refresh-cw": RefreshCw,
 	"rotate-ccw": RotateCcw,
 	"rotate-cw": RotateCw,
+	"skip-back": SkipBack,
 	search: Search,
 	server: Server,
 	settings: Settings,
@@ -116,8 +124,10 @@ const ICONS = {
 	smartphone: Smartphone,
 	sparkles: Sparkles,
 	square: Square,
+	star: Star,
 	tablet: Tablet,
 	text: Text,
+	type: Type,
 	"trash-2": Trash2,
 	"triangle-alert": TriangleAlert,
 	tick: Check,
@@ -139,12 +149,13 @@ let {
 	size,
 	stroke,
 	filled = false,
-}: { name: IconName; size?: number; stroke?: number; filled?: boolean } = $props();
+	class: extra,
+}: { name: IconName; size?: number; stroke?: number; filled?: boolean; class?: string } = $props();
 const Glyph = $derived(ICONS[name]);
 </script>
 
 <Glyph
-	class="sl-ico"
+	class={["sl-ico", extra]}
 	aria-hidden="true"
 	style={[size && `font-size:${size}px`, filled && "fill:currentColor"].filter(Boolean).join(";") ||
 		undefined}

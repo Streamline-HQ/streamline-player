@@ -16,7 +16,7 @@ let {
 }: {
 	look: Look;
 	label: string;
-	variant: "hero" | "round" | "bar" | "poster";
+	variant: "hero" | "round" | "bar" | "poster" | "row";
 	onclick: (e: MouseEvent) => void;
 } = $props();
 
@@ -25,6 +25,7 @@ const SIZES = {
 	round: { ring: 20, hole: 14, icon: 18, stroke: 1.8 },
 	bar: { ring: 20, hole: 14, icon: 18, stroke: 1.8 },
 	poster: { ring: 18, hole: 12, icon: 17, stroke: 1.8 },
+	row: { ring: 17, hole: 11, icon: 16, stroke: 1.8 },
 };
 const size = $derived(SIZES[variant]);
 </script>
@@ -85,23 +86,37 @@ const size = $derived(SIZES[variant]);
 .poster {
 	width: 34px;
 	height: 34px;
-	margin-right: -8px;
+}
+
+.row {
+	width: 32px;
+	height: 32px;
+}
+
+.poster,
+.row {
+	border: 0;
+	border-radius: 50%;
+	background: transparent;
 	pointer-events: auto;
 	z-index: 1;
 	color: var(--fg-subtle);
 }
 
-.poster.accent {
+.poster.accent,
+.row.accent {
 	color: var(--accent);
 }
 
-.poster.progress {
+.poster.progress,
+.row.progress {
 	color: var(--accent-text);
 }
 
 .round:hover,
 .bar:hover,
-.poster:hover {
+.poster:hover,
+.row:hover {
 	background: var(--surface-2);
 }
 

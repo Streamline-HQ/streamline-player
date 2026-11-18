@@ -4,8 +4,10 @@ import { goto } from "#lib/ui/nav.ts";
 import LoadFailed from "#lib/tv/LoadFailed.svelte";
 import TvScreen from "#lib/tv/TvScreen.svelte";
 import type { Kind, Title } from "#lib/core/types.ts";
-import { artwork, everything } from "#platform";
-import { hideBroken } from "#lib/ui/img.ts";
+import { lib, loadLibrary } from "#lib/core/library.svelte.ts";
+import { watchInfo } from "#lib/core/watch-info.ts";
+import { artwork, home, library, title, watchState } from "#platform";
+import PosterCard from "#lib/ui/PosterCard.svelte";
 import { search } from "#lib/core/search.svelte.ts";
 import { Delete, Mic, Search } from "@lucide/svelte";
 
@@ -13,11 +15,14 @@ type Entry = Title & { kind: Kind };
 const KEYS = "abcdefghijklmnopqrstuvwxyz1234567890".split("");
 const MAX_RESULTS = 12;
 
-let all = $state.raw<Entry[]>([]);
-let failed = $state<string | null>(null);
+const all = $derived<Entry[]>([
+	...lib.movies.map((t) => ({ ...t, kind: "movies" as Kind })),
+	...lib.shows.map((t) => ({ ...t, kind: "series" as Kind })),
+]);
+const failed = $derived(lib.error);
 
-const load = () => everything().then((t) => (all = t));
-load().catch((e) => (failed = String(e)));
+const load = () => loadLibrary({ library, watchState, home, title }, true);
+loadLibrary({ library, watchState, home, title }, lib.loaded);
 
 const norm = (x: string) => x.normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase();
 const q = $derived(search.q.trim());
@@ -47,12 +52,7 @@ const heading = $derived(
 
 <TvScreen tab={failed === null ? "search" : undefined}>
 	{#if failed !== null}
-		<LoadFailed
-			error={failed}
-			retry={load}
-			onloaded={() => (failed = null)}
-			onback={() => history.back()}
-		/>
+		<LoadFailed error={failed} retry={load} onloaded={() => {}} onback={() => history.back()} />
 	{:else}
 		<div class="page">
 			<div class="board">
@@ -97,16 +97,17 @@ const heading = $derived(
 				<div class="heading">{heading}</div>
 				<div class="grid">
 					{#each results.slice(0, MAX_RESULTS) as t (`${t.kind}:${t.id}`)}
-						<button
-							type="button"
-							data-tv="1"
-							data-fid="{t.kind}:{t.id}"
-							class="card"
+						{@const info = watchInfo(t, t.kind, lib.watch)}
+						<PosterCard
+							size="tv"
+							width={196}
+							title={t.title}
+							src={artwork(t.kind, t.id, "poster")}
+							{info}
+							leftLabel={i18n.card_left_label({ count: info.left })}
+							tv={{ fid: `${t.kind}:${t.id}` }}
 							onclick={() => goto(`/detail/${t.kind}/${t.id}`)}
-						>
-							<img src={artwork(t.kind, t.id, "poster")} alt="" loading="lazy" onerror={hideBroken}>
-							<span class="name">{t.title}</span>
-						</button>
+						/>
 					{/each}
 				</div>
 			</div>
@@ -236,42 +237,5 @@ const heading = $derived(
 	display: grid;
 	grid-template-columns: repeat(auto-fill, 196px);
 	gap: 40px 30px;
-}
-
-.card {
-	display: flex;
-	flex-direction: column;
-	gap: 12px;
-	padding: 0;
-	border: 0;
-	background: transparent;
-	color: var(--fg);
-	text-align: left;
-	cursor: pointer;
-	outline: none;
-	border-radius: 14px;
-	transition: transform 180ms var(--ease);
-}
-
-.card:focus {
-	transform: scale(1.08);
-}
-
-.card img {
-	width: 196px;
-	aspect-ratio: 2 / 3;
-	border-radius: 14px;
-	object-fit: cover;
-	display: block;
-	background: var(--bg-card);
-}
-
-.name {
-	font-size: 21px;
-	font-weight: 500;
-	width: 196px;
-	white-space: nowrap;
-	overflow: hidden;
-	text-overflow: ellipsis;
 }
 </style>

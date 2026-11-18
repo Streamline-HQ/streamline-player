@@ -3,10 +3,13 @@ export { skeleton };
 </script>
 
 <script lang="ts">
-import Tip from "#lib/ui/Tip.svelte";
+import "#lib/ui/card.css";
+import type { WatchInfo } from "#lib/core/watch-info.ts";
 import Art from "#lib/ui/Art.svelte";
 import DownloadButton from "#lib/ui/DownloadButton.svelte";
 import Icon from "#lib/ui/Icon.svelte";
+import Tip from "#lib/ui/Tip.svelte";
+import WatchGlyph from "#lib/ui/WatchGlyph.svelte";
 
 type Download = {
 	look: {
@@ -17,130 +20,232 @@ type Download = {
 	label: string;
 	onclick: (e: MouseEvent) => void;
 };
-type Mark = { on: boolean; label: string; onclick: () => void };
+type Action = { label: string; onclick: () => void };
+type Mark = Action & { on: boolean };
 type Lang = { own: boolean; label: string; onclick: (trigger: HTMLElement) => void };
+type Tv = { fid: string; isDefault?: boolean; onfocus?: () => void };
 
 let {
 	title,
 	sub,
-	character,
-	accent = false,
+	note,
 	src,
 	badge,
-	watched = false,
-	progress = 0,
+	info,
+	leftLabel,
+	size = "desktop",
+	bare = false,
+	full = false,
 	width,
 	playLabel,
+	onplay,
+	reset,
 	mark,
 	lang,
 	download,
-	onplay,
+	tv,
+	nav = false,
 	onclick,
 }: {
 	title: string;
-	sub: string;
-	/** A role, between the title and the sub line; the sub line then reads as the credit's own detail. */
-	character?: string;
-	accent?: boolean;
+	sub?: string;
+	/** A role, between the title and the sub line. */
+	note?: string;
 	src?: string;
+	/** "New", or "2 new" for a series' new episodes. */
 	badge?: string;
-	watched?: boolean;
-	/** Percent of the unfinished play, drawn along the poster's foot. */
-	progress?: number;
+	/** The watch markers: corner, episode count, resume bar. */
+	info?: WatchInfo;
+	/** What the episode count reads out: "3 unwatched episodes". */
+	leftLabel?: string;
+	size?: "desktop" | "tv";
+	/** TV rails: the art alone, no title. */
+	bare?: boolean;
+	/** TV: the note and the sub line under the title too. */
+	full?: boolean;
 	/** A fixed width in a row; omitted, the card fills its grid cell. */
 	width?: number;
-	/** With `onplay`, the poster shows a play button on hover. */
 	playLabel?: string;
+	onplay?: () => void;
+	/** Shown only while there is progress to reset. */
+	reset?: Action;
 	mark?: Mark;
 	lang?: Lang;
 	download?: Download;
-	onplay?: () => void;
+	tv?: Tv;
+	/** One of the items a screen's arrow keys move between (Search). */
+	nav?: boolean;
 	onclick: () => void;
 } = $props();
+
+const corner = $derived(!!info?.unread);
+const stop = (e: Event, then: () => void) => {
+	e.stopPropagation();
+	then();
+};
+const open = (e: KeyboardEvent) => {
+	if (e.key === "Enter" && e.target === e.currentTarget) onclick();
+};
 </script>
 
 <!-- A card's stand-in while a long list mounts: its size, from the same rules, and its title as text the browser's find can match. -->
 {#snippet skeleton(title: string)}
-	<div class="poster skeleton">
-		<span class="art"></span>
+	<div class="card skeleton">
+		<span class="slp-art"></span>
 		<span class="text">
 			<span class="lines">
 				<span class="title">{title}</span>
 				<span class="sub">&nbsp;</span>
 			</span>
-			<span class="mark"></span>
 		</span>
 	</div>
 {/snippet}
 
-<div class="poster" style:width={width ? `${width}px` : undefined}>
-	<button type="button" class="hit" aria-label={title} {onclick}></button>
-	<span class="art">
-		<Art {src} kind="poster" ratio="2 / 3" />
-		{#if badge}
-			<span class="badge">{badge}</span>
-		{/if}
-		{#if watched}
-			<span class="seen"><Icon name="tick" size={13} stroke={2.5} /></span>
-		{/if}
-		{#if progress > 0 && !watched}
-			<span class="bar"><span style:width="{progress}%"></span></span>
-		{/if}
-		{#if onplay}
-			<span class="shade">
-				<button type="button" class="play" aria-label={playLabel} onclick={onplay}>
-					<Tip text={playLabel} />
-					<Icon name="play" filled size={20} />
-				</button>
+{#snippet markers()}
+	{#if corner}
+		<span class="slp-corner" aria-hidden="true"></span>
+	{/if}
+	{#if info && info.left > 0}
+		<span class="slp-count" role="img" aria-label={leftLabel}>{info.left}</span>
+	{/if}
+	{#if badge}
+		<span class="slp-new" style:left="calc({corner ? 28 : 8}px * var(--mk, 1))">{badge}</span>
+	{/if}
+	{#if info?.inProgress}
+		<span class="slp-prog"
+			><i><b style:width="{info.pct}%"></b></i></span
+		>
+	{/if}
+{/snippet}
+
+{#if size === "tv"}
+	<div class="tv slp-mk--tv" style:width={width ? `${width}px` : undefined}>
+		<button
+			type="button"
+			class="slp-art tv-art"
+			data-tv="1"
+			data-tv-default={tv?.isDefault ? "1" : undefined}
+			data-fid={tv?.fid}
+			aria-label={title}
+			onfocus={tv?.onfocus}
+			{onclick}
+		>
+			<Art {src} kind="poster" />
+			{@render markers()}
+		</button>
+		{#if !bare}
+			<span class="tv-lines">
+				<span class="tv-title">{title}</span>
+				{#if full && note}
+					<span class="tv-note">{note}</span>
+				{/if}
+				{#if full && sub}
+					<span class="tv-sub">{sub}</span>
+				{/if}
 			</span>
 		{/if}
-	</span>
-	<span class="text">
-		<span class="lines">
-			<span class="title">{title}</span>
-			{#if character}
-				<span class="character">{character}</span>
+	</div>
+{:else}
+	<!-- biome-ignore lint/a11y/useSemanticElements: an <a> may not hold the card's own buttons. -->
+	<div
+		class="card"
+		role="link"
+		tabindex="0"
+		data-nav={nav ? "" : undefined}
+		aria-label={title}
+		style:width={width ? `${width}px` : undefined}
+		{onclick}
+		onkeydown={open}
+	>
+		<span class="slp-art desk-art">
+			<Art {src} kind="poster" />
+			{#if onplay || reset || mark || lang}
+				<span class="slp-hover">
+					{#if onplay}
+						<button
+							type="button"
+							class="slp-play"
+							aria-label={playLabel}
+							onclick={(e) => stop(e, onplay)}
+						>
+							<Tip text={playLabel} />
+							<Icon name="play" filled size={20} />
+						</button>
+					{/if}
+					<span class="slp-acts">
+						{#if reset}
+							<button
+								type="button"
+								class="slp-glass"
+								aria-label={reset.label}
+								onclick={(e) => stop(e, reset.onclick)}
+							>
+								<Tip text={reset.label} />
+								<Icon name="rotate-ccw" />
+							</button>
+						{/if}
+						{#if mark}
+							<button
+								type="button"
+								class="slp-glass"
+								class:on={mark.on}
+								aria-label={mark.label}
+								onclick={(e) => stop(e, mark.onclick)}
+							>
+								<Tip text={mark.label} />
+								<WatchGlyph on={mark.on} size={15} stroke={1.9} />
+							</button>
+						{/if}
+						{#if lang}
+							<button
+								type="button"
+								class="slp-glass"
+								class:own={lang.own}
+								data-lang-trigger="card"
+								aria-label={lang.label}
+								onclick={(e) => {
+									e.stopPropagation();
+									lang.onclick(e.currentTarget);
+								}}
+							>
+								<Tip text={lang.label} />
+								<Icon name="languages" />
+							</button>
+						{/if}
+					</span>
+				</span>
 			{/if}
-			<span class="sub" class:credit={!!character} class:accent>{sub}</span>
+			{@render markers()}
 		</span>
-		{#if mark}
-			<button
-				type="button"
-				class="mark"
-				class:on={mark.on}
-				aria-label={mark.label}
-				onclick={mark.onclick}
-			>
-				<Tip text={mark.label} />
-				<Icon name={mark.on ? "check-check" : "eye"} size={16} stroke={1.75} />
-			</button>
-		{/if}
-		{#if lang}
-			<button
-				type="button"
-				class="mark lang"
-				class:own={lang.own}
-				data-lang-trigger="lib"
-				aria-label={lang.label}
-				onclick={(e) => lang.onclick(e.currentTarget)}
-			>
-				<Tip text={lang.label} />
-				<Icon name="languages" size={16} stroke={1.8} />
-			</button>
-		{/if}
-		{#if download}
-			<DownloadButton
-				variant="poster"
-				look={download.look}
-				label={download.label}
-				onclick={download.onclick}
-			/>
-		{/if}
-	</span>
-</div>
+		<span class="text">
+			<span class="lines">
+				<span class="title">{title}</span>
+				{#if note}
+					<span class="note">{note}</span>
+				{/if}
+				{#if sub}
+					<span class="sub">{sub}</span>
+				{/if}
+			</span>
+			{#if download}
+				<span class="dl">
+					<DownloadButton
+						variant="poster"
+						look={download.look}
+						label={download.label}
+						onclick={(e) => {
+							e.stopPropagation();
+							download.onclick(e);
+						}}
+					/>
+				</span>
+			{/if}
+		</span>
+	</div>
+{/if}
 
 <style>
-.poster {
+.card {
 	position: relative;
 	flex: none;
 	display: flex;
@@ -149,129 +254,43 @@ let {
 	min-width: 0;
 	color: var(--fg);
 	text-align: left;
+	cursor: pointer;
+	outline: none;
 	scroll-snap-align: start;
 }
 
-.hit {
-	position: absolute;
-	inset: 0;
-	z-index: 0;
-	padding: 0;
-	border: 0;
-	border-radius: var(--radius-md);
-	background: transparent;
-	cursor: pointer;
-}
-
-.art {
-	position: relative;
-	display: block;
-	width: 100%;
-	aspect-ratio: 2 / 3;
-	border-radius: var(--radius-md);
-	overflow: hidden;
-	background: var(--bg-card);
-	box-shadow: 0 0 0 1px var(--border);
-	pointer-events: none;
+.desk-art {
 	transition:
 		box-shadow var(--dur-fast),
 		transform var(--dur-fast);
 }
 
-.poster:hover .art {
+.desk-art:hover {
 	box-shadow: var(--shadow-card-hover);
 	transform: scale(1.03);
 }
 
-.badge {
-	position: absolute;
-	left: 8px;
-	top: 8px;
-	padding: 2px 7px;
-	border-radius: var(--radius-sm);
-	background: color-mix(in srgb, var(--bg-deep) 78%, transparent);
-	backdrop-filter: blur(8px);
-	-webkit-backdrop-filter: blur(8px);
-	font: 500 10px var(--font-mono);
-	letter-spacing: 0.08em;
-	text-transform: uppercase;
-	color: var(--accent-text);
+.card:focus-visible .desk-art {
+	box-shadow: 0 0 0 2px var(--accent);
 }
 
-.seen {
-	position: absolute;
-	right: 8px;
-	top: 8px;
-	width: 22px;
-	height: 22px;
-	display: grid;
-	place-items: center;
-	border-radius: 50%;
-	background: color-mix(in srgb, var(--bg-deep) 78%, transparent);
+.slp-glass {
+	color: var(--fg);
+}
+
+.slp-glass.on {
 	color: var(--status-available);
 }
 
-.bar {
-	position: absolute;
-	left: 0;
-	right: 0;
-	bottom: 0;
-	height: 3px;
-	background: rgba(255, 255, 255, 0.2);
-}
-
-.bar > span {
-	display: block;
-	height: 100%;
-	background: var(--accent);
-}
-
-.shade {
-	position: absolute;
-	inset: 0;
-	display: grid;
-	place-items: center;
-	background: linear-gradient(
-		180deg,
-		transparent 30%,
-		color-mix(in srgb, var(--bg-deep) 55%, transparent) 100%
-	);
-	opacity: 0;
-	transition: opacity 180ms var(--ease);
-}
-
-.poster:hover .shade,
-.poster:focus-within .shade {
-	opacity: 1;
-}
-
-.play {
-	z-index: 1;
-	width: 52px;
-	height: 52px;
-	display: grid;
-	place-items: center;
-	padding: 0;
-	border: 0;
-	border-radius: 50%;
-	background: color-mix(in srgb, var(--fg) 94%, transparent);
-	color: var(--fg-on-accent);
-	cursor: pointer;
-	pointer-events: auto;
-	box-shadow: 0 8px 24px rgba(0, 0, 0, 0.45);
-	transition: transform var(--dur-fast) var(--ease);
-}
-
-.play:hover {
-	transform: scale(1.08);
+.slp-glass.own {
+	color: var(--accent-text);
 }
 
 .text {
 	display: flex;
-	align-items: center;
-	gap: 4px;
+	align-items: flex-start;
+	gap: 8px;
 	min-width: 0;
-	pointer-events: none;
 }
 
 .lines {
@@ -282,75 +301,91 @@ let {
 	min-width: 0;
 }
 
+.title,
+.note,
+.sub {
+	white-space: nowrap;
+	overflow: hidden;
+	text-overflow: ellipsis;
+}
+
 .title {
 	font-size: 13.5px;
 	font-weight: 500;
-	white-space: nowrap;
-	overflow: hidden;
-	text-overflow: ellipsis;
+	line-height: 1.35;
+}
+
+.note {
+	font-size: 12.5px;
+	line-height: 1.35;
+	color: var(--fg-muted);
 }
 
 .sub {
-	font: 400 11.5px var(--font-mono);
+	font: 400 11.5px / 1.4 var(--font-mono);
 	color: var(--fg-subtle);
-	white-space: nowrap;
-	overflow: hidden;
-	text-overflow: ellipsis;
 }
 
-.character {
-	font-size: 12.5px;
-	color: var(--fg-muted);
-	white-space: nowrap;
-	overflow: hidden;
-	text-overflow: ellipsis;
-}
-
-.sub.credit {
-	font-size: 11px;
-}
-
-.sub.accent {
-	color: var(--accent-text);
-}
-
-.mark {
-	z-index: 1;
+.dl {
 	flex: none;
-	width: 34px;
-	height: 34px;
-	margin-right: -4px;
-	display: grid;
-	place-items: center;
+	margin: -4px -8px 0 0;
+}
+
+.tv {
+	flex: none;
+	display: flex;
+	flex-direction: column;
+	gap: 14px;
+	min-width: 0;
+}
+
+.tv-art {
 	padding: 0;
 	border: 0;
-	border-radius: 50%;
-	background: transparent;
-	color: var(--fg-subtle);
 	cursor: pointer;
-	pointer-events: auto;
-	transition: color 180ms;
+	outline: none;
+	transition:
+		transform 220ms var(--ease),
+		box-shadow 220ms;
 }
 
-.mark:hover {
-	background: var(--surface-2);
+.tv-art:focus {
+	transform: translateY(-10px);
+	box-shadow: var(--shadow-tv-focus);
 }
 
-.mark.on {
-	color: var(--status-available);
+.tv-lines {
+	display: flex;
+	flex-direction: column;
+	gap: 4px;
+	min-width: 0;
 }
 
-.lang.own {
-	color: var(--accent);
+.tv-title,
+.tv-note,
+.tv-sub {
+	white-space: nowrap;
+	overflow: hidden;
+	text-overflow: ellipsis;
 }
 
-.lang:hover {
-	color: var(--fg);
+.tv-title {
+	font-size: 24px;
+	font-weight: 500;
 }
 
-.poster.skeleton:hover .art {
-	box-shadow: 0 0 0 1px var(--border);
-	transform: none;
+.tv-note {
+	font-size: 21px;
+	color: var(--fg-muted);
+}
+
+.tv-sub {
+	font: 400 19px var(--font-mono);
+	color: var(--fg-subtle);
+}
+
+.skeleton {
+	cursor: default;
 }
 
 /* Transparent, not hidden: find-in-page skips text under visibility: hidden or display: none. */
@@ -362,10 +397,5 @@ let {
 
 .skeleton .sub {
 	background-size: 40% 7px;
-}
-
-/* Holds the height of the card's buttons. */
-.skeleton .mark {
-	visibility: hidden;
 }
 </style>

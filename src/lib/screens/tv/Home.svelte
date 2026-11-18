@@ -1,8 +1,8 @@
 <script module lang="ts">
 import type { Kind, Title } from "#lib/core/types.ts";
 import { badges, episodesOf, inProgress, left, meta, pct, stillPos } from "#lib/core/format.ts";
-import { artwork, library, title as fetchTitle, watchState } from "#platform";
-import { hideBroken, orPoster } from "#lib/ui/img.ts";
+import { artwork, home, library, title as fetchTitle, watchState } from "#platform";
+import { orPoster } from "#lib/ui/img.ts";
 
 type Item = {
 	key: string;
@@ -23,8 +23,11 @@ let cached: Row[] | null = null;
 </script>
 
 <script lang="ts">
+import { lib, loadLibrary } from "#lib/core/library.svelte.ts";
+import { watchInfo } from "#lib/core/watch-info.ts";
 import { m as i18n } from "#lib/paraglide/messages.js";
 import { goto, staticUrl } from "#lib/ui/nav.ts";
+import PosterCard from "#lib/ui/PosterCard.svelte";
 import LoadFailed from "#lib/tv/LoadFailed.svelte";
 import TvScreen from "#lib/tv/TvScreen.svelte";
 import { focusDefault } from "#lib/tv/focus.ts";
@@ -98,17 +101,19 @@ function onLoaded() {
 }
 
 async function load() {
-	const [movies, shows, watch] = await Promise.all([
-		library("movies"),
-		library("series"),
-		watchState(),
-	]);
+	await loadLibrary({ library, watchState, home, title: fetchTitle }, true);
+	if (lib.error !== null) throw new Error(lib.error);
+	const { movies, shows, watch } = lib;
 	const seen = new Set<number>();
 	const going = watch.filter(inProgress);
 	const details = new Map(
 		await Promise.all(
 			[...new Set(going.flatMap((w) => w.series_id ?? []))].map(
-				async (id) => [id, await fetchTitle("series", id)] as const,
+				async (id) =>
+					[
+						id,
+						shows.find((s) => s.id === id && s.seasons) ?? (await fetchTitle("series", id)),
+					] as const,
 			),
 		),
 	);
@@ -277,22 +282,23 @@ const onFocus = (it: Item, ri: number) => {
 									<span class="wide-bar"><span style:width="{it.pct}%"></span></span>
 								</button>
 							{:else}
-								<button
-									type="button"
-									data-tv="1"
-									data-tv-default={ri === 0 && ii === 0 ? "1" : undefined}
-									data-fid={it.key}
-									class="poster"
-									onfocus={() => onFocus(it, ri)}
+								<PosterCard
+									size="tv"
+									bare
+									width={196}
+									title={it.t.title}
+									src={artwork(it.kind, it.t.id, "poster")}
+									info={watchInfo(it.t, it.kind, lib.watch)}
+									leftLabel={i18n.card_left_label({
+										count: watchInfo(it.t, it.kind, lib.watch).left,
+									})}
+									tv={{
+										fid: it.key,
+										isDefault: ri === 0 && ii === 0,
+										onfocus: () => onFocus(it, ri),
+									}}
 									onclick={() => goto(it.href)}
-								>
-									<img
-										src={artwork(it.kind, it.t.id, "poster")}
-										alt={it.t.title}
-										loading="lazy"
-										onerror={hideBroken}
-									>
-								</button>
+								/>
 							{/if}
 						{/each}
 					</div>
@@ -471,8 +477,7 @@ h2 {
 	padding: 26px 96px 24px;
 }
 
-.wide,
-.poster {
+.wide {
 	flex: none;
 	position: relative;
 	display: block;
@@ -493,20 +498,12 @@ h2 {
 	border-radius: 14px;
 }
 
-.poster {
-	width: 196px;
-	aspect-ratio: 2 / 3;
-	border-radius: 12px;
-}
-
-.wide:focus,
-.poster:focus {
+.wide:focus {
 	transform: translateY(-10px);
 	box-shadow: var(--shadow-tv-focus);
 }
 
-.wide img,
-.poster img {
+.wide img {
 	width: 100%;
 	height: 100%;
 	object-fit: cover;

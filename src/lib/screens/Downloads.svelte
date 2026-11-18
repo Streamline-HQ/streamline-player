@@ -4,7 +4,8 @@ import { removeKeys } from "#lib/core/download-ask.svelte.ts";
 import { dl, retry } from "#lib/core/downloads.svelte.ts";
 import { type Card, type Group, pageView, storageView } from "#lib/core/downloads-view.ts";
 import { localUrl } from "#lib/core/download-launch.ts";
-import { stillPos } from "#lib/core/format.ts";
+import { sizeText, stillPos } from "#lib/core/format.ts";
+import { lib } from "#lib/core/library.svelte.ts";
 import { net } from "#lib/core/online.svelte.ts";
 import { toast } from "#lib/core/toast.svelte.ts";
 import { m as i18n } from "#lib/paraglide/messages.js";
@@ -24,7 +25,7 @@ const TOP = 92;
 const BOTTOM = 32;
 
 const words = $derived(downloadWords());
-const view = $derived(pageView(dl.items, dl.rate, words));
+const view = $derived(pageView(dl.items, dl.rate, words, lib.watch));
 const meter = $derived(dl.storage ? storageView(dl.storage, words) : null);
 const byKey = (key: string) => dl.items.find((e) => e.key === key);
 
@@ -39,9 +40,52 @@ function cancel(key: string) {
 	toast(i18n.dl_toast_cancelled());
 }
 
-function removeOne(key: string) {
-	removeKeys(downloadsPort, [key]);
-	toast(i18n.dl_toast_removed());
+function removeOne(c: Card) {
+	ask({
+		title: i18n.dl_ask_title({ title: c.fullTitle }),
+		body: i18n.dl_ask_one_body({ size: sizeText(byKey(c.key)?.size) }),
+		confirm: i18n.dl_remove_one(),
+		onconfirm: () => {
+			removeKeys(downloadsPort, [c.key]);
+			toast(i18n.dl_toast_removed());
+		},
+	});
+}
+
+let selecting = $state(false);
+let picked = $state<Set<string>>(new Set());
+const doneKeys = $derived(view.groups.flatMap((g) => g.keys));
+const pickedKeys = $derived(doneKeys.filter((k) => picked.has(k)));
+const allPicked = $derived(doneKeys.length > 0 && pickedKeys.length === doneKeys.length);
+const pickedSize = $derived(sizeText(pickedKeys.reduce((n, k) => n + (byKey(k)?.size ?? 0), 0)));
+
+function toggleSelecting() {
+	selecting = !selecting;
+	picked = new Set();
+}
+
+function pick(key: string) {
+	const next = new Set(picked);
+	if (!next.delete(key)) next.add(key);
+	picked = next;
+}
+
+function removePicked() {
+	const keys = pickedKeys;
+	const n = keys.length;
+	ask({
+		title: (n === 1 ? i18n.dl_ask_many_title_one : i18n.dl_ask_many_title_other)({ count: n }),
+		body: i18n.dl_ask_many_body({ size: pickedSize }),
+		confirm: i18n.dl_remove_one(),
+		onconfirm: () => {
+			removeKeys(downloadsPort, keys);
+			toast(
+				(n === 1 ? i18n.dl_toast_removed_many_one : i18n.dl_toast_removed_many_other)({ count: n }),
+			);
+			selecting = false;
+			picked = new Set();
+		},
+	});
 }
 
 function removeAll(g: Group) {
@@ -78,7 +122,19 @@ const openGroup = (g: Group) =>
 <div class="page" style:padding="{TOP}px {PAD_X}px {BOTTOM}px">
 	<div class="top">
 		<div class="titles">
-			<h1>{i18n.shell_downloads()}</h1>
+			<div class="title-row">
+				<h1>{i18n.shell_downloads()}</h1>
+				{#if view.groups.length > 0}
+					<Button
+						variant="secondary"
+						size="sm"
+						icon={selecting ? "x" : "circle-check"}
+						onclick={toggleSelecting}
+					>
+						{selecting ? i18n.dl_select_done() : i18n.dl_select()}
+					</Button>
+				{/if}
+			</div>
 			<span class="summary">{view.summary}</span>
 		</div>
 		{#if meter}
@@ -87,6 +143,38 @@ const openGroup = (g: Group) =>
 			</div>
 		{/if}
 	</div>
+
+	{#if selecting}
+		<div class="selbar" role="toolbar" aria-label={i18n.dl_selection()}>
+			<span class="selcount"
+				>{pickedKeys.length
+					? (pickedKeys.length === 1 ? i18n.dl_selected_one : i18n.dl_selected_other)({
+							count: pickedKeys.length,
+						})
+					: i18n.dl_pick_none()}</span
+			>
+			{#if pickedKeys.length}
+				<span class="selsize">{pickedSize}</span>
+			{/if}
+			<span class="spacer"></span>
+			<Button
+				variant="secondary"
+				size="sm"
+				onclick={() => (picked = allPicked ? new Set() : new Set(doneKeys))}
+			>
+				{allPicked ? i18n.dl_select_clear() : i18n.dl_select_all()}
+			</Button>
+			<Button
+				variant="danger"
+				size="sm"
+				icon="trash-2"
+				disabled={!pickedKeys.length}
+				onclick={removePicked}
+			>
+				{i18n.dl_remove_one()}
+			</Button>
+		</div>
+	{/if}
 
 	{#if !net.online}
 		<Banner
@@ -104,19 +192,6 @@ const openGroup = (g: Group) =>
 				<div class="row {r.state}" data-key={r.key} data-state={r.state}>
 					<span class="pic">
 						<Art src={stillOf(r.key)} position={posOf(r.key)} />
-						<span class="over">
-							{#if r.state === "failed"}
-								<span class="err"><Icon name="circle-alert" /></span>
-							{:else}
-								<span class="ring" style:--p="{r.pct}%">
-									<span class="hole">
-										{#if r.state === "waiting"}
-											<Icon name="pause" filled />
-										{/if}
-									</span>
-								</span>
-							{/if}
-						</span>
 					</span>
 					<span class="body">
 						<span class="name">{r.title}</span>
@@ -185,17 +260,26 @@ const openGroup = (g: Group) =>
 							{/if}
 							<div class="grid">
 								{#each s.cards as c (c.key)}
+									{@const on = picked.has(c.key)}
 									<div class="card" data-key={c.key}>
 										<button
 											type="button"
 											class="still"
-											aria-label={i18n.library_play_title({ title: c.fullTitle })}
-											onclick={() => play(c)}
+											class:picked={selecting && on}
+											class:dim={selecting && !on}
+											aria-label={selecting
+												? (on ? i18n.dl_unselect_item : i18n.dl_select_item)({ title: c.fullTitle })
+												: i18n.library_play_title({ title: c.fullTitle })}
+											aria-pressed={selecting ? on : undefined}
+											onclick={() => (selecting ? pick(c.key) : play(c))}
 										>
 											<Art src={stillOf(c.key)} position={posOf(c.key)} />
-											<span class="playdot"><Icon name="play" filled /></span>
-											{#if c.watched}
-												<span class="seen"><Icon name="tick" stroke={2.5} /></span>
+											{#if selecting}
+												<span class="box" class:on aria-hidden="true"
+													><Icon name="tick" size={13} stroke={3} /></span
+												>
+											{:else}
+												<span class="playdot"><Icon name="play" filled /></span>
 											{/if}
 										</button>
 										<div class="info">
@@ -214,7 +298,7 @@ const openGroup = (g: Group) =>
 													icon="trash-2"
 													label={i18n.dl_remove()}
 													title={i18n.dl_remove()}
-													onclick={() => removeOne(c.key)}
+													onclick={() => removeOne(c)}
 												/>
 											</span>
 										</div>
@@ -340,44 +424,6 @@ h2 {
 
 .pic :global(img.loaded) {
 	opacity: 0.7;
-}
-
-.over {
-	position: absolute;
-	inset: 0;
-	display: grid;
-	place-items: center;
-}
-
-.ring {
-	display: grid;
-	place-items: center;
-	width: 30px;
-	height: 30px;
-	border-radius: 50%;
-	background: conic-gradient(var(--player-accent) var(--p), var(--player-track) 0);
-}
-
-.hole {
-	display: grid;
-	place-items: center;
-	width: 22px;
-	height: 22px;
-	border-radius: 50%;
-	background: color-mix(in srgb, var(--bg-deep) 85%, transparent);
-	color: var(--player-ink);
-	font-size: 11px;
-}
-
-.err {
-	display: grid;
-	place-items: center;
-	width: 30px;
-	height: 30px;
-	border-radius: 50%;
-	background: color-mix(in srgb, var(--bg-deep) 85%, transparent);
-	color: var(--status-failed);
-	font-size: 20px;
 }
 
 .body {
@@ -547,6 +593,18 @@ h2 {
 	transition: box-shadow var(--dur-fast);
 }
 
+.still :global(img) {
+	transition: opacity var(--dur-fast);
+}
+
+.still.dim :global(img.loaded) {
+	opacity: 0.6;
+}
+
+.still.picked {
+	box-shadow: 0 0 0 2px var(--accent);
+}
+
 .still:hover {
 	box-shadow:
 		0 0 0 2px color-mix(in srgb, var(--accent) 55%, transparent),
@@ -569,20 +627,6 @@ h2 {
 
 .playdot :global(.sl-ico) {
 	margin-left: 2px;
-}
-
-.seen {
-	position: absolute;
-	right: 8px;
-	top: 8px;
-	display: grid;
-	place-items: center;
-	width: 22px;
-	height: 22px;
-	border-radius: 50%;
-	background: color-mix(in srgb, var(--bg-deep) 80%, transparent);
-	color: var(--status-available);
-	font-size: 13px;
 }
 
 .info {
@@ -659,5 +703,75 @@ h2 {
 .trash :global(.sl-btn) {
 	width: 34px;
 	height: 34px;
+	color: var(--status-failed);
+}
+
+.title-row {
+	display: flex;
+	align-items: center;
+	gap: 12px;
+}
+
+.selbar {
+	position: sticky;
+	top: 72px;
+	z-index: 10;
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	gap: 10px;
+	padding: 10px 12px 10px 16px;
+	border-radius: 12px;
+	background: color-mix(in srgb, var(--bg-elevated) 92%, transparent);
+	backdrop-filter: blur(12px);
+	-webkit-backdrop-filter: blur(12px);
+	box-shadow:
+		inset 0 0 0 1px var(--border-strong),
+		var(--shadow-3);
+}
+
+.selcount {
+	font-size: 14px;
+	font-weight: 600;
+}
+
+.selsize {
+	font: 400 11.5px var(--font-mono);
+	color: var(--fg-subtle);
+}
+
+.spacer {
+	flex: 1;
+}
+.box {
+	position: absolute;
+	left: 10px;
+	top: 10px;
+	width: 24px;
+	height: 24px;
+	box-sizing: border-box;
+	display: grid;
+	place-items: center;
+	border: 2px solid rgba(255, 255, 255, 0.85);
+	border-radius: 50%;
+	background: rgba(10, 10, 14, 0.45);
+	color: var(--fg-on-accent);
+	box-shadow: 0 1px 6px rgba(0, 0, 0, 0.5);
+	transition:
+		background 150ms var(--ease),
+		border-color 150ms var(--ease);
+}
+
+.box :global(.sl-ico) {
+	opacity: 0;
+}
+
+.box.on {
+	border-color: var(--accent);
+	background: var(--accent);
+}
+
+.box.on :global(.sl-ico) {
+	opacity: 1;
 }
 </style>

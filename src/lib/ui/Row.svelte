@@ -8,20 +8,29 @@ let {
 	title,
 	note,
 	padX = 56,
+	gap = 16,
 	prevLabel,
 	nextLabel,
+	seeAll,
 	children,
 }: {
 	title: string;
 	note?: string;
 	padX?: number;
+	gap?: number;
 	prevLabel: string;
 	nextLabel: string;
+	/** Library's rails: the note beside the title and a "See all" before the arrows. */
+	seeAll?: { label: string; onclick: () => void };
 	children: Snippet;
 } = $props();
 
 let scroller = $state<HTMLElement>();
-const page = (dir: -1 | 1) => scroller?.scrollBy({ left: dir * PAGE_PX, behavior: "smooth" });
+const page = (dir: -1 | 1) =>
+	scroller?.scrollBy({
+		left: dir * (seeAll ? scroller.clientWidth * 0.8 : PAGE_PX),
+		behavior: "smooth",
+	});
 
 let atStart = $state(true);
 let atEnd = $state(true);
@@ -40,11 +49,16 @@ $effect(() => {
 });
 </script>
 
-<section>
+<section class:rail={!!seeAll}>
 	<div class="head" style:padding="0 {padX}px">
 		<h2>{title}</h2>
+		{#if seeAll && note}
+			<span class="rail-note">{note}</span>
+		{/if}
 		<div class="tools">
-			{#if note}
+			{#if seeAll}
+				<button type="button" class="see-all" onclick={seeAll.onclick}>{seeAll.label}</button>
+			{:else if note}
 				<span class="note">{note}</span>
 			{/if}
 			<button
@@ -71,8 +85,9 @@ $effect(() => {
 		class="scroller"
 		bind:this={scroller}
 		onscroll={measure}
-		style:padding="6px {padX}px 10px"
+		style:padding={seeAll ? `4px ${padX}px 8px` : `6px ${padX}px 10px`}
 		style:scroll-padding="0 {padX}px"
+		style:gap="{gap}px"
 	>
 		{@render children()}
 	</div>
@@ -138,9 +153,64 @@ h2 {
 
 .scroller {
 	display: flex;
-	gap: 16px;
 	overflow-x: auto;
 	scroll-snap-type: x proximity;
 	scrollbar-width: none;
+}
+
+.rail {
+	gap: 12px;
+}
+
+.rail .head {
+	justify-content: flex-start;
+	align-items: baseline;
+	gap: 12px;
+}
+
+.rail-note {
+	font: 400 11.5px var(--font-mono);
+	color: var(--fg-subtle);
+}
+
+.rail .tools {
+	align-self: center;
+	margin-left: auto;
+}
+
+.see-all {
+	margin-right: 6px;
+	padding: 0;
+	border: 0;
+	background: transparent;
+	color: var(--fg-muted);
+	font-size: 13px;
+	font-weight: 500;
+	cursor: pointer;
+}
+
+.see-all:hover {
+	color: var(--fg);
+}
+
+.rail .arrow {
+	border: 0;
+	background: color-mix(in srgb, var(--fg) 6%, transparent);
+	box-shadow: inset 0 0 0 1px var(--border);
+	transition:
+		opacity var(--dur-fast),
+		background var(--dur-fast);
+}
+
+.rail .arrow:disabled {
+	opacity: 0.35;
+}
+
+.rail .arrow:hover:not(:disabled) {
+	background: color-mix(in srgb, var(--fg) 12%, transparent);
+}
+
+.rail .scroller {
+	scroll-snap-type: x mandatory;
 }
 </style>

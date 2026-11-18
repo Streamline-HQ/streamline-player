@@ -269,7 +269,7 @@ nav {
 }
 
 .sl-searchbtn:hover {
-	background: color-mix(in srgb, var(--bg-selected) 94%, var(--fg) 6%);
+	background: color-mix(in srgb, var(--bg-selected) 88%, transparent);
 	color: var(--fg);
 }
 

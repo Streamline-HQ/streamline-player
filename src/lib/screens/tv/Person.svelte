@@ -5,14 +5,31 @@ import LoadFailed from "#lib/tv/LoadFailed.svelte";
 import TvScreen from "#lib/tv/TvScreen.svelte";
 import type { Credit, Person } from "#lib/core/types.ts";
 import { monogram, seasonSpan } from "#lib/core/format.ts";
-import { artwork, headshot, person as fetchPerson } from "#platform";
+import { lib, loadLibrary } from "#lib/core/library.svelte.ts";
+import { watchInfo } from "#lib/core/watch-info.ts";
 import { hideBroken } from "#lib/ui/img.ts";
+import PosterCard from "#lib/ui/PosterCard.svelte";
+import {
+	artwork,
+	headshot,
+	home,
+	library,
+	person as fetchPerson,
+	title,
+	watchState,
+} from "#platform";
 
 let { id }: { id: string } = $props();
 let p = $state.raw<Person | null>(null);
 let failed = $state<string | null>(null);
 let bgHidden = $state(false);
 let loadId = 0;
+
+loadLibrary({ library, watchState, home, title }, lib.loaded);
+const infoOf = (c: Credit) => {
+	const t = (c.kind === "movies" ? lib.movies : lib.shows).find((x) => x.id === c.id);
+	return t ? watchInfo(t, c.kind, lib.watch) : undefined;
+};
 
 $effect(() => {
 	const i = id;
@@ -64,23 +81,21 @@ const open = (c: Pick<Credit, "kind" | "id" | "seasons">) =>
 		<h2>{name}<span class="count">{list.length}</span></h2>
 		<div class="grid">
 			{#each list as c, i (`${c.kind}:${c.id}`)}
-				<button
-					type="button"
-					data-tv="1"
-					data-fid="{c.kind}:{c.id}"
-					data-tv-default={first && i === 0 && firstKnown < 0 ? "1" : undefined}
-					class="card"
+				{@const info = infoOf(c)}
+				<PosterCard
+					size="tv"
+					full
+					title={c.title}
+					note={c.character}
+					sub={c.kind === "series"
+						? seasonSpan(c.seasons ?? [], c.total_seasons ?? c.seasons?.length ?? 0)
+						: String(c.year)}
+					src={artwork(c.kind, c.id, "poster")}
+					{info}
+					leftLabel={i18n.card_left_label({ count: info?.left ?? 0 })}
+					tv={{ fid: `${c.kind}:${c.id}`, isDefault: first && i === 0 && firstKnown < 0 }}
 					onclick={() => open(c)}
-				>
-					<img src={artwork(c.kind, c.id, "poster")} alt="" loading="lazy" onerror={hideBroken}>
-					<span class="t">{c.title}</span>
-					<span class="r">{c.character}</span>
-					<span class="s" class:span={c.kind === "series"}
-						>{c.kind === "series"
-							? seasonSpan(c.seasons ?? [], c.total_seasons ?? c.seasons?.length ?? 0)
-							: c.year}</span
-					>
-				</button>
+				/>
 			{/each}
 		</div>
 	</section>
@@ -397,68 +412,5 @@ h2 {
 	display: grid;
 	grid-template-columns: repeat(auto-fill, 220px);
 	gap: 44px 30px;
-}
-
-.card {
-	display: flex;
-	flex-direction: column;
-	gap: 4px;
-	padding: 0;
-	border: 0;
-	background: transparent;
-	color: var(--fg);
-	text-align: left;
-	cursor: pointer;
-	outline: none;
-	min-width: 0;
-}
-
-.card img {
-	width: 220px;
-	aspect-ratio: 2 / 3;
-	margin-bottom: 12px;
-	border-radius: 14px;
-	object-fit: cover;
-	display: block;
-	background: var(--bg-card);
-	transition:
-		transform 180ms var(--ease),
-		box-shadow 180ms;
-}
-
-.card:focus img {
-	transform: scale(1.06);
-	box-shadow:
-		0 0 0 4px var(--fg),
-		0 24px 60px rgba(0, 0, 0, 0.7);
-}
-
-/* Above the focused poster's shadow, which would grey them out. */
-.t,
-.r,
-.s {
-	position: relative;
-	white-space: nowrap;
-	overflow: hidden;
-	text-overflow: ellipsis;
-}
-
-.t {
-	font-size: 24px;
-	font-weight: 500;
-}
-
-.r {
-	font-size: 21px;
-	color: var(--fg-muted);
-}
-
-.s {
-	font: 400 19px var(--font-mono);
-	color: var(--fg-subtle);
-}
-
-.s.span {
-	color: var(--accent-text);
 }
 </style>

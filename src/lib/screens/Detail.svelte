@@ -6,6 +6,7 @@ let hops = 0;
 
 <script lang="ts">
 import Tip from "#lib/ui/Tip.svelte";
+import WatchGlyph from "#lib/ui/WatchGlyph.svelte";
 import { playUrl, watchedTitle } from "#lib/core/browse.ts";
 import {
 	defaultSeason,
@@ -299,6 +300,27 @@ async function mark(targets: Target[], to: boolean, message: string) {
 		await Promise.all(targets.map((x) => setWatched(x.media, to)));
 		for (const x of targets) applyWatch(x.media, to, x.ref);
 		toast(message);
+	} catch {}
+}
+
+const resetLabel = $derived(
+	series && primary
+		? i18n.detail_reset_episode({ season: primary.season ?? 1, episode: primary.episode ?? 1 })
+		: i18n.detail_reset(),
+);
+
+async function resetProgress() {
+	if (!primary || !t) return;
+	const done = series
+		? i18n.detail_reset_episode_text({
+				season: primary.season ?? 1,
+				episode: primary.episode ?? 1,
+			})
+		: i18n.card_reset_text({ title: t.title });
+	try {
+		await setWatched(primary.mediaId, false);
+		applyWatch(primary.mediaId, false);
+		toast(i18n.card_reset_done(), { text: done });
 	} catch {}
 }
 
@@ -598,20 +620,15 @@ const audioTracks = $derived(
 				Boolean,
 			),
 );
-const subsLine = $derived(
-	tracks?.subtitles.length
-		? i18n.detail_subs_line({
-				list: tracks.subtitles
-					.map((s) => {
-						const info = subInfo(s);
-						const name = languageLabel(s.language);
-						return info.burnOnly
-							? i18n.detail_sub_item_burn({ name, format: info.fmt })
-							: i18n.detail_sub_item({ name, format: info.fmt });
-					})
-					.join(", "),
-			})
-		: "",
+const subsList = $derived(
+	(tracks?.subtitles ?? []).map((s) => {
+		const info = subInfo(s);
+		return {
+			name: languageLabel(s.language),
+			format: info.burnOnly ? i18n.detail_sub_burns({ format: info.fmt }) : info.fmt,
+			burns: !!info.burnOnly,
+		};
+	}),
 );
 
 type Open = { scope: Scope; ep: number | null; draft: Choice; x: number; y: number; up: boolean };
@@ -769,7 +786,13 @@ const heroHeight = $derived(
 					</button>
 					{#if !series && resuming}
 						<button type="button" class="glass restart" onclick={() => goto(playUrl("movies", id))}>
-							<Icon name="rotate-ccw" size={17} />{i18n.detail_from_start()}
+							<Icon name="skip-back" size={17} stroke={1.75} />{i18n.detail_from_start()}
+						</button>
+					{/if}
+					{#if resuming}
+						<button type="button" class="glass sq" aria-label={resetLabel} onclick={resetProgress}>
+							<Tip text={resetLabel} />
+							<Icon name="rotate-ccw" size={18} stroke={1.9} />
 						</button>
 					{/if}
 					<button
@@ -780,7 +803,7 @@ const heroHeight = $derived(
 						onclick={toggleWatched}
 					>
 						<Tip text={watched ? i18n.detail_mark_as_unwatched() : i18n.detail_mark_as_watched()} />
-						<Icon name={watched ? "check-check" : "eye"} size={19} stroke={2} />
+						<WatchGlyph on={watched} size={19} stroke={2} />
 					</button>
 					<button
 						type="button"
@@ -901,7 +924,8 @@ const heroHeight = $derived(
 				audioTitle={i18n.detail_audio_tracks()}
 				audio={audioTracks}
 				subsTitle={i18n.player_subtitles()}
-				subs={series ? undefined : subsLine}
+				subs={series ? undefined : subsList}
+				subsNote={i18n.detail_subs_note()}
 				ontoggle={() => (techOpen = !(techOpen ?? prefs.techDetails))}
 			/>
 
@@ -912,11 +936,8 @@ const heroHeight = $derived(
 						{#each similar as it (`${it.kind}:${it.id}`)}
 							<button type="button" onclick={() => goto(`/detail/${it.kind}/${it.id}`)}>
 								<span class="poster"
-									><Art src={artwork(it.kind, it.id, "poster")} kind="poster" ratio="2 / 3" />
-									{#if watchedTitle(it, it.kind, lib.watch)}
-										<span class="seen"><Icon name="tick" size={13} stroke={2.5} /></span>
-									{/if}
-								</span>
+									><Art src={artwork(it.kind, it.id, "poster")} kind="poster" ratio="2 / 3" /></span
+								>
 								<span class="name">{it.title}</span>
 							</button>
 						{/each}
@@ -1145,6 +1166,11 @@ p {
 	color: var(--fg);
 }
 
+.mark-title {
+	position: relative;
+	transition: color 260ms var(--ease);
+}
+
 .status {
 	display: flex;
 	align-items: center;
@@ -1226,19 +1252,6 @@ h2 {
 	transition:
 		box-shadow var(--dur-fast),
 		transform var(--dur-fast);
-}
-
-.seen {
-	position: absolute;
-	right: 8px;
-	top: 8px;
-	width: 22px;
-	height: 22px;
-	display: grid;
-	place-items: center;
-	border-radius: 50%;
-	background: color-mix(in srgb, var(--bg-deep) 78%, transparent);
-	color: var(--status-available);
 }
 
 .similar > button:hover .poster {

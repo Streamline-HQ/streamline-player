@@ -1,98 +1,57 @@
 <script lang="ts">
+import { isNew } from "#lib/core/browse.ts";
+import { addedText } from "#lib/core/format.ts";
+import { lib, loadLibrary } from "#lib/core/library.svelte.ts";
+import {
+	browseRails,
+	DEFAULT_VIEW,
+	type Flag,
+	type Rail,
+	type Tab,
+	visible,
+} from "#lib/core/library-view.ts";
+import type { Kind, Title } from "#lib/core/types.ts";
+import { watchInfo } from "#lib/core/watch-info.ts";
 import { m as i18n } from "#lib/paraglide/messages.js";
-import { goto } from "#lib/ui/nav.ts";
 import LoadFailed from "#lib/tv/LoadFailed.svelte";
 import TvScreen from "#lib/tv/TvScreen.svelte";
-import type { Kind, Title, Watch } from "#lib/core/types.ts";
-import { episodesOf, inProgress, pct } from "#lib/core/format.ts";
-import { artwork, library, title as fetchTitle, watchState } from "#platform";
-import { hideBroken } from "#lib/ui/img.ts";
+import BackdropCard from "#lib/ui/BackdropCard.svelte";
+import { goto } from "#lib/ui/nav.ts";
+import PosterCard from "#lib/ui/PosterCard.svelte";
 import { progressive } from "#lib/ui/progressive.svelte.ts";
-import { Check } from "@lucide/svelte";
+import { artwork, home, library, title, watchState } from "#platform";
 
-type Flag = "unwatched" | "progress" | "uhd" | "hdr";
-const FLAGS: [Flag, string][] = [
+const port = { library, watchState, home, title };
+
+let { kind }: { kind: Kind } = $props();
+let tab = $state<Tab>("browse");
+let flags = $state<Flag[]>([]);
+
+$effect(() => {
+	kind;
+	tab = "browse";
+	flags = [];
+});
+
+$effect(() => {
+	loadLibrary(port, lib.loaded);
+});
+
+const now = new Date();
+const filters = $derived<[Flag, string][]>([
 	["unwatched", i18n.library_unwatched()],
 	["progress", i18n.library_in_progress()],
 	["uhd", "4K"],
 	["hdr", "HDR"],
-];
-
-let { kind }: { kind: Kind } = $props();
-let titles = $state.raw<Title[]>([]);
-let watch = $state.raw<Watch[]>([]);
-let loaded = $state(false);
-let flags = $state<Flag[]>([]);
-let doneShows = $state.raw(new Set<number>());
-let failed = $state<string | null>(null);
-let loadId = 0;
-
-$effect(() => {
-	const current = kind;
-	flags = [];
-	failed = null;
-	load(current).catch((e) => (failed = String(e)));
-});
-
-async function load(current: Kind) {
-	const id = ++loadId;
-	titles = [];
-	watch = [];
-	doneShows = new Set();
-	loaded = false;
-	const [t, w] = await Promise.all([library(current), watchState()]).catch((e) => {
-		// A failure of the load the viewer already left is not theirs to see.
-		if (id === loadId) throw e;
-		return [];
-	});
-	if (id !== loadId) return;
-	titles = [...t].sort((a, b) => b.added_at.localeCompare(a.added_at));
-	watch = w;
-	loaded = true;
-	if (current === "series") markDoneShows(w, id).catch(() => {});
-}
-
-async function markDoneShows(w: Watch[], id: number) {
-	const started = [...new Set(w.filter((x) => x.watched).flatMap((x) => x.series_id ?? []))];
-	const shows = await Promise.all(started.map((id) => fetchTitle("series", id)));
-	if (id !== loadId) return;
-	const seen = new Set(w.filter((x) => x.watched).map((x) => x.media_id));
-	doneShows = new Set(
-		shows
-			.filter((s) => {
-				const eps = episodesOf(s).filter((e) => e.has_file);
-				return eps.length > 0 && eps.every((e) => seen.has(e.media_file_id));
-			})
-			.map((s) => s.id),
-	);
-}
-
-// Grouped once: filtering the whole watch state for each card is what made a large library slow.
-const watchByTitle = $derived.by(() => {
-	const by = new Map<number, Watch[]>();
-	for (const w of watch) {
-		const id = kind === "movies" ? w.movie_id : w.series_id;
-		if (id === undefined) continue;
-		const of = by.get(id);
-		if (of) of.push(w);
-		else by.set(id, [w]);
-	}
-	return by;
-});
-const stateOf = (t: Title) => watchByTitle.get(t.id) ?? [];
-const going = (t: Title) => stateOf(t).find(inProgress);
-const watched = (t: Title) =>
-	kind === "movies" ? stateOf(t).some((w) => w.watched) : doneShows.has(t.id);
-
-const test: Record<Flag, (t: Title) => boolean> = {
-	unwatched: (t) => !watched(t) && !going(t),
-	progress: (t) => !!going(t),
-	uhd: (t) => t.file_summary?.resolution === "2160p",
-	hdr: (t) => !!t.file_summary?.hdr,
-};
-const items = $derived(titles.filter((t) => flags.every((f) => test[f](t))));
+	kind === "movies" ? ["short", i18n.rail_short()] : ["binge", i18n.library_binge()],
+]);
+const base = $derived(kind === "movies" ? lib.movies : lib.shows);
+const items = $derived(visible(base, kind, lib.watch, { ...DEFAULT_VIEW, flags }));
+const rails = $derived(
+	tab === "browse" ? browseRails(base, kind, lib.watch, (t: Title) => isNew(t, now)) : [],
+);
 const rows = progressive(
-	() => items,
+	() => (tab === "all" ? items : []),
 	() => kind,
 );
 const shown = $derived(items.slice(0, rows.drawn));
@@ -104,14 +63,43 @@ function toggle(f: Flag) {
 		? flags.filter((x) => x !== f)
 		: [...flags.filter((x) => x !== other[f]), f];
 }
+
+const open = (t: Title) => goto(`/detail/${kind}/${t.id}`);
+const info = (t: Title) => watchInfo(t, kind, lib.watch);
+const newest = $derived(
+	base.reduce<Title | null>(
+		(a, t) => (!a || Date.parse(t.added_at) > Date.parse(a.added_at) ? t : a),
+		null,
+	),
+);
+const railTitle = (r: Rail) =>
+	({
+		recent: i18n.home_recently_added(),
+		top: i18n.rail_top(),
+		unstarted: i18n.rail_unstarted(),
+		genre: r.genre ?? "",
+		uhd: i18n.rail_uhd(),
+		short: i18n.rail_short(),
+		binge: i18n.rail_binge(),
+	})[r.id];
+const railNote = (r: Rail) =>
+	({
+		recent: i18n.home_new_count({ count: r.count }),
+		top: i18n.rail_top_note(),
+		unstarted: i18n.rail_titles({ count: r.count }),
+		genre: i18n.rail_titles({ count: r.count }),
+		uhd: i18n.rail_uhd_note({ count: r.count }),
+		short: i18n.rail_short_note(),
+		binge: i18n.rail_binge_note(),
+	})[r.id];
 </script>
 
-<TvScreen tab={failed === null ? kind : undefined} scroll>
-	{#if failed !== null}
+<TvScreen tab={lib.error === null ? kind : undefined} scroll>
+	{#if lib.error !== null}
 		<LoadFailed
-			error={failed}
-			retry={() => load(kind)}
-			onloaded={() => (failed = null)}
+			error={lib.error}
+			retry={() => loadLibrary(port, true)}
+			onloaded={() => {}}
 			onback={() => history.back()}
 		/>
 	{:else}
@@ -119,59 +107,115 @@ function toggle(f: Flag) {
 			<div class="page">
 				<div class="head">
 					<h1>{kind === "series" ? i18n.nav_shows() : i18n.nav_movies()}</h1>
-					{#if loaded}
+					{#if lib.loaded}
 						<span class="count"
-							>{(kind === "series" ? i18n.library_count_shows : i18n.library_count_movies)({
-								count: items.length,
-								total: titles.length,
-							})}</span
+							>{#if tab === "all"}
+								{(kind === "series" ? i18n.library_count_shows : i18n.library_count_movies)({
+									count: items.length,
+									total: base.length,
+								})}
+							{:else}
+								{(kind === "series" ? i18n.library_total_shows : i18n.library_total_movies)({
+									count: base.length,
+								})}
+							{/if}</span
 						>
 					{/if}
 				</div>
-				<div class="filters">
-					{#each FLAGS as [f, label]}
+				<div class="filters" role="tablist" aria-label={i18n.library_view_label()}>
+					{#each [
+						["browse", i18n.library_tab_browse()],
+						[
+							"all",
+							kind === "movies" ? i18n.library_tab_all_movies() : i18n.library_tab_all_shows(),
+						],
+					] as [t, label] (t)}
 						<button
 							type="button"
 							data-tv="1"
-							class="filter"
-							class:on={flags.includes(f)}
-							onclick={() => toggle(f)}
+							role="tab"
+							class="filter tab"
+							class:on={tab === t}
+							aria-selected={tab === t}
+							onclick={() => (tab = t as Tab)}
 						>
 							{label}
 						</button>
 					{/each}
 				</div>
-				<div class="grid" use:track style:padding-bottom="{rows.after}px">
-					{#each shown as t (t.id)}
-						<div class="item">
+				{#if tab === "browse"}
+					<div class="rails">
+						{#each rails as r (`${r.id}:${r.genre ?? ""}`)}
+							<section aria-label={railTitle(r)}>
+								<div class="rail-head">
+									<h2>{railTitle(r)}</h2>
+									<span class="note">{railNote(r)}</span>
+								</div>
+								<div class="rail">
+									{#each r.titles as t, ti (t.id)}
+										{#if r.wide}
+											<div class="cell" style:width="480px">
+												<BackdropCard
+													size="tv"
+													title={t.title}
+													eyebrow={t === newest
+														? i18n.rail_added_today()
+														: i18n.rail_added({ date: addedText(t.added_at, now) })}
+													backdrop={artwork(kind, t.id, "backdrop")}
+													poster={artwork(kind, t.id, "poster")}
+													info={info(t)}
+													leftLabel={i18n.card_left_label({ count: info(t).left })}
+													tv={{ fid: `${r.id}:${t.id}`, isDefault: ti === 0 }}
+													onclick={() => open(t)}
+												/>
+											</div>
+										{:else}
+											<PosterCard
+												size="tv"
+												bare
+												width={212}
+												title={t.title}
+												src={artwork(kind, t.id, "poster")}
+												info={info(t)}
+												leftLabel={i18n.card_left_label({ count: info(t).left })}
+												tv={{ fid: `${r.id}:${r.genre ?? ""}:${t.id}` }}
+												onclick={() => open(t)}
+											/>
+										{/if}
+									{/each}
+								</div>
+							</section>
+						{/each}
+					</div>
+				{:else}
+					<div class="filters">
+						{#each filters as [f, label] (f)}
 							<button
 								type="button"
 								data-tv="1"
-								data-fid={String(t.id)}
-								class="card"
-								aria-label={t.title}
-								onclick={() => goto(`/detail/${kind}/${t.id}`)}
+								class="filter"
+								class:on={flags.includes(f)}
+								onclick={() => toggle(f)}
 							>
-								<!-- The card is focusable before its poster and badges are drawn: the remote can reach any title at once. -->
-								{#if rows.real(t.id)}
-									<img
-										src={artwork(kind, t.id, "poster")}
-										alt=""
-										loading="lazy"
-										onerror={hideBroken}
-									>
-									{#if going(t)}
-										<span class="bar"><span style:width="{pct(going(t))}%"></span></span>
-									{/if}
-									{#if watched(t)}
-										<span class="done"><Check size={22} strokeWidth={3} /></span>
-									{/if}
-								{/if}
+								{label}
 							</button>
-							<span class="name">{t.title}</span>
-						</div>
-					{/each}
-				</div>
+						{/each}
+					</div>
+					<div class="grid" use:track style:padding-bottom="{rows.after}px">
+						{#each shown as t (t.id)}
+							<!-- Every card is focusable before its poster is drawn: the remote can reach any title at once. -->
+							<PosterCard
+								size="tv"
+								title={t.title}
+								src={rows.real(t.id) ? artwork(kind, t.id, "poster") : undefined}
+								info={rows.real(t.id) ? info(t) : undefined}
+								leftLabel={i18n.card_left_label({ count: info(t).left })}
+								tv={{ fid: String(t.id) }}
+								onclick={() => open(t)}
+							/>
+						{/each}
+					</div>
+				{/if}
 			</div>
 		{/key}
 	{/if}
@@ -222,6 +266,14 @@ h1 {
 	transition: transform var(--dur-fast);
 }
 
+.filter.tab {
+	padding: 0 28px;
+}
+
+.filter.tab.on {
+	font-weight: 600;
+}
+
 .filter.on {
 	background: rgba(255, 255, 255, 0.16);
 	color: var(--fg);
@@ -233,87 +285,55 @@ h1 {
 	transform: scale(1.06);
 }
 
+.rails {
+	display: flex;
+	flex-direction: column;
+	gap: 44px;
+	margin: 0 -96px;
+}
+
+section {
+	display: flex;
+	flex-direction: column;
+	gap: 16px;
+}
+
+.rail-head {
+	display: flex;
+	align-items: baseline;
+	gap: 18px;
+	padding: 0 96px;
+}
+
+h2 {
+	margin: 0;
+	font-size: 30px;
+	font-weight: 600;
+	letter-spacing: -0.01em;
+}
+
+.note {
+	font: 400 20px var(--font-mono);
+	color: var(--fg-subtle);
+}
+
+.rail {
+	display: flex;
+	gap: 30px;
+	overflow-x: auto;
+	padding: 14px 96px 18px;
+	scroll-padding: 0 96px;
+	scrollbar-width: none;
+}
+
+.cell {
+	flex: none;
+}
+
 .grid {
 	display: grid;
 	grid-template-columns: repeat(5, minmax(0, 1fr));
 	gap: 52px 40px;
 	padding-top: 10px;
-}
-
-.item {
-	display: flex;
-	flex-direction: column;
-	gap: 16px;
-	min-width: 0;
-}
-
-.card {
-	position: relative;
-	display: block;
-	width: 100%;
-	aspect-ratio: 2 / 3;
-	padding: 0;
-	border: 0;
-	border-radius: 14px;
-	overflow: hidden;
-	background: var(--bg-card);
-	cursor: pointer;
-	outline: none;
-	transition:
-		transform 220ms var(--ease),
-		box-shadow 220ms;
-}
-
-.card:focus {
-	transform: translateY(-12px) scale(1.04);
-	box-shadow:
-		0 0 0 3px var(--bg-deep),
-		0 0 0 8px var(--accent),
-		0 0 64px color-mix(in srgb, var(--accent) 60%, transparent),
-		0 28px 56px rgba(0, 0, 0, 0.65);
-}
-
-.card img {
-	width: 100%;
-	height: 100%;
-	object-fit: cover;
-	display: block;
-}
-
-.bar {
-	position: absolute;
-	left: 0;
-	right: 0;
-	bottom: 0;
-	height: 6px;
-	background: rgba(255, 255, 255, 0.2);
-}
-
-.bar > span {
-	display: block;
-	height: 100%;
-	background: var(--accent);
-}
-
-.done {
-	position: absolute;
-	right: 12px;
-	top: 12px;
-	width: 40px;
-	height: 40px;
-	display: grid;
-	place-items: center;
-	border-radius: 50%;
-	background: var(--accent);
-	color: var(--fg-on-accent);
-	box-shadow: 0 4px 14px rgba(0, 0, 0, 0.5);
-}
-
-.name {
-	font-size: 26px;
-	font-weight: 500;
-	white-space: nowrap;
-	overflow: hidden;
-	text-overflow: ellipsis;
 }
 </style>

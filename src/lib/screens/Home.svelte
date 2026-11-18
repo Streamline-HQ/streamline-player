@@ -10,12 +10,10 @@ import {
 	recentCount,
 	recentlyAdded,
 	topGenre,
-	watchedTitle,
 } from "#lib/core/browse.ts";
 import { badges, left, runtime, stillPos } from "#lib/core/format.ts";
 import { dl } from "#lib/core/downloads.svelte.ts";
 import { lib, loadLibrary } from "#lib/core/library.svelte.ts";
-import { episodeFor, playHref, progressOf } from "#lib/core/library-view.ts";
 import type { Kind, Title } from "#lib/core/types.ts";
 import { getLocale } from "#lib/paraglide/runtime.js";
 import { m as i18n } from "#lib/paraglide/messages.js";
@@ -26,6 +24,7 @@ import PosterCard from "#lib/ui/PosterCard.svelte";
 import ResumeCard from "#lib/ui/ResumeCard.svelte";
 import Row from "#lib/ui/Row.svelte";
 import { goto } from "#lib/ui/nav.ts";
+import { titleCard } from "#lib/screens/title-card.svelte.ts";
 import { artwork, canDownload, home, library, title, watchState } from "#platform";
 import { onMount } from "svelte";
 
@@ -55,17 +54,6 @@ const heroHeight = $derived(
 		: Math.round(innerHeight * HERO_SHARE),
 );
 const now = new Date();
-
-function playLabel(t: Title, kind: Kind) {
-	if (kind === "movies")
-		return progressOf(t, kind, lib.watch) > 0
-			? i18n.library_resume_title({ title: t.title })
-			: i18n.library_play_title({ title: t.title });
-	const ep = episodeFor(t, lib.watch);
-	return ep && "number" in ep
-		? i18n.library_play_episode({ title: t.title, season: ep.season, episode: ep.number })
-		: i18n.library_play_title({ title: t.title });
-}
 
 const resume = $derived(continueWatching(lib.movies, lib.shows, lib.watch));
 const byKey = (kind: Kind, id: number) =>
@@ -263,10 +251,8 @@ onMount(() => {
 							title={t.title}
 							sub={movieSub(t)}
 							src={artwork("movies", t.id, "poster")}
+							{...titleCard("movies", t, now)}
 							badge={badge(t, "movies")}
-							watched={watchedTitle(t, "movies", lib.watch)}
-							playLabel={playLabel(t, "movies")}
-							onplay={() => goto(playHref(t, "movies", lib.watch))}
 							onclick={() => open("movies", t.id)}
 						/>
 					{/each}
@@ -286,10 +272,8 @@ onMount(() => {
 							title={t.title}
 							sub={showSub(t)}
 							src={artwork("series", t.id, "poster")}
+							{...titleCard("series", t, now)}
 							badge={badge(t, "series")}
-							watched={watchedTitle(t, "series", lib.watch)}
-							playLabel={playLabel(t, "series")}
-							onplay={() => goto(playHref(t, "series", lib.watch))}
 							onclick={() => open("series", t.id)}
 						/>
 					{/each}
@@ -308,9 +292,8 @@ onMount(() => {
 							title={t.title}
 							sub={kind === "movies" ? movieSub(t) : showSub(t)}
 							src={artwork(kind, t.id, "poster")}
-							watched={watchedTitle(t, kind, lib.watch)}
-							playLabel={playLabel(t, kind)}
-							onplay={() => goto(playHref(t, kind, lib.watch))}
+							{...titleCard(kind, t, now)}
+							badge={undefined}
 							onclick={() => open(kind, t.id)}
 						/>
 					{/each}

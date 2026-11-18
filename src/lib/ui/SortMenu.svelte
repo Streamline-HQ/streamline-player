@@ -9,20 +9,28 @@ let {
 	label,
 	icon = "arrow-up-down",
 	title,
+	current: currentLabel,
+	ascending,
+	align = "right",
 	onchange,
 }: {
-	options: { value: V; label: string }[];
+	options: { value: V; label: string; icon?: IconName }[];
 	value: V;
 	label: string;
 	icon?: IconName;
 	/** What the button reads in place of the chosen option, for a choice that means "no filter". */
 	title?: string;
+	/** What the button reads when the value is none of the options (a sort picked from a column head). */
+	current?: string;
+	/** Set for a sort: the chosen option shows the direction instead of a tick. */
+	ascending?: boolean;
+	align?: "left" | "right";
 	onchange: (value: V) => void;
 } = $props();
 
 let open = $state(false);
 const panel = presence(() => open, 170);
-const current = $derived(options.find((o) => o.value === value)?.label ?? "");
+const current = $derived(options.find((o) => o.value === value)?.label ?? currentLabel ?? "");
 </script>
 
 <div class="sort" use:dismiss={() => (open = false)}>
@@ -34,10 +42,10 @@ const current = $derived(options.find((o) => o.value === value)?.label ?? "");
 		onclick={() => (open = !open)}
 	>
 		<Icon name={icon} size={15} stroke={1.75} />{title ?? current}
-		<span class="chev" class:open><Icon name="chevron-down" size={14} stroke={2} /></span>
+		<span class="chev" class:open><Icon name="chevron-down" size={13} stroke={2} /></span>
 	</button>
 	{#if panel.mounted}
-		<div class="menu" class:shown={panel.shown && open} role="menu" aria-label={label}>
+		<div class="menu {align}" class:shown={panel.shown && open} role="menu" aria-label={label}>
 			{#each options as o (o.value)}
 				<button
 					type="button"
@@ -49,7 +57,17 @@ const current = $derived(options.find((o) => o.value === value)?.label ?? "");
 						open = false;
 					}}
 				>
-					<span class="check"><Icon name="tick" size={14} stroke={2.5} /></span>{o.label}
+					{#if o.icon}
+						<span class="lead"><Icon name={o.icon} size={15} stroke={1.75} /></span>
+					{/if}
+					<span class="label">{o.label}</span>
+					<span class="check" class:up={ascending === true}
+						><Icon
+							name={ascending === undefined ? "tick" : "chevron-down"}
+							size={14}
+							stroke={2.5}
+						/></span
+					>
 				</button>
 			{/each}
 		</div>
@@ -62,27 +80,33 @@ const current = $derived(options.find((o) => o.value === value)?.label ?? "");
 }
 
 .trigger {
-	height: 38px;
+	height: 36px;
 	display: flex;
 	align-items: center;
 	gap: 8px;
-	padding: 0 12px;
-	border-radius: var(--radius-md);
-	border: 1px solid var(--border-strong);
-	background: var(--surface);
+	padding: 0 10px 0 12px;
+	border: 0;
+	border-radius: 10px;
+	box-shadow: inset 0 0 0 1px var(--border);
+	background: color-mix(in srgb, var(--fg) 4%, transparent);
 	color: var(--fg-muted);
 	font-size: 13px;
+	font-weight: 500;
 	cursor: pointer;
 	white-space: nowrap;
+	transition:
+		background var(--dur-fast),
+		color var(--dur-fast);
 }
 
 .trigger:hover {
-	background: rgba(255, 255, 255, 0.08);
+	background: color-mix(in srgb, var(--fg) 8%, transparent);
 	color: var(--fg);
 }
 
 .chev {
 	display: grid;
+	color: var(--fg-subtle);
 	transition: transform var(--dur-base) var(--ease);
 }
 
@@ -92,7 +116,6 @@ const current = $derived(options.find((o) => o.value === value)?.label ?? "");
 
 .menu {
 	position: absolute;
-	right: 0;
 	top: 44px;
 	z-index: 5;
 	width: 200px;
@@ -109,6 +132,15 @@ const current = $derived(options.find((o) => o.value === value)?.label ?? "");
 	transition:
 		opacity 130ms var(--ease-in),
 		transform 150ms var(--ease-in);
+}
+
+.menu.right {
+	right: 0;
+}
+
+.menu.left {
+	left: 0;
+	transform-origin: top left;
 }
 
 .menu.shown {
@@ -140,10 +172,29 @@ const current = $derived(options.find((o) => o.value === value)?.label ?? "");
 	background: var(--surface-2);
 }
 
+.lead {
+	display: grid;
+	color: var(--fg-subtle);
+}
+
+[aria-checked="true"] > .lead {
+	color: var(--accent-text);
+}
+
+.label {
+	flex: 1;
+}
+
 .check {
+	display: grid;
 	width: 14px;
 	color: var(--accent);
 	opacity: 0;
+	transition: transform var(--dur-fast) var(--ease);
+}
+
+.check.up {
+	transform: rotate(180deg);
 }
 
 [aria-checked="true"] > .check {

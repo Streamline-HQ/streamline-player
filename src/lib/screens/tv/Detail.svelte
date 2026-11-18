@@ -6,7 +6,7 @@ import { autoCap, PRESETS, presetOf, rememberedThroughput } from "#lib/core/play
 import { prefs } from "#lib/core/prefs.svelte.ts";
 import LoadFailed from "#lib/tv/LoadFailed.svelte";
 import TvScreen from "#lib/tv/TvScreen.svelte";
-import type { Decision, Kind, Title, Watch } from "#lib/core/types.ts";
+import type { Decision, Kind, Title } from "#lib/core/types.ts";
 import {
 	badges,
 	monogram,
@@ -24,19 +24,23 @@ import {
 	decisions,
 	network as whereAmI,
 	everything,
+	home,
+	library,
 	setWatched,
 	title as fetchTitle,
 	watchState,
 } from "#platform";
+import { applyWatch, lib, loadLibrary } from "#lib/core/library.svelte.ts";
+import WatchGlyph from "#lib/ui/WatchGlyph.svelte";
 import { hideBroken, orPoster } from "#lib/ui/img.ts";
 import { toast } from "#lib/core/toast.svelte.ts";
-import { Check, CheckCheck, Eye, Play, RotateCcw } from "@lucide/svelte";
+import { Play, RotateCcw, SkipBack } from "@lucide/svelte";
 
 const MAX_SIMILAR = 10;
 const MAX_CAST = 14;
 let { kind, id }: { kind: Kind; id: number } = $props();
 let t = $state.raw<Title | null>(null);
-let watch = $state.raw<Watch[]>([]);
+const watch = $derived(lib.watch);
 let similar = $state.raw<(Title & { kind: Kind })[]>([]);
 let season = $state<number | null>(null);
 let heroBlur = $state(false);
@@ -54,7 +58,6 @@ let loadId = 0;
 $effect(() => {
 	const [k, i] = [kind, id];
 	t = null;
-	watch = [];
 	similar = [];
 	season = null;
 	heroBlur = false;
@@ -64,17 +67,16 @@ $effect(() => {
 
 async function load(k: Kind, i: number) {
 	const call = ++loadId;
-	const [title, w, all] = await Promise.all([
+	const [title, , all] = await Promise.all([
 		fetchTitle(k, i),
-		watchState(),
+		loadLibrary({ library, watchState, home, title: fetchTitle }, true),
 		k === "movies" ? everything() : Promise.resolve([]),
 	]).catch((e) => {
 		if (call === loadId) throw e;
 		return [];
 	});
-	if (call !== loadId) return;
+	if (call !== loadId || !title) return;
 	t = title;
-	watch = w;
 	const g = title.genres[0] ?? "";
 	const pool = all.filter((m) => !(m.kind === k && m.id === title.id));
 	similar = [
@@ -171,10 +173,17 @@ function play() {
 
 async function toggleWatched() {
 	const list =
-		kind === "series" ? available.map((e) => e.media_file_id) : movieMedia ? [movieMedia] : [];
+		kind === "series"
+			? available.map((e) => ({
+					media: e.media_file_id,
+					ref: { series_id: id, season: e.season, episode_id: e.id },
+				}))
+			: movieMedia
+				? [{ media: movieMedia, ref: { movie_id: id } }]
+				: [];
 	const was = watched;
-	await Promise.all(list.map((m) => setWatched(m, !was)));
-	watch = await watchState();
+	await Promise.all(list.map((x) => setWatched(x.media, !was)));
+	for (const x of list) applyWatch(x.media, !was, x.ref);
 	toast(
 		kind === "series"
 			? was
@@ -184,6 +193,22 @@ async function toggleWatched() {
 				? i18n.detail_marked_unwatched()
 				: i18n.detail_marked_watched(),
 	);
+}
+const resetMedia = $derived(
+	kind === "series" ? progressEp?.media_file_id : hasRestart ? movieMedia : undefined,
+);
+
+async function resetProgress() {
+	const media = resetMedia;
+	if (!media || !t) return;
+	await setWatched(media, false);
+	applyWatch(media, false);
+	toast(i18n.card_reset_done(), {
+		text:
+			kind === "series" && progressEp
+				? i18n.detail_reset_episode_text({ season: progressEp.season, episode: progressEp.number })
+				: i18n.card_reset_text({ title: t.title }),
+	});
 }
 </script>
 
@@ -261,15 +286,17 @@ async function toggleWatched() {
 							class="act"
 							onclick={() => goto(`/player/movies/${id}`)}
 						>
-							<RotateCcw size={26} strokeWidth={2} />{i18n.detail_from_start()}
+							<SkipBack size={26} strokeWidth={2} />{i18n.detail_from_start()}
+						</button>
+					{/if}
+					{#if resetMedia}
+						<button type="button" data-tv="1" class="act" onclick={resetProgress}>
+							<RotateCcw size={26} strokeWidth={2} />{i18n.detail_reset()}
 						</button>
 					{/if}
 					<button type="button" data-tv="1" class="act mark" class:watched onclick={toggleWatched}>
-						{#if watched}
-							<CheckCheck size={26} strokeWidth={2.2} />{i18n.detail_watched()}
-						{:else}
-							<Eye size={26} strokeWidth={2.2} />{i18n.detail_mark_watched()}
-						{/if}
+						<WatchGlyph on={watched} size={26} stroke={2.2} />
+						{watched ? i18n.detail_watched() : i18n.detail_mark_watched()}
 					</button>
 				</div>
 				{#if playback && !playback.error}
@@ -325,9 +352,6 @@ async function toggleWatched() {
 									>
 									{#if inProgress(w)}
 										<span class="bar"><span style:width="{pct(w)}%"></span></span>
-									{/if}
-									{#if w?.watched}
-										<span class="done"><Check size={22} strokeWidth={2.5} /></span>
 									{/if}
 								</span>
 								<span class="ep-text">
@@ -510,7 +534,11 @@ p {
 }
 
 .act.mark {
+	position: relative;
 	padding: 0 30px;
+	transition:
+		transform var(--dur-fast),
+		color 260ms var(--ease);
 }
 
 .act.main {
@@ -635,19 +663,6 @@ p {
 	display: block;
 	height: 100%;
 	background: var(--accent);
-}
-
-.done {
-	position: absolute;
-	right: 14px;
-	top: 14px;
-	width: 38px;
-	height: 38px;
-	display: grid;
-	place-items: center;
-	border-radius: 50%;
-	background: color-mix(in srgb, var(--bg-deep) 80%, transparent);
-	color: var(--status-available);
 }
 
 .ep-text {
