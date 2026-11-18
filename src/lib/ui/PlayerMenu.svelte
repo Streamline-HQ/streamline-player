@@ -9,6 +9,9 @@ let {
 	rows,
 	note,
 	night = false,
+	sheet = false,
+	tabs,
+	ontab,
 	onpick,
 	onclose,
 	children,
@@ -17,6 +20,9 @@ let {
 	rows: Row[];
 	note?: { text: string; color: string };
 	night?: boolean;
+	sheet?: boolean;
+	tabs?: { id: string; label: string; on: boolean }[];
+	ontab?: (id: string) => void;
 	onpick: (id: string) => void;
 	onclose: () => void;
 	children?: Snippet;
@@ -45,21 +51,36 @@ const pop = (_: Element, { duration = 110 } = {}) => ({
 	duration,
 	css: (t: number) => `opacity:${t};transform:scale(${0.92 + 0.08 * t})`,
 });
+
+const slide = (_: Element, { duration = 240 } = {}) => ({
+	duration,
+	css: (t: number) => `opacity:${t};transform:translateX(${(1 - t) * 24}px)`,
+});
+const enter = (node: Element, o?: { duration?: number }) => (sheet ? slide(node, o) : pop(node, o));
 </script>
 
 <div
 	class="menu"
+	class:sheet
 	role="dialog"
 	aria-label={title}
 	data-menu-panel="1"
 	tabindex="-1"
 	bind:this={panel}
 	{onkeydown}
-	in:pop|global
-	out:pop|global={{ duration: 80 }}
+	in:enter|global
+	out:enter|global={{ duration: sheet ? 180 : 80 }}
 >
 	<div class="head">
-		<span class="title">{title}</span>
+		{#if tabs}
+			{#each tabs as t (t.id)}
+				<button type="button" class="tab" class:on={t.on} onclick={() => ontab?.(t.id)}>
+					{t.label}<span class="line"></span>
+				</button>
+			{/each}
+		{:else}
+			<span class="title">{title}</span>
+		{/if}
 		<div class="grow"></div>
 		<button type="button" class="close" aria-label={i18n.player_close()} onclick={onclose}>
 			<X size={16} strokeWidth={2} />
@@ -133,6 +154,58 @@ const pop = (_: Element, { duration = 110 } = {}) => ({
 	box-shadow: 0 24px 64px rgba(0, 0, 0, 0.6);
 	overflow: hidden;
 	transform-origin: 100% 100%;
+}
+
+.menu.sheet {
+	right: 0;
+	top: 0;
+	bottom: 0;
+	width: 360px;
+	max-height: none;
+	zoom: 0.85;
+	border-radius: 0;
+	background: rgba(17, 17, 25, 0.94);
+	backdrop-filter: blur(28px) saturate(150%);
+	-webkit-backdrop-filter: blur(28px) saturate(150%);
+	transform-origin: 100% 50%;
+}
+
+.tab {
+	position: relative;
+	height: 40px;
+	padding: 0 11px;
+	border: 0;
+	border-radius: 8px 8px 0 0;
+	background: transparent;
+	color: var(--fg-subtle);
+	font-size: 13px;
+	font-weight: 500;
+	white-space: nowrap;
+	cursor: pointer;
+}
+
+.tab.on {
+	color: var(--player-ink);
+	font-weight: 600;
+}
+
+.tab:hover {
+	color: var(--player-ink);
+}
+
+.line {
+	position: absolute;
+	left: 10px;
+	right: 10px;
+	bottom: 0;
+	height: 2px;
+	border-radius: 2px;
+	background: var(--player-accent);
+	opacity: 0;
+}
+
+.tab.on .line {
+	opacity: 1;
 }
 
 .head {

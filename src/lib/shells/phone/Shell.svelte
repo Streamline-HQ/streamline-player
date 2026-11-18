@@ -29,7 +29,7 @@ import { anyActive, dl, entry, initDownloads } from "#lib/core/downloads.svelte.
 import { loadLibrary } from "#lib/core/library.svelte.ts";
 import { net, watchOnline } from "#lib/core/online.svelte.ts";
 import { activeToast, toast } from "#lib/core/toast.svelte.ts";
-import { nowPlaying } from "#lib/core/playback/now-playing.svelte.ts";
+import { nowPlaying, stop, toFull } from "#lib/core/playback/now-playing.svelte.ts";
 import { m as i18n } from "#lib/paraglide/messages.js";
 import { adminPort } from "#lib/screens/admin/port.ts";
 import { downloadsPort } from "#lib/screens/downloads-port.ts";
@@ -43,6 +43,7 @@ import CountdownToast from "#lib/ui/CountdownToast.svelte";
 import DesktopToast from "#lib/ui/DesktopToast.svelte";
 import DownloadPicker from "#lib/ui/DownloadPicker.svelte";
 import DownloadPopover from "#lib/ui/DownloadPopover.svelte";
+import MiniPlayer from "#lib/ui/MiniPlayer.svelte";
 import { downloadWords } from "#lib/ui/download-words.ts";
 import { presence } from "#lib/ui/presence.svelte.ts";
 import { provideScroll } from "#lib/ui/scroll.ts";
@@ -53,6 +54,7 @@ import {
 	library,
 	markActivityRead,
 	me,
+	playbackPort,
 	reachable,
 	syncOffline,
 	title as fetchTitle,
@@ -64,6 +66,7 @@ import { onMount, untrack } from "svelte";
 const ACTIVITY_PORT = { activity, markActivityRead };
 const LIBRARY_PORT = { library, watchState, home, title: fetchTitle };
 const COUNTDOWN_SHIFT = 74;
+const PIP_WIDTH = 220;
 
 let { children }: { children: Snippet } = $props();
 
@@ -87,6 +90,69 @@ const onboarding = $derived(
 );
 const inPlayer = $derived(route.startsWith("/player"));
 const showTabs = $derived(!hidesTabs(route));
+
+let pip = $state<HTMLElement>();
+let pipArt = $state<HTMLElement>();
+let hole = $state<{ x: number; y: number; width: number; height: number } | null>(null);
+const launch = $derived(nowPlaying.launch);
+const showMini = $derived(
+	!!nowPlaying.pb && nowPlaying.mini && !!launch && !inPlayer && !onboarding,
+);
+const pictureReady = $derived((nowPlaying.pb?.position ?? 0) > 0);
+const holed = $derived(showMini && pictureReady);
+const miniTitle = $derived(
+	launch?.view.season ? launch.view.eyebrow : (launch?.view.heading ?? ""),
+);
+const miniProgress = $derived(
+	nowPlaying.pb && nowPlaying.pb.duration > 0
+		? Math.min(100, (nowPlaying.pb.position / nowPlaying.pb.duration) * 100)
+		: 0,
+);
+const miniLabels = $derived({
+	play: i18n.player_play(),
+	pause: i18n.player_pause(),
+	expand: i18n.player_mini_expand(),
+	close: i18n.player_mini_close(),
+});
+
+$effect(() => {
+	if (!showMini || !pip || !pipArt) {
+		hole = null;
+		return;
+	}
+	const wrap = pip;
+	const art = pipArt;
+	const measure = () => {
+		const at = wrap.getBoundingClientRect();
+		const size = art.getBoundingClientRect();
+		hole = { x: at.left, y: at.top, width: size.width, height: size.height };
+	};
+	measure();
+	const watch = new ResizeObserver(measure);
+	watch.observe(wrap);
+	watch.observe(art);
+	window.addEventListener("resize", measure);
+	return () => {
+		watch.disconnect();
+		window.removeEventListener("resize", measure);
+	};
+});
+
+$effect(() => {
+	if (!showMini || !hole) return;
+	playbackPort.command("viewport", { ...hole }).catch(() => {});
+});
+
+$effect(() => {
+	if (showMini && nowPlaying.pb?.ended) stop();
+});
+
+function expand() {
+	const href = launch?.view.href;
+	if (!href) return;
+	toFull();
+	goto(href);
+}
 
 const tabs = $derived<{ id: PhoneTab; label: string }[]>([
 	{ id: "home", label: i18n.nav_home() },
@@ -253,19 +319,46 @@ onMount(() => {
 const toastNow = $derived(activeToast());
 </script>
 
-<div class="shell" class:player={inPlayer} class:tabbed={showTabs}>
-	<div class="content" bind:this={content}>
-		{@render children()}
+<div class="shell" class:player={inPlayer} class:tabbed={showTabs} class:holed>
+	<div
+		class="layer"
+		style:--hole-x="{hole?.x ?? 0}px"
+		style:--hole-y="{hole?.y ?? 0}px"
+		style:--hole-w="{hole?.width ?? 0}px"
+		style:--hole-h="{hole?.height ?? 0}px"
+	>
+		<div class="content" bind:this={content}>
+			{@render children()}
+		</div>
+
+		{#if showTabs}
+			<div class="bar">
+				<TabBar
+					items={tabs}
+					current={currentTab(route)}
+					label={i18n.nav_main()}
+					downloadsDot={anyActive()}
+					onnavigate={go}
+				/>
+			</div>
+		{/if}
 	</div>
 
-	{#if showTabs}
-		<div class="bar">
-			<TabBar
-				items={tabs}
-				current={currentTab(route)}
-				label={i18n.nav_main()}
-				downloadsDot={anyActive()}
-				onnavigate={go}
+	{#if showMini && launch && nowPlaying.pb}
+		<div class="pip" bind:this={pip}>
+			<MiniPlayer
+				title={miniTitle}
+				still={launch.view.still}
+				progress={miniProgress}
+				playing={nowPlaying.pb.playing}
+				width={PIP_WIDTH}
+				live
+				ready={pictureReady}
+				labels={miniLabels}
+				bind:art={pipArt}
+				ontoggle={() => nowPlaying.pb?.togglePlay()}
+				onexpand={expand}
+				onclose={() => stop()}
 			/>
 		</div>
 	{/if}
@@ -408,6 +501,40 @@ const toastNow = $derived(activeToast());
 
 .shell.player {
 	background: transparent;
+}
+
+.layer {
+	position: absolute;
+	inset: 0;
+}
+
+.shell.holed {
+	background: transparent;
+}
+
+.shell.holed .layer {
+	background: var(--bg-deep);
+	mask-image: linear-gradient(#000 0 0), linear-gradient(#000 0 0);
+	mask-size:
+		100% 100%,
+		var(--hole-w) var(--hole-h);
+	mask-position:
+		0 0,
+		var(--hole-x) var(--hole-y);
+	mask-repeat: no-repeat;
+	mask-composite: exclude;
+	-webkit-mask-composite: xor;
+}
+
+.pip {
+	position: absolute;
+	right: 12px;
+	bottom: calc(12px + env(safe-area-inset-bottom));
+	z-index: 40;
+}
+
+.tabbed .pip {
+	bottom: calc(var(--tabs-h) + 12px);
 }
 
 .content {
