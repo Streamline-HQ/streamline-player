@@ -5,6 +5,7 @@ import "#lib/design/elevation.css";
 import "#lib/design/motion.css";
 import "#lib/design/shape.css";
 import "#lib/design/typography.css";
+import { page } from "$app/state";
 import { appPath, goto } from "#lib/ui/nav.ts";
 import { toast } from "#lib/core/toast.svelte.ts";
 import { m as i18n } from "#lib/paraglide/messages.js";
@@ -16,6 +17,14 @@ import { onMount } from "svelte";
 
 let { children } = $props();
 let ready = $state(false);
+
+const titles: Record<string, () => string> = {
+	"/admin": () => i18n.server_open(),
+	"/settings": () => i18n.nav_settings(),
+	"/search": () => i18n.nav_search(),
+	"/library/[kind]": () => (page.params.kind === "movies" ? i18n.nav_movies() : i18n.nav_shows()),
+};
+const title = $derived(titles[page.route.id ?? ""]?.() ?? "Streamline");
 
 const onSignIn = () => appPath().startsWith("/signin");
 
@@ -45,6 +54,8 @@ onMount(() => {
 	};
 });
 </script>
+
+<svelte:head><title>{title}</title></svelte:head>
 
 {#snippet content()}
 	{#if ready}

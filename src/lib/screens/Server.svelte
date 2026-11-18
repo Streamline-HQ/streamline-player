@@ -429,8 +429,6 @@ onMount(() => {
 });
 </script>
 
-<svelte:head><title>{i18n.server_open()}</title></svelte:head>
-
 <div class="server" style:padding="{TOP}px {PAD_X}px 64px">
 	{#if admin.error !== null && !admin.loaded}
 		<div class="solo">
