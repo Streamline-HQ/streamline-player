@@ -123,14 +123,37 @@ let {
 	display: flex;
 	align-items: center;
 	gap: 30px;
-	background: linear-gradient(
-		180deg,
-		color-mix(in srgb, var(--bg-deep) 72%, transparent) 0%,
-		transparent 100%
-	);
 	transition:
 		background var(--dur-base),
 		box-shadow var(--dur-base);
+}
+
+/* Taller than the bar, so the tabs and the account read over a bright hero; gone once the bar turns solid. */
+.bar::before {
+	content: "";
+	position: absolute;
+	left: 0;
+	right: 0;
+	top: 0;
+	height: 150px;
+	z-index: -1;
+	pointer-events: none;
+	background: linear-gradient(
+		180deg,
+		color-mix(in srgb, var(--bg-deep) 84%, transparent) 0%,
+		color-mix(in srgb, var(--bg-deep) 62%, transparent) 38%,
+		color-mix(in srgb, var(--bg-deep) 22%, transparent) 72%,
+		transparent 100%
+	);
+	transition: opacity var(--dur-base);
+}
+
+.bar.scrolled::before {
+	opacity: 0;
+}
+
+.bar:not(.scrolled) .account :global(.sl-avatar:not(.ring)) {
+	box-shadow: 0 0 0 2px color-mix(in srgb, var(--bg-deep) 55%, transparent);
 }
 
 .bar.scrolled {
@@ -234,9 +257,10 @@ nav {
 	border: 1px solid var(--border);
 	border-radius: var(--radius-md);
 	/* Near solid: over a bright hero a see-through field leaves its label unreadable. */
-	background: color-mix(in srgb, var(--bg-card) 88%, transparent);
-	backdrop-filter: blur(12px);
-	-webkit-backdrop-filter: blur(12px);
+	background: color-mix(in srgb, var(--bg-selected) 82%, transparent);
+	box-shadow: inset 0 0 0 1px var(--border-strong);
+	backdrop-filter: blur(16px) saturate(160%);
+	-webkit-backdrop-filter: blur(16px) saturate(160%);
 	color: var(--fg-muted);
 	font-size: 13px;
 	white-space: nowrap;
@@ -245,7 +269,7 @@ nav {
 }
 
 .sl-searchbtn:hover {
-	background: color-mix(in srgb, var(--bg-hover) 92%, transparent);
+	background: color-mix(in srgb, var(--bg-selected) 94%, var(--fg) 6%);
 	color: var(--fg);
 }
 
