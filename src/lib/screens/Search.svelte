@@ -1,4 +1,5 @@
 <script lang="ts">
+import { isTablet } from "#lib/platform/form-factor.svelte.ts";
 import { loadErrorText } from "#lib/core/load-error.ts";
 import { lib, loadLibrary } from "#lib/core/library.svelte.ts";
 import { runtime } from "#lib/core/format.ts";
@@ -26,7 +27,7 @@ import { afterNavigate } from "$app/navigation";
 import { page } from "$app/state";
 import { onMount } from "svelte";
 
-const PAD_X = 56;
+const PAD_X = $derived(isTablet() ? 44 : 56);
 const TOP = 92;
 const TYPE_DELAY_MS = 150;
 const port = { library, watchState, home, title };

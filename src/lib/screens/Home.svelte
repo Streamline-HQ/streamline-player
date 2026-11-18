@@ -28,7 +28,11 @@ import { titleCard } from "#lib/screens/title-card.svelte.ts";
 import { artwork, canDownload, home, library, title, watchState } from "#platform";
 import { onMount } from "svelte";
 
-const PAD_X = 56;
+import { isTablet } from "#lib/platform/form-factor.svelte.ts";
+
+const PAD_X = $derived(isTablet() ? 44 : 56);
+const HERO_TITLE = $derived(isTablet() ? 54 : 58);
+const ROWS_BOTTOM = $derived(isTablet() ? 28 : 56);
 const HERO_SHARE = 0.8;
 const ROW_LIMIT = 12;
 const OVERLAP = 112;
@@ -49,7 +53,7 @@ $effect(() => {
 });
 // The hero gives way so the first row shows whole under it, down to a floor on short windows.
 const heroHeight = $derived(
-	firstRow
+	firstRow && !isTablet()
 		? Math.max(HERO_MIN, innerHeight - firstRow + OVERLAP - ROW_MARGIN)
 		: Math.round(innerHeight * HERO_SHARE),
 );
@@ -199,6 +203,7 @@ onMount(() => {
 				{slides}
 				height={heroHeight}
 				padX={PAD_X}
+				titleSize={HERO_TITLE}
 				infoLabel={i18n.common_more_info()}
 				dotLabel={(name) => i18n.home_show_title({ title: name })}
 			/>
@@ -207,12 +212,14 @@ onMount(() => {
 			class="rows"
 			bind:this={rows}
 			style:margin-top="{slides.length ? -OVERLAP : BAR_CLEARANCE}px"
+			style:padding-bottom="{ROWS_BOTTOM}px"
 		>
 			{#if resume.length}
 				<Row
 					title={i18n.home_continue_watching()}
 					note={i18n.home_count_in_progress({ count: resume.length })}
 					padX={PAD_X}
+					arrows={!isTablet()}
 					prevLabel={i18n.home_scroll_left()}
 					nextLabel={i18n.home_scroll_right()}
 				>
@@ -242,6 +249,7 @@ onMount(() => {
 					title={i18n.home_recent_movies()}
 					note={i18n.home_count_month({ count: recentCount(recentMovies, now) })}
 					padX={PAD_X}
+					arrows={!isTablet()}
 					prevLabel={i18n.home_scroll_left()}
 					nextLabel={i18n.home_scroll_right()}
 				>
@@ -263,6 +271,7 @@ onMount(() => {
 					title={i18n.home_recent_shows()}
 					note={i18n.home_count_month({ count: recentCount(recentShows, now) })}
 					padX={PAD_X}
+					arrows={!isTablet()}
 					prevLabel={i18n.home_scroll_left()}
 					nextLabel={i18n.home_scroll_right()}
 				>
@@ -283,6 +292,7 @@ onMount(() => {
 				<Row
 					title={genre}
 					padX={PAD_X}
+					arrows={!isTablet()}
 					prevLabel={i18n.home_scroll_left()}
 					nextLabel={i18n.home_scroll_right()}
 				>

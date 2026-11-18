@@ -1,4 +1,5 @@
 <script lang="ts">
+import { isTablet } from "#lib/platform/form-factor.svelte.ts";
 import { isNew } from "#lib/core/browse.ts";
 import { addedText, badges, sizeText } from "#lib/core/format.ts";
 import { dl } from "#lib/core/downloads.svelte.ts";
@@ -47,9 +48,9 @@ import { artwork, canDownload, home, library, title, watchState } from "#platfor
 import { page } from "$app/state";
 import { onMount, untrack } from "svelte";
 
-const PAD_X = 56;
+const PAD_X = $derived(isTablet() ? 44 : 56);
 const TOP = 92;
-const MIN_COL = 196;
+const MIN_COL = $derived(isTablet() ? 180 : 196);
 const ALL = "__all";
 const LIST_COLS = "32px minmax(0,2.2fr) 74px 58px 104px minmax(0,1.4fr) 76px 84px 170px";
 const port = { library, watchState, home, title };
