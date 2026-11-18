@@ -688,6 +688,7 @@
 	"server_ro_body": "Cette instance est configurée en externe et fonctionne en lecture seule. Les contrôles d’édition sont désactivés.",
 	"server_ro_lock": "Mode lecture seule — la configuration ne peut pas être modifiée sur cette instance.",
 	"server_ro_strip": "Lecture seule · géré par la configuration",
+	"server_scan_percent": "{pct} %",
 	"server_scan_progress": "{pct} % · {left} restantes",
 	"server_scan_progress_label": "Progression de l’analyse · {name}",
 	"server_sec_access": "Accès au lecteur",

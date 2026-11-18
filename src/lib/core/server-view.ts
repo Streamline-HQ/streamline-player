@@ -316,7 +316,8 @@ export type Words = {
 	daysAgo(n: number): string;
 	expiresIn(days: number): string;
 	folderCount(kind: Kind, n: number): string;
-	scanProgress(pct: number, left: string): string;
+	/** `left` is null while the server has no pace to work the time left out from. */
+	scanProgress(pct: number, left: string | null): string;
 	lastScan(when: string, added: number, replaced: number, errors: number): string;
 	keptDesc(host: string): string;
 	reachable(version: string): string;
@@ -997,7 +998,7 @@ export function sections(
 					disabled: true,
 				},
 			],
-			aside: w.scanProgress(Math.round(f.scan.progress * 100), clock(left)),
+			aside: w.scanProgress(Math.round(f.scan.progress * 100), left > 0 ? clock(left) : null),
 			progress: f.scan.progress,
 		};
 	};

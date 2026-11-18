@@ -231,7 +231,8 @@ export const serverWords = (): Words => ({
 			: one(count)
 				? i18n.server_shows_one({ count })
 				: i18n.server_shows_other({ count }),
-	scanProgress: (pct, left) => i18n.server_scan_progress({ pct, left }),
+	scanProgress: (pct, left) =>
+		left === null ? i18n.server_scan_percent({ pct }) : i18n.server_scan_progress({ pct, left }),
 	lastScan: (when, added, replaced, errors) =>
 		i18n.server_last_scan({
 			when,

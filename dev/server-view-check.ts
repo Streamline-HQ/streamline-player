@@ -195,7 +195,7 @@ const words: Words = {
 	daysAgo: (n) => `${n} days ago`,
 	expiresIn: (n) => `expires in ${plural(n, "day")}`,
 	folderCount: (kind, n) => (kind === "movies" ? plural(n, "movie") : plural(n, "show")),
-	scanProgress: (p, left) => `${p}% · ${left} left`,
+	scanProgress: (p, left) => (left === null ? `${p}%` : `${p}% · ${left} left`),
 	lastScan: (when, a, r, e) =>
 		`${when} · ${plural(a, "new file")} · ${r} replaced · ${plural(e, "error")}`,
 };

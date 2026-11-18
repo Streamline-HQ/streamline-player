@@ -688,6 +688,7 @@
 	"server_ro_body": "This instance is configured externally and runs read-only. Editing controls are disabled.",
 	"server_ro_lock": "Read-only mode — configuration changes are disabled on this instance.",
 	"server_ro_strip": "Read-only · managed from config",
+	"server_scan_percent": "{pct}%",
 	"server_scan_progress": "{pct}% · {left} left",
 	"server_scan_progress_label": "Scan progress · {name}",
 	"server_sec_access": "Player access",
