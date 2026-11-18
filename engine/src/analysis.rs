@@ -410,12 +410,13 @@ pub async fn run_analyze(ffprobe_bin: &Path, path: &Path) -> Result<Analysis, An
     run_analyze_with(ffprobe_bin, path, &|_| {}).await
 }
 
-/// `prepare` runs on each ffprobe command after its program and arguments are set and before stdio is configured.
-pub async fn run_analyze_with(
+/// The streams, chapters and container of the file, and its first video frame: quick to read
+/// whatever the file's size.
+async fn probe(
     ffprobe_bin: &Path,
     path: &Path,
     prepare: Prepare<'_>,
-) -> Result<Analysis, AnalysisError> {
+) -> Result<(Value, Value), AnalysisError> {
     let probe = ffprobe(
         ffprobe_bin,
         &[
@@ -446,12 +447,21 @@ pub async fn run_analyze_with(
         prepare,
     )
     .await?;
-    let probe: Value = serde_json::from_str(&probe)?;
+    Ok((serde_json::from_str(&probe)?, serde_json::from_str(&frame)?))
+}
+
+/// `prepare` runs on each ffprobe command after its program and arguments are set and before stdio is configured.
+pub async fn run_analyze_with(
+    ffprobe_bin: &Path,
+    path: &Path,
+    prepare: Prepare<'_>,
+) -> Result<Analysis, AnalysisError> {
+    let (probe, frame) = probe(ffprobe_bin, path, prepare).await?;
     let packets = match indexed_packets(ffprobe_bin, path, &probe, prepare).await {
         Some(packets) => packets,
         None => packets(ffprobe_bin, path, None, prepare).await?,
     };
-    parse(&probe, &serde_json::from_str(&frame)?, &packets)
+    parse(&probe, &frame, &packets)
 }
 
 /// The video packets as `pts,dts,flags` rows: all of them, which reads the whole file, or those
@@ -627,6 +637,34 @@ pub async fn analyze_shared(
     .unwrap_or_else(|e| Err(AnalysisError::Spawn(e.to_string())))
 }
 
+/// What the file holds, for naming its tracks and deciding how to play it: the whole analysis
+/// when one is at hand, else everything but the keyframes, which a file with no usable index
+/// gives up only when read from end to end. Never to be played from: without keyframes a copied
+/// stream has no segments.
+pub async fn tracks(
+    ffprobe_bin: &Path,
+    path: &Path,
+    kept: Option<&Path>,
+    prepare: Prepare<'_>,
+) -> Result<Analysis, AnalysisError> {
+    if let Ok(meta) = tokio::fs::metadata(path).await {
+        let key = (path.to_owned(), meta.len(), meta.modified().ok());
+        let recent = RECENT
+            .lock()
+            .unwrap_or_else(PoisonError::into_inner)
+            .get(&key)
+            .and_then(|cell| cell.get().cloned());
+        let whole = recent.or_else(|| read_kept(&kept?.join(format!("{}.json", kept_name(&key)))));
+        if let Some(a) = whole {
+            return Ok(a);
+        }
+    }
+    // ponytail: probed again on each call (two short ffprobe runs); remember it next to RECENT
+    // if tracks and decisions of one file ever show up as slow.
+    let (probe, frame) = probe(ffprobe_bin, path, prepare).await?;
+    parse(&probe, &frame, "")
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -665,6 +703,41 @@ mod tests {
         let ran = std::fs::read_to_string(&runs).unwrap().lines().count();
         std::fs::remove_dir_all(&dir).unwrap();
         assert_eq!(ran, 6);
+    }
+
+    #[cfg(unix)]
+    #[tokio::test]
+    async fn tracks_never_read_every_packet() {
+        let dir = std::env::temp_dir().join(format!("engine-tracks-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let (bin, file, runs) = (dir.join("ffprobe"), dir.join("a.mp4"), dir.join("runs"));
+        std::fs::write(&file, "x").unwrap();
+        crate::jobs::write_executable(
+            &bin,
+            &format!(
+                "#!/bin/sh\necho \"$*\" >> {}\ncase \"$*\" in *csv=p=0*) echo '1.0,1.0,K__' ;; *) echo '{}' ;; esac\n",
+                runs.display(),
+                r#"{"format":{"duration":"9","start_time":"0","format_name":"mov,mp4"},"streams":[{"index":1,"codec_type":"audio","codec_name":"aac"}]}"#,
+            ),
+        );
+        let kept = dir.join("kept");
+        let quick = tracks(&bin, &file, Some(&kept), &|_| {}).await.unwrap();
+        assert_eq!(quick.audio.len(), 1);
+        assert!(quick.keyframes.is_empty());
+        let ran = std::fs::read_to_string(&runs).unwrap();
+        assert_eq!(ran.lines().count(), 2);
+        assert!(!ran.contains("csv=p=0"));
+
+        let whole = analyze_shared(&bin, &file, Some(&kept), &|_| {})
+            .await
+            .unwrap();
+        assert_eq!(whole.keyframes, vec![1.0]);
+        let before = std::fs::read_to_string(&runs).unwrap().lines().count();
+        let again = tracks(&bin, &file, Some(&kept), &|_| {}).await.unwrap();
+        let after = std::fs::read_to_string(&runs).unwrap().lines().count();
+        std::fs::remove_dir_all(&dir).unwrap();
+        assert_eq!(again.keyframes, vec![1.0]);
+        assert_eq!(before, after);
     }
 
     /// Needs a real ffmpeg, like the engine's end-to-end tests.

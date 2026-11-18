@@ -430,10 +430,12 @@ impl Sessions {
             .map_err(|_| ApiError::transcode_limit(TRANSCODE_RETRY_AFTER))
     }
 
+    /// `to_play` asks for the keyframes too, which can mean reading the whole file.
     async fn input_and_analysis(
         &self,
         path: &str,
         given: Option<Analysis>,
+        to_play: bool,
     ) -> Result<(PathBuf, Analysis), ApiError> {
         let cfg = &self.inner.cfg;
         let input = cfg.path_map.rewrite(path);
@@ -443,21 +445,22 @@ impl Sessions {
                 input.display()
             )));
         }
+        let (bin, kept) = (cfg.ffprobe(), cfg.jobs_dir.join(crate::jobs::ANALYSIS_DIR));
         let analysis = match given.filter(analysis::is_current) {
-            Some(a) => a,
-            None => analysis::analyze_shared(
-                &cfg.ffprobe(),
-                &input,
-                Some(&cfg.jobs_dir.join(crate::jobs::ANALYSIS_DIR)),
-                &|_| {},
-            )
-            .await
-            .map_err(|e| match e {
-                analysis::AnalysisError::Spawn(m) => ApiError::ffmpeg_unavailable(m),
-                e => ApiError::unreadable_file(e.to_string()),
-            })?,
-        };
+            Some(a) => Ok(a),
+            None if to_play => analysis::analyze_shared(&bin, &input, Some(&kept), &|_| {}).await,
+            None => analysis::tracks(&bin, &input, Some(&kept), &|_| {}).await,
+        }
+        .map_err(|e| match e {
+            analysis::AnalysisError::Spawn(m) => ApiError::ffmpeg_unavailable(m),
+            e => ApiError::unreadable_file(e.to_string()),
+        })?;
         Ok((input, analysis))
+    }
+
+    /// What the file holds, without waiting for an analysis that has to read all of it.
+    pub async fn probe(&self, path: &str) -> Result<Analysis, ApiError> {
+        Ok(self.input_and_analysis(path, None, false).await?.1)
     }
 
     /// What each option would do, without starting ffmpeg or taking a slot. An option
@@ -468,7 +471,7 @@ impl Sessions {
                 "at most {MAX_DECISION_OPTIONS} options"
             )));
         }
-        let (_, analysis) = self.input_and_analysis(&r.path, r.analysis).await?;
+        let (_, analysis) = self.input_and_analysis(&r.path, r.analysis, false).await?;
         let hw = &self.inner.hw;
         let decisions = r
             .options
@@ -522,7 +525,7 @@ impl Sessions {
             return Err(ApiError::session_exists());
         }
         let cfg = &self.inner.cfg;
-        let (input, analysis) = self.input_and_analysis(&r.path, r.analysis).await?;
+        let (input, analysis) = self.input_and_analysis(&r.path, r.analysis, true).await?;
         let params = SessionParams {
             audio_index: r.audio_index,
             burn_in_subtitle: r.burn_in_subtitle,

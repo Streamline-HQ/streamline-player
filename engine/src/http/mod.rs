@@ -27,6 +27,7 @@ pub fn router(state: AppState) -> Router {
             patch(control::patch_session).delete(control::delete_session),
         )
         .route("/decisions", post(control::decisions))
+        .route("/probe", post(control::probe))
         .route("/jobs", get(control::list_jobs).post(control::submit_job))
         .route(
             "/jobs/{id}",

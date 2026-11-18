@@ -1022,6 +1022,32 @@ async fn analyze_job() {
 }
 
 #[tokio::test]
+async fn probe_names_the_tracks_without_the_keyframes() {
+    if !have_ffmpeg() {
+        return;
+    }
+    let e = env().await;
+    let src = e.root.join("in.mkv");
+    make_h264_mkv(&src);
+    let (status, v) = e
+        .api(
+            "POST",
+            "/v1/probe",
+            Some(json!({"path": src.display().to_string()})),
+        )
+        .await;
+    assert_eq!(status, StatusCode::OK, "{v}");
+    assert_eq!(v["container"], "mkv", "{v}");
+    assert_eq!(v["video"][0]["codec"], "h264", "{v}");
+    assert_eq!(v["keyframes"], json!([]), "{v}");
+
+    let (status, v) = e
+        .api("POST", "/v1/probe", Some(json!({"path": "/no/such.mkv"})))
+        .await;
+    assert_eq!(status, StatusCode::NOT_FOUND, "{v}");
+}
+
+#[tokio::test]
 async fn decisions_preview_every_option_without_starting_anything() {
     if !have_ffmpeg() {
         return;

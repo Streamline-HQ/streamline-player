@@ -73,6 +73,19 @@ pub async fn decisions(
     Ok(Json(s.sessions.decisions(req).await?))
 }
 
+#[derive(serde::Deserialize)]
+pub struct ProbeRequest {
+    path: String,
+}
+
+pub async fn probe(
+    State(s): State<AppState>,
+    body: Bytes,
+) -> Result<Json<crate::analysis::Analysis>, ApiError> {
+    let req: ProbeRequest = parse(&body)?;
+    Ok(Json(s.sessions.probe(&req.path).await?))
+}
+
 pub async fn start_session(
     State(s): State<AppState>,
     body: Bytes,
