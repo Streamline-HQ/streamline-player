@@ -3,4 +3,7 @@ export type FormFactor = "desktop" | "tv" | "phone" | "tablet";
 
 export const TARGET: Target = (import.meta.env.TAURI_ENV_PLATFORM as Target | undefined) || "web";
 export const IS_WEB = TARGET === "web";
-export const FORM_FACTOR: FormFactor = TARGET === "android" ? "tv" : "desktop";
+// ponytail: a touch screen means phone or tablet; a TV with a touch panel would get the wrong
+// shell. Ask the plugin for FEATURE_LEANBACK if that ever shows up.
+const touch = typeof matchMedia === "function" && matchMedia("(pointer: coarse)").matches;
+export const FORM_FACTOR: FormFactor = TARGET === "android" && !touch ? "tv" : "desktop";
