@@ -1,0 +1,785 @@
+<script lang="ts">
+import { loadActivity, unread } from "#lib/core/activity.svelte.ts";
+import { bellLabel } from "#lib/core/activity-view.ts";
+import {
+	arrivalDay,
+	continueWatching,
+	isNew,
+	nextEpisode,
+	playUrl,
+	recentCount,
+	recentlyAdded,
+	topGenre,
+} from "#lib/core/browse.ts";
+import { dl } from "#lib/core/downloads.svelte.ts";
+import { badges, left, runtime, stillPos } from "#lib/core/format.ts";
+import { lib, loadLibrary } from "#lib/core/library.svelte.ts";
+import { loadErrorText } from "#lib/core/load-error.ts";
+import { account } from "#lib/core/me.svelte.ts";
+import { picture, syncPicture } from "#lib/core/picture.svelte.ts";
+import type { Kind, Title } from "#lib/core/types.ts";
+import { m as i18n } from "#lib/paraglide/messages.js";
+import { titleCard } from "#lib/screens/title-card.svelte.ts";
+import { activityWords } from "#lib/ui/activity-words.ts";
+import Art from "#lib/ui/Art.svelte";
+import Avatar from "#lib/ui/Avatar.svelte";
+import Button from "#lib/ui/Button.svelte";
+import EmptyState from "#lib/ui/EmptyState.svelte";
+import Icon from "#lib/ui/Icon.svelte";
+import Mark from "#lib/ui/Mark.svelte";
+import { goto } from "#lib/ui/nav.ts";
+import PosterCard from "#lib/ui/PosterCard.svelte";
+import ResumeCard from "#lib/ui/ResumeCard.svelte";
+import { useScroll } from "#lib/ui/scroll.ts";
+import {
+	activity,
+	artwork,
+	canDownload,
+	home,
+	library,
+	markActivityRead,
+	myPicture,
+	title,
+	watchState,
+} from "#platform";
+import { onMount, untrack } from "svelte";
+
+type Slide = {
+	key: string;
+	img: string;
+	eyebrow: string;
+	title: string;
+	meta: string;
+	primary: string;
+	progress?: { pct: number; left: string };
+	onprimary: () => void;
+	oninfo: () => void;
+};
+
+const ROW_LIMIT = 12;
+const HERO_MS = 8000;
+const TICK_MS = 100;
+const SWAP_MS = 260;
+const SCROLLED_PAST = 320;
+const KEN_BURNS = 1.08;
+const SWIPE_MIN = 40;
+const SWIPE_SLANT = 1.5;
+const port = { library, watchState, home, title };
+const activityPort = { activity, markActivityRead };
+const AVATAR_COLOR = "var(--kind-album)";
+const now = new Date();
+const scroller = useScroll();
+
+const resume = $derived(continueWatching(lib.movies, lib.shows, lib.watch));
+const byKey = (kind: Kind, id: number) =>
+	(kind === "movies" ? lib.movies : lib.shows).find((t) => t.id === id);
+const arrivedEpisodes = (id: number) =>
+	lib.feed?.arrivals.flatMap((d) => d.items).find((a) => a.kind === "series" && a.id === id)
+		?.episodes?.length ?? 0;
+
+const seasons = (n: number) =>
+	n === 1 ? i18n.common_seasons_one({ count: n }) : i18n.common_seasons_other({ count: n });
+const years = (t: Title) => t.first_aired ?? String(t.year);
+const resLabel = (t: Title) => badges(t.file_summary)[0];
+const movieSub = (t: Title) => [t.year, resLabel(t)].filter(Boolean).join(" · ");
+const showSub = (t: Title) =>
+	[seasons(t.total_seasons ?? t.seasons?.length ?? 0), years(t)].join(" · ");
+const quality = (t: Title) =>
+	[t.file_summary?.resolution, t.file_summary?.hdr].filter(Boolean).join(" ");
+
+const playResume = (r: (typeof resume)[number]) => goto(playUrl(r.kind, r.id, r.episodeId, true));
+const open = (kind: Kind, id: number, season?: number) =>
+	goto(`/detail/${kind}/${id}${season ? `?s=${season}` : ""}`);
+
+function eyebrow(f: NonNullable<typeof lib.feed>["featured"][number], t: Title) {
+	if (f.reason === "continue") return i18n.home_continue_watching();
+	if (f.reason === "new_episodes" && f.season !== undefined && f.episodes?.length) {
+		const first = f.episodes[0];
+		const last = f.episodes.at(-1);
+		return first === last
+			? i18n.home_eyebrow_episode({ season: f.season, episode: first as number })
+			: i18n.home_eyebrow_episodes({ season: f.season, from: first as number, to: last as number });
+	}
+	const day = arrivalDay(t.added_at.slice(0, 10), now);
+	return day === "today"
+		? i18n.home_added_today()
+		: day === "yesterday"
+			? i18n.home_added_yesterday()
+			: i18n.home_recently_added();
+}
+
+const slides = $derived.by(() => {
+	const out: Slide[] = [];
+	for (const f of lib.feed?.featured ?? []) {
+		const t = byKey(f.kind, f.id);
+		if (!t) continue;
+		const going = resume.find((r) => r.kind === f.kind && r.id === f.id);
+		const base = {
+			key: `${f.kind}:${f.id}`,
+			img: artwork(f.kind, f.id, "backdrop"),
+			eyebrow: eyebrow(f, t),
+			title: t.title,
+			oninfo: () => open(f.kind, f.id, going?.season ?? f.season),
+		};
+		if (going) {
+			const episode = going.kind === "series";
+			out.push({
+				...base,
+				meta: episode
+					? i18n.home_phone_episode_meta({
+							season: going.season as number,
+							episode: going.episode as number,
+							left: left(going.left),
+						})
+					: [t.year, t.runtime ? runtime(t.runtime) : "", quality(t)].filter(Boolean).join(" · "),
+				primary: episode
+					? i18n.detail_resume_episode({
+							season: going.season as number,
+							episode: going.episode as number,
+						})
+					: i18n.common_resume(),
+				progress: {
+					pct: going.pct,
+					left: going.sub ? `${going.sub} · ${left(going.left)}` : left(going.left),
+				},
+				onprimary: () => playResume(going),
+			});
+			continue;
+		}
+		const ep = f.kind === "series" ? nextEpisode(t, lib.watch) : undefined;
+		out.push({
+			...base,
+			meta:
+				f.kind === "series"
+					? [years(t), seasons(t.total_seasons ?? t.seasons?.length ?? 0), quality(t)]
+							.filter(Boolean)
+							.join(" · ")
+					: [t.year, t.runtime ? runtime(t.runtime) : "", quality(t)].filter(Boolean).join(" · "),
+			primary: i18n.common_play(),
+			onprimary: () => goto(playUrl(f.kind, f.id, ep?.id)),
+		});
+	}
+	return out;
+});
+
+let index = $state(0);
+let progress = $state(0);
+let phase = $state<"pre" | "in" | "out">("pre");
+let reduceMotion = false;
+let swap: ReturnType<typeof setTimeout>;
+let down: { x: number; y: number } | null = null;
+
+const at = $derived(slides.length ? index % slides.length : 0);
+const slide = $derived(slides[at]);
+
+const settle = () => requestAnimationFrame(() => requestAnimationFrame(() => (phase = "in")));
+
+function go(i: number) {
+	if (i === at || phase === "out") return;
+	clearTimeout(swap);
+	phase = "out";
+	swap = setTimeout(() => {
+		index = i;
+		progress = 0;
+		phase = "pre";
+		settle();
+	}, SWAP_MS);
+}
+
+function swipe(el: HTMLElement) {
+	const press = (e: PointerEvent) => (down = { x: e.clientX, y: e.clientY });
+	const cancel = () => (down = null);
+	el.addEventListener("pointerdown", press);
+	el.addEventListener("pointerup", release);
+	el.addEventListener("pointercancel", cancel);
+	return {
+		destroy() {
+			el.removeEventListener("pointerdown", press);
+			el.removeEventListener("pointerup", release);
+			el.removeEventListener("pointercancel", cancel);
+		},
+	};
+}
+
+function release(e: PointerEvent) {
+	if (!down) return;
+	const dx = e.clientX - down.x;
+	const dy = e.clientY - down.y;
+	down = null;
+	if (Math.abs(dx) > SWIPE_MIN && Math.abs(dx) > Math.abs(dy) * SWIPE_SLANT)
+		go((at + (dx < 0 ? 1 : slides.length - 1)) % slides.length);
+}
+
+const text = $derived(
+	phase === "out"
+		? "opacity:0;transform:translateY(-10px);transition:opacity 240ms var(--ease-in), transform 240ms var(--ease-in)"
+		: phase === "pre"
+			? "opacity:0;transform:translateY(18px);transition:none"
+			: "opacity:1;transform:translateY(0);transition:opacity 600ms var(--ease) 80ms, transform 700ms var(--ease) 80ms",
+);
+const frameStyle = (i: number) => {
+	const on = i === at;
+	const zoom = on && !reduceMotion && phase !== "pre";
+	return [
+		`opacity:${on ? 1 : 0}`,
+		`transform:${zoom ? `scale(${KEN_BURNS})` : "scale(1)"}`,
+		"transform-origin:50% 35%",
+		`transition:${on ? `opacity 1100ms var(--ease), transform ${HERO_MS + 1500}ms linear` : "opacity 1100ms var(--ease), transform 0ms linear 1100ms"}`,
+	].join(";");
+};
+
+const recentMovies = $derived(recentlyAdded(lib.movies, ROW_LIMIT));
+const recentShows = $derived(recentlyAdded(lib.shows, ROW_LIMIT));
+const genre = $derived(topGenre([...lib.movies, ...lib.shows]));
+const genreTitles = $derived(
+	genre
+		? [
+				...lib.movies
+					.filter((t) => t.genres.includes(genre))
+					.map((t) => ({ kind: "movies" as Kind, t })),
+				...lib.shows
+					.filter((t) => t.genres.includes(genre))
+					.map((t) => ({ kind: "series" as Kind, t })),
+			].slice(0, ROW_LIMIT)
+		: [],
+);
+const badge = (t: Title, kind: Kind) => {
+	const episodes = kind === "series" ? arrivedEpisodes(t.id) : 0;
+	if (episodes) return i18n.home_new_count({ count: episodes });
+	return isNew(t, now) ? i18n.home_new() : undefined;
+};
+const empty = $derived(lib.loaded && lib.movies.length + lib.shows.length === 0);
+
+const bell = $derived(bellLabel(unread(), activityWords()));
+const me = $derived(account.me);
+$effect(() => {
+	void syncPicture(myPicture, me?.picture, account.version);
+});
+
+onMount(() => {
+	loadLibrary(port, lib.loaded);
+	untrack(() => loadActivity(activityPort));
+	reduceMotion = matchMedia("(prefers-reduced-motion: reduce)").matches;
+	settle();
+	const timer = setInterval(() => {
+		if (phase !== "in" || slides.length < 2) return;
+		if ((scroller?.()?.scrollTop ?? 0) > SCROLLED_PAST) return;
+		if (document.hidden) return;
+		const next = progress + TICK_MS / HERO_MS;
+		if (next >= 1) go((at + 1) % slides.length);
+		else progress = next;
+	}, TICK_MS);
+	return () => {
+		clearInterval(timer);
+		clearTimeout(swap);
+	};
+});
+</script>
+
+<div class="home">
+	{#if lib.error !== null}
+		<div class="state">
+			<EmptyState icon="film" title={i18n.home_error_title()} text={loadErrorText(lib.error)}>
+				{#snippet action()}
+					<div class="failed-actions">
+						<Button variant="secondary" onclick={() => loadLibrary(port, true)}>
+							{i18n.halt_try_again()}
+						</Button>
+						{#if canDownload && dl.items.some((e) => e.state === "done")}
+							<Button variant="secondary" onclick={() => goto("/downloads")}>
+								{i18n.dl_watch()}
+							</Button>
+						{/if}
+					</div>
+				{/snippet}
+			</EmptyState>
+		</div>
+	{:else if empty}
+		<div class="state">
+			<EmptyState icon="film" title={i18n.home_empty_title()} text={i18n.home_empty_text()} />
+		</div>
+	{:else if lib.loaded}
+		{#if slide}
+			<section class="hero" use:swipe>
+				{#each slides as s, i (s.key)}
+					<div class="frame" style={frameStyle(i)}>
+						<Art src={s.img} position="50% 50%" />
+					</div>
+				{/each}
+				<div class="scrim"></div>
+				<div class="top">
+					<div class="brand">
+						<Mark size={28} />
+						<span>streamline</span>
+					</div>
+					<div class="actions">
+						<span class="bell">
+							<Button
+								variant="icon"
+								icon="bell"
+								label={bell}
+								title={bell}
+								dot={unread() > 0}
+								onclick={() => goto("/activity")}
+							/>
+						</span>
+						<button
+							type="button"
+							class="account"
+							aria-label={i18n.nav_settings()}
+							onclick={() => goto("/settings")}
+						>
+							<Avatar
+								name={me?.name}
+								email={me?.email}
+								initials={me?.initials}
+								color={AVATAR_COLOR}
+								picture={picture.url}
+								size={32}
+							/>
+						</button>
+					</div>
+				</div>
+				<div class="body" style={text}>
+					<div class="eyebrow">{slide.eyebrow}</div>
+					<h1>{slide.title}</h1>
+					<div class="meta">{slide.meta}</div>
+					<div class="buttons">
+						<button type="button" class="cta" onclick={slide.onprimary}>
+							<Icon name="play" filled size={18} />{slide.primary}
+						</button>
+						<button
+							type="button"
+							class="glass"
+							aria-label={i18n.common_more_info()}
+							onclick={slide.oninfo}
+						>
+							<Icon name="info" size={20} />
+						</button>
+					</div>
+					{#if slide.progress}
+						<div class="resume">
+							<i><b style:width="{slide.progress.pct}%"></b></i>
+							<span>{slide.progress.left}</span>
+						</div>
+					{/if}
+				</div>
+				{#if slides.length > 1}
+					<div class="dots">
+						{#each slides as s, i (s.key)}
+							<button
+								type="button"
+								class="dot"
+								style:width="{i === at ? 26 : 10}px"
+								aria-label={i18n.home_show_title({ title: s.title })}
+								onclick={() => go(i)}
+							>
+								<span class="track"
+									><span
+										class="fill"
+										style:width="{i === at ? Math.round(progress * 1000) / 10 : 0}%"
+										style:transition={i === at && progress > 0
+											? `width ${TICK_MS}ms linear`
+											: "none"}
+									></span></span
+								>
+							</button>
+						{/each}
+					</div>
+				{/if}
+			</section>
+		{/if}
+		<div class="rows" class:bare={!slide}>
+			{#if resume.length}
+				<section>
+					<div class="head">
+						<h2>{i18n.home_continue_watching()}</h2>
+						<span class="note">{i18n.home_count_in_progress({ count: resume.length })}</span>
+					</div>
+					<div class="scroller">
+						{#each resume as r (r.mediaId)}
+							{@const t = byKey(r.kind, r.id)}
+							<ResumeCard
+								title={r.title}
+								code={r.code}
+								sub={r.kind === "series"
+									? r.sub
+									: t
+										? `${runtime(t.runtime ?? 0)} · ${badges(t.file_summary).slice(0, 2).join(" ")}`
+										: ""}
+								still={artwork(r.kind, r.id, "backdrop")}
+								position={r.kind === "series"
+									? stillPos(r.episode as number, r.season as number)
+									: "50% 35%"}
+								progress={r.pct}
+								left={left(r.left)}
+								width={248}
+								onclick={() => playResume(r)}
+							/>
+						{/each}
+					</div>
+				</section>
+			{/if}
+			{#if recentMovies.length}
+				<section>
+					<div class="head">
+						<h2>{i18n.home_recent_movies()}</h2>
+						<span class="note"
+							>{i18n.home_count_month({ count: recentCount(recentMovies, now) })}</span
+						>
+					</div>
+					<div class="scroller">
+						{#each recentMovies as t (t.id)}
+							<PosterCard
+								size="phone"
+								width={116}
+								title={t.title}
+								sub={movieSub(t)}
+								src={artwork("movies", t.id, "poster")}
+								{...titleCard("movies", t, now)}
+								badge={badge(t, "movies")}
+								onclick={() => open("movies", t.id)}
+							/>
+						{/each}
+					</div>
+				</section>
+			{/if}
+			{#if recentShows.length}
+				<section>
+					<div class="head">
+						<h2>{i18n.home_recent_shows()}</h2>
+						<span class="note"
+							>{i18n.home_count_month({ count: recentCount(recentShows, now) })}</span
+						>
+					</div>
+					<div class="scroller">
+						{#each recentShows as t (t.id)}
+							<PosterCard
+								size="phone"
+								width={116}
+								title={t.title}
+								sub={showSub(t)}
+								src={artwork("series", t.id, "poster")}
+								{...titleCard("series", t, now)}
+								badge={badge(t, "series")}
+								onclick={() => open("series", t.id)}
+							/>
+						{/each}
+					</div>
+				</section>
+			{/if}
+			{#if genre && genreTitles.length}
+				<section>
+					<div class="head">
+						<h2>{genre}</h2>
+					</div>
+					<div class="scroller">
+						{#each genreTitles as { kind, t } (`${kind}:${t.id}`)}
+							<PosterCard
+								size="phone"
+								width={116}
+								title={t.title}
+								sub={kind === "movies" ? movieSub(t) : showSub(t)}
+								src={artwork(kind, t.id, "poster")}
+								{...titleCard(kind, t, now)}
+								badge={undefined}
+								onclick={() => open(kind, t.id)}
+							/>
+						{/each}
+					</div>
+				</section>
+			{/if}
+		</div>
+	{/if}
+</div>
+
+<style>
+.failed-actions {
+	display: flex;
+	gap: 10px;
+}
+
+.home {
+	position: relative;
+	min-height: 100%;
+	background: var(--bg-deep);
+	color: var(--fg);
+}
+
+.state {
+	display: grid;
+	place-items: center;
+	min-height: 100vh;
+	padding-top: env(safe-area-inset-top);
+	box-sizing: border-box;
+}
+
+.hero {
+	position: relative;
+	height: 560px;
+	overflow: hidden;
+	touch-action: pan-y;
+	color: var(--player-ink);
+}
+
+.frame {
+	position: absolute;
+	inset: 0;
+}
+
+.scrim {
+	position: absolute;
+	inset: 0;
+	background: linear-gradient(
+		0deg,
+		var(--bg-deep) 0%,
+		color-mix(in srgb, var(--bg-deep) 75%, transparent) 30%,
+		color-mix(in srgb, var(--bg-deep) 10%, transparent) 62%,
+		color-mix(in srgb, var(--bg-deep) 55%, transparent) 100%
+	);
+}
+
+.top {
+	position: absolute;
+	left: 0;
+	right: 0;
+	top: env(safe-area-inset-top);
+	height: 52px;
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	padding: 0 20px;
+}
+
+.brand {
+	display: flex;
+	align-items: center;
+	gap: 9px;
+	font-size: 17px;
+	font-weight: 600;
+	letter-spacing: -0.02em;
+}
+
+.actions {
+	display: flex;
+	align-items: center;
+	gap: 2px;
+	margin-right: -6px;
+}
+
+.bell :global(.sl-btn) {
+	width: 44px;
+	height: 44px;
+}
+
+.account {
+	display: grid;
+	place-items: center;
+	width: 44px;
+	height: 44px;
+	padding: 0;
+	border: 0;
+	background: transparent;
+	cursor: pointer;
+}
+
+.body {
+	position: absolute;
+	left: 20px;
+	right: 20px;
+	bottom: 61px;
+	display: flex;
+	flex-direction: column;
+	gap: 11px;
+}
+
+.eyebrow {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	font: 500 10.5px / 1 var(--font-mono);
+	letter-spacing: 0.14em;
+	text-transform: uppercase;
+	color: var(--player-accent-text);
+	white-space: nowrap;
+}
+
+.eyebrow::before {
+	content: "";
+	width: 6px;
+	height: 6px;
+	border-radius: 50%;
+	background: var(--player-accent);
+}
+
+h1 {
+	margin: 0;
+	font-size: 34px;
+	line-height: 1.04;
+	font-weight: 700;
+	letter-spacing: -0.03em;
+	text-wrap: balance;
+}
+
+.meta {
+	font: 400 12px var(--font-mono);
+	color: var(--fg-muted);
+}
+
+.buttons {
+	display: flex;
+	gap: 10px;
+	margin-top: 6px;
+}
+
+.cta {
+	flex: 1;
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	gap: 10px;
+	height: 48px;
+	padding: 0 18px;
+	border: 0;
+	border-radius: var(--radius-md);
+	background: var(--player-accent);
+	color: var(--fg-on-accent);
+	font-size: 16px;
+	font-weight: 600;
+	cursor: pointer;
+	transition: transform 150ms;
+}
+
+.cta:active {
+	transform: scale(0.97);
+}
+
+.glass {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	flex: none;
+	width: 48px;
+	height: 48px;
+	padding: 0;
+	border: 1px solid rgba(255, 255, 255, 0.16);
+	border-radius: var(--radius-md);
+	background: var(--player-chip);
+	backdrop-filter: blur(12px);
+	-webkit-backdrop-filter: blur(12px);
+	color: var(--player-ink);
+	cursor: pointer;
+}
+
+.glass :global(.sl-ico) {
+	stroke-width: 1.75;
+}
+
+.resume {
+	display: flex;
+	align-items: center;
+	gap: 10px;
+}
+
+.resume > i {
+	flex: 1;
+	height: 3px;
+	border-radius: 2px;
+	background: var(--player-track);
+	overflow: hidden;
+}
+
+.resume > i > b {
+	display: block;
+	height: 100%;
+	background: var(--player-ink);
+}
+
+.resume > span {
+	font: 400 11.5px var(--font-mono);
+	color: var(--fg-muted);
+}
+
+.dots {
+	position: absolute;
+	left: 20px;
+	right: 20px;
+	bottom: 26px;
+	height: 20px;
+	display: flex;
+	justify-content: center;
+	gap: 4px;
+}
+
+.dot {
+	height: 20px;
+	padding: 0;
+	border: 0;
+	background: transparent;
+	display: flex;
+	align-items: center;
+	cursor: pointer;
+	transition: width 400ms var(--ease);
+}
+
+.track {
+	position: relative;
+	display: block;
+	width: 100%;
+	height: 4px;
+	border-radius: 2px;
+	background: color-mix(in srgb, var(--fg) 30%, transparent);
+	overflow: hidden;
+}
+
+.fill {
+	position: absolute;
+	left: 0;
+	top: 0;
+	bottom: 0;
+	background: var(--player-ink);
+}
+
+.rows {
+	display: flex;
+	flex-direction: column;
+	gap: 26px;
+	padding-top: 6px;
+}
+
+.rows.bare {
+	padding-top: calc(env(safe-area-inset-top) + 20px);
+}
+
+.rows section {
+	display: flex;
+	flex-direction: column;
+	gap: 12px;
+}
+
+.head {
+	display: flex;
+	align-items: baseline;
+	justify-content: space-between;
+	padding: 0 20px;
+}
+
+h2 {
+	margin: 0;
+	font-size: 17px;
+	font-weight: 600;
+}
+
+.note {
+	font: 400 11px var(--font-mono);
+	color: var(--fg-subtle);
+}
+
+.scroller {
+	display: flex;
+	gap: 12px;
+	overflow-x: auto;
+	padding: 0 20px;
+	scrollbar-width: none;
+}
+</style>

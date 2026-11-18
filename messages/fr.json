@@ -1038,5 +1038,12 @@
 	"dl_toast_removed_many_one": "1 téléchargement supprimé",
 	"dl_toast_removed_many_other": "{count} téléchargements supprimés",
 	"dl_select_item": "Sélectionner {title}",
-	"dl_unselect_item": "Désélectionner {title}"
+	"dl_unselect_item": "Désélectionner {title}",
+	"home_phone_episode_meta": "S{season} · É{episode} · {left}",
+	"search_phone_placeholder": "Films et séries",
+	"search_phone_recent": "Récents",
+	"search_phone_genres": "Genres",
+	"search_phone_no_matches": "Aucun résultat pour « {query} »",
+	"search_phone_requests": "Les demandes se font dans l’application web Streamline.",
+	"library_phone_sort": "Tri : {sort}"
 }

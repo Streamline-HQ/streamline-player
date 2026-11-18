@@ -24,13 +24,13 @@ let {
 	poster: string;
 	info?: WatchInfo;
 	leftLabel?: string;
-	size?: "desktop" | "tv";
+	size?: "desktop" | "tv" | "phone";
 	tv?: { fid: string; isDefault?: boolean; onfocus?: () => void };
 	onclick: () => void;
 } = $props();
 </script>
 
-<div class:slp-mk--tv={size === "tv"}>
+<div class:slp-mk--tv={size === "tv"} class:slp-mk--phone={size === "phone"}>
 	<button
 		type="button"
 		class="slp-bd"

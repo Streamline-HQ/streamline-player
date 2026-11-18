@@ -1,5 +1,6 @@
 /* The title-card pieces every screen shares (PosterCard, BackdropCard, list thumbnails).
-   One size knob, --mk: 1 on desktop, 1.67 on TV, 0.55 on list thumbnails. */
+   One size knob, --mk: 1 on desktop, 0.75 on phone, 1.67 on TV, 0.55 on list thumbnails. */
+.slp-mk--phone{--mk:.75}
 .slp-mk--tv{--mk:1.67}
 .slp-mk--thumb{--mk:.55}
 

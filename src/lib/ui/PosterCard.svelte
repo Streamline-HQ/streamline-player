@@ -58,7 +58,7 @@ let {
 	info?: WatchInfo;
 	/** What the episode count reads out: "3 unwatched episodes". */
 	leftLabel?: string;
-	size?: "desktop" | "tv";
+	size?: "desktop" | "tv" | "phone";
 	/** TV rails: the art alone, no title. */
 	bare?: boolean;
 	/** TV: the note and the sub line under the title too. */
@@ -145,6 +145,28 @@ const open = (e: KeyboardEvent) => {
 			</span>
 		{/if}
 	</div>
+{:else if size === "phone"}
+	<button
+		type="button"
+		class="phone slp-mk--phone"
+		style:width={width ? `${width}px` : undefined}
+		aria-label={title}
+		{onclick}
+	>
+		<span class="slp-art">
+			<Art {src} kind="poster" />
+			{@render markers()}
+		</span>
+		<span class="phone-lines">
+			<span class="phone-title">{title}</span>
+			{#if full && note}
+				<span class="phone-note">{note}</span>
+			{/if}
+			{#if full && sub}
+				<span class="phone-sub">{sub}</span>
+			{/if}
+		</span>
+	</button>
 {:else}
 	<!-- biome-ignore lint/a11y/useSemanticElements: an <a> may not hold the card's own buttons. -->
 	<div
@@ -381,6 +403,54 @@ const open = (e: KeyboardEvent) => {
 
 .tv-sub {
 	font: 400 19px var(--font-mono);
+	color: var(--fg-subtle);
+}
+
+.phone {
+	flex: none;
+	display: flex;
+	flex-direction: column;
+	gap: 6px;
+	width: 100%;
+	min-width: 0;
+	padding: 0;
+	border: 0;
+	background: transparent;
+	color: var(--fg);
+	text-align: left;
+	cursor: pointer;
+	scroll-snap-align: start;
+}
+
+.phone-lines {
+	display: flex;
+	flex-direction: column;
+	gap: 1px;
+	min-width: 0;
+}
+
+.phone-title,
+.phone-note,
+.phone-sub {
+	white-space: nowrap;
+	overflow: hidden;
+	text-overflow: ellipsis;
+}
+
+.phone-title {
+	font-size: 12px;
+	font-weight: 500;
+	line-height: 1.3;
+}
+
+.phone-note {
+	font-size: 11px;
+	line-height: 1.3;
+	color: var(--fg-subtle);
+}
+
+.phone-sub {
+	font: 400 10.5px / 1.4 var(--font-mono);
 	color: var(--fg-subtle);
 }
 

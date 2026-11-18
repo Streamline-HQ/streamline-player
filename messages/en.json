@@ -1038,5 +1038,12 @@
 	"dl_toast_removed_many_one": "1 download removed",
 	"dl_toast_removed_many_other": "{count} downloads removed",
 	"dl_select_item": "Select {title}",
-	"dl_unselect_item": "Unselect {title}"
+	"dl_unselect_item": "Unselect {title}",
+	"home_phone_episode_meta": "S{season} · E{episode} · {left}",
+	"search_phone_placeholder": "Movies and shows",
+	"search_phone_recent": "Recent",
+	"search_phone_genres": "Genres",
+	"search_phone_no_matches": "No matches for “{query}”",
+	"search_phone_requests": "Requests live in the Streamline web app.",
+	"library_phone_sort": "Sort: {sort}"
 }
