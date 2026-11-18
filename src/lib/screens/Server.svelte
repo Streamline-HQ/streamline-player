@@ -38,9 +38,11 @@ import {
 import { toast } from "#lib/core/toast.svelte.ts";
 import type { Kind, SettingValue } from "#lib/core/types.ts";
 import { m as i18n } from "#lib/paraglide/messages.js";
+import { isPhone } from "#lib/platform/form-factor.svelte.ts";
 import { getLocale } from "#lib/paraglide/runtime.js";
 import type { Handlers } from "#lib/screens/admin/handlers.ts";
 import { adminPort } from "#lib/screens/admin/port.ts";
+import PhoneServer from "#lib/screens/phone/Server.svelte";
 import ServerBlock from "#lib/screens/admin/ServerBlock.svelte";
 import ServerNav from "#lib/screens/admin/ServerNav.svelte";
 import { TONES } from "#lib/screens/admin/tone.ts";
@@ -341,6 +343,7 @@ async function act(a: Act) {
 	}
 }
 
+const phone = $derived(isPhone());
 const handlers: Handlers = {
 	go: jump,
 	act: (a) => void act(a),
@@ -429,7 +432,32 @@ onMount(() => {
 });
 </script>
 
-<div class="server" style:padding="{TOP}px {PAD_X}px 64px">
+{#snippet strips()}
+	{#if admin.restarting && admin.lateRestart}
+		<div class="strip late" role="status">
+			<span class="line">
+				<Icon name="triangle-alert" size={15} stroke={2} />
+				<span class="text">{i18n.server_late()}</span>
+			</span>
+		</div>
+	{/if}
+	{#if readOnly}
+		<div class="strip">
+			<span class="line">
+				<Icon name="lock" size={15} stroke={2} />
+				<span class="text">{i18n.server_ro_strip()}</span>
+				<button type="button" aria-expanded={why} onclick={() => (why = !why)}>
+					{i18n.server_why()}
+				</button>
+			</span>
+			{#if why}
+				<span class="why">{i18n.server_ro_body()}</span>
+			{/if}
+		</div>
+	{/if}
+{/snippet}
+
+<div class="server" class:phone style:padding={phone ? "0" : `${TOP}px ${PAD_X}px 64px`}>
 	{#if admin.error !== null && !admin.loaded}
 		<div class="solo">
 			<EmptyState icon="server" title={i18n.server_load_failed()}>
@@ -442,6 +470,17 @@ onMount(() => {
 		</div>
 	{:else if !data || !health}
 		<div class="solo loading">{i18n.server_loading()}</div>
+	{:else if phone}
+		<PhoneServer
+			{secs}
+			groups={groups.map((g) => ({ name: g.name, items: g.items }))}
+			{health}
+			{host}
+			version={data.overview.extension.version}
+			h={handlers}
+			{strips}
+			onrestart={askRestart}
+		/>
 	{:else}
 		<ServerNav
 			groups={groups.map((g) => ({ name: g.name, items: g.items }))}
@@ -454,28 +493,7 @@ onMount(() => {
 			onopen={jump}
 		/>
 		<main>
-			{#if admin.restarting && admin.lateRestart}
-				<div class="strip late" role="status">
-					<span class="line">
-						<Icon name="triangle-alert" size={15} stroke={2} />
-						<span class="text">{i18n.server_late()}</span>
-					</span>
-				</div>
-			{/if}
-			{#if readOnly}
-				<div class="strip">
-					<span class="line">
-						<Icon name="lock" size={15} stroke={2} />
-						<span class="text">{i18n.server_ro_strip()}</span>
-						<button type="button" aria-expanded={why} onclick={() => (why = !why)}>
-							{i18n.server_why()}
-						</button>
-					</span>
-					{#if why}
-						<span class="why">{i18n.server_ro_body()}</span>
-					{/if}
-				</div>
-			{/if}
+			{@render strips()}
 			<div class="blocks">
 				{#each secs as sec, si (sec.key)}
 					{#each sec.blocks as block, bi (bi)}
@@ -509,6 +527,10 @@ onMount(() => {
 	gap: 48px;
 	background: var(--bg-deep);
 	color: var(--fg);
+}
+
+.server.phone {
+	display: block;
 }
 
 .solo {

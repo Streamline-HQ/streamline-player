@@ -9,6 +9,8 @@ import { lib } from "#lib/core/library.svelte.ts";
 import { net } from "#lib/core/online.svelte.ts";
 import { toast } from "#lib/core/toast.svelte.ts";
 import { m as i18n } from "#lib/paraglide/messages.js";
+import { isPhone } from "#lib/platform/form-factor.svelte.ts";
+import PhoneDownloads, { type PhoneGroup } from "#lib/screens/phone/Downloads.svelte";
 import { downloadsPort } from "#lib/screens/downloads-port.ts";
 import Banner from "#lib/ui/Banner.svelte";
 import Button from "#lib/ui/Button.svelte";
@@ -117,213 +119,277 @@ function open(c: Card) {
 
 const openGroup = (g: Group) =>
 	goto(`/detail/${g.titleKind}/${g.titleId}${g.firstSeason != null ? `?s=${g.firstSeason}` : ""}`);
+
+const phone = $derived(isPhone());
+const phoneGroups = $derived<PhoneGroup[]>(
+	view.groups.flatMap<PhoneGroup>((g) => {
+		if (g.kind === "show")
+			return [
+				{
+					key: `${g.titleKind}:${g.titleId}`,
+					title: g.title,
+					sub: g.sub,
+					poster: g.poster,
+					open: () => openGroup(g),
+					seasons: g.seasons,
+				},
+			];
+		return g.seasons.flatMap((s) =>
+			s.cards.flatMap((c) => {
+				const m = byKey(c.key)?.meta;
+				if (!m) return [];
+				return [
+					{
+						key: c.key,
+						title: c.fullTitle,
+						sub: c.meta.split(" · ").slice(0, 2).join(" · "),
+						poster: m.poster,
+						open: () => void open(c),
+						seasons: [{ label: null, cards: [c] }],
+					},
+				];
+			}),
+		);
+	}),
+);
 </script>
 
-<div class="page" style:padding="{TOP}px {PAD_X}px {BOTTOM}px">
-	<div class="top">
-		<div class="titles">
-			<div class="title-row">
-				<h1>{i18n.shell_downloads()}</h1>
-				{#if view.groups.length > 0}
-					<Button
-						variant="secondary"
-						size="sm"
-						icon={selecting ? "x" : "circle-check"}
-						onclick={toggleSelecting}
-					>
-						{selecting ? i18n.dl_select_done() : i18n.dl_select()}
-					</Button>
-				{/if}
-			</div>
-			<span class="summary">{view.summary}</span>
-		</div>
-		{#if meter}
-			<div class="meter">
-				<StorageMeter usedPct={meter.usedPct} otherPct={meter.otherPct} labels={meter.labels} />
-			</div>
-		{/if}
-	</div>
-
-	{#if selecting}
-		<div class="selbar" role="toolbar" aria-label={i18n.dl_selection()}>
-			<span class="selcount"
-				>{pickedKeys.length
-					? (pickedKeys.length === 1 ? i18n.dl_selected_one : i18n.dl_selected_other)({
-							count: pickedKeys.length,
-						})
-					: i18n.dl_pick_none()}</span
-			>
-			{#if pickedKeys.length}
-				<span class="selsize">{pickedSize}</span>
-			{/if}
-			<span class="spacer"></span>
-			<Button
-				variant="secondary"
-				size="sm"
-				onclick={() => (picked = allPicked ? new Set() : new Set(doneKeys))}
-			>
-				{allPicked ? i18n.dl_select_clear() : i18n.dl_select_all()}
-			</Button>
-			<Button
-				variant="danger"
-				size="sm"
-				icon="trash-2"
-				disabled={!pickedKeys.length}
-				onclick={removePicked}
-			>
-				{i18n.dl_remove_one()}
-			</Button>
-		</div>
-	{/if}
-
-	{#if !net.online}
-		<Banner
-			status="paused"
-			icon="wifi-off"
-			title={i18n.dl_offline_title()}
-			detail={i18n.dl_offline_detail()}
-		/>
-	{/if}
-
-	{#if view.active.length > 0}
-		<section class="active">
-			<h2>{i18n.dl_downloading()}</h2>
-			{#each view.active as r (r.key)}
-				<div class="row {r.state}" data-key={r.key} data-state={r.state}>
-					<span class="pic">
-						<Art src={stillOf(r.key)} position={posOf(r.key)} />
-					</span>
-					<span class="body">
-						<span class="name">{r.title}</span>
-						<span class="bar"><span class="fill" style:width="{r.pct}%"></span></span>
-						<span class="line">
-							<span class="sub">{r.sub}</span>
-							<span class="note {r.noteTone}">{r.note}</span>
-						</span>
-					</span>
-					{#if r.canRetry}
+{#if phone}
+	<PhoneDownloads
+		summary={view.summary}
+		meter={meter
+			? { usedPct: meter.usedPct, otherPct: meter.otherPct, labels: meter.labels }
+			: null}
+		groups={phoneGroups}
+		active={view.active}
+		empty={view.empty && dl.loaded}
+		online={net.online}
+		{selecting}
+		{picked}
+		pickedCount={pickedKeys.length}
+		{pickedSize}
+		{allPicked}
+		{stillOf}
+		{posOf}
+		oncancel={cancel}
+		onretry={(key) => retry(downloadsPort, key)}
+		onplay={play}
+		onremove={removeOne}
+		onselecting={toggleSelecting}
+		onpick={pick}
+		onpickall={() => (picked = allPicked ? new Set() : new Set(doneKeys))}
+		onremovepicked={removePicked}
+		onbrowse={() => goto("/library/movies")}
+	/>
+{:else}
+	<div class="page" style:padding="{TOP}px {PAD_X}px {BOTTOM}px">
+		<div class="top">
+			<div class="titles">
+				<div class="title-row">
+					<h1>{i18n.shell_downloads()}</h1>
+					{#if view.groups.length > 0}
 						<Button
 							variant="secondary"
 							size="sm"
-							icon="rotate-cw"
-							title={i18n.dl_retry_download()}
-							onclick={() => retry(downloadsPort, r.key)}
+							icon={selecting ? "x" : "circle-check"}
+							onclick={toggleSelecting}
 						>
-							{i18n.dl_retry()}
+							{selecting ? i18n.dl_select_done() : i18n.dl_select()}
 						</Button>
 					{/if}
-					<Button
-						variant="icon"
-						icon="x"
-						label={i18n.dl_cancel()}
-						title={i18n.dl_cancel()}
-						onclick={() => cancel(r.key)}
-					/>
 				</div>
-			{/each}
-		</section>
-	{/if}
+				<span class="summary">{view.summary}</span>
+			</div>
+			{#if meter}
+				<div class="meter">
+					<StorageMeter usedPct={meter.usedPct} otherPct={meter.otherPct} labels={meter.labels} />
+				</div>
+			{/if}
+		</div>
 
-	{#if view.groups.length > 0}
-		<section class="done">
-			<h2>{i18n.dl_on_device()}</h2>
-			{#each view.groups as g (g.kind === "movies" ? "movies" : `${g.titleKind}:${g.titleId}`)}
-				<div class="group">
-					{#if g.kind === "show"}
-						<div class="head">
-							<button
-								type="button"
-								class="poster"
-								aria-label={i18n.dl_open({ title: g.title })}
-								onclick={() => openGroup(g)}
+		{#if selecting}
+			<div class="selbar" role="toolbar" aria-label={i18n.dl_selection()}>
+				<span class="selcount"
+					>{pickedKeys.length
+						? (pickedKeys.length === 1 ? i18n.dl_selected_one : i18n.dl_selected_other)({
+								count: pickedKeys.length,
+							})
+						: i18n.dl_pick_none()}</span
+				>
+				{#if pickedKeys.length}
+					<span class="selsize">{pickedSize}</span>
+				{/if}
+				<span class="spacer"></span>
+				<Button
+					variant="secondary"
+					size="sm"
+					onclick={() => (picked = allPicked ? new Set() : new Set(doneKeys))}
+				>
+					{allPicked ? i18n.dl_select_clear() : i18n.dl_select_all()}
+				</Button>
+				<Button
+					variant="danger"
+					size="sm"
+					icon="trash-2"
+					disabled={!pickedKeys.length}
+					onclick={removePicked}
+				>
+					{i18n.dl_remove_one()}
+				</Button>
+			</div>
+		{/if}
+
+		{#if !net.online}
+			<Banner
+				status="paused"
+				icon="wifi-off"
+				title={i18n.dl_offline_title()}
+				detail={i18n.dl_offline_detail()}
+			/>
+		{/if}
+
+		{#if view.active.length > 0}
+			<section class="active">
+				<h2>{i18n.dl_downloading()}</h2>
+				{#each view.active as r (r.key)}
+					<div class="row {r.state}" data-key={r.key} data-state={r.state}>
+						<span class="pic">
+							<Art src={stillOf(r.key)} position={posOf(r.key)} />
+						</span>
+						<span class="body">
+							<span class="name">{r.title}</span>
+							<span class="bar"><span class="fill" style:width="{r.pct}%"></span></span>
+							<span class="line">
+								<span class="sub">{r.sub}</span>
+								<span class="note {r.noteTone}">{r.note}</span>
+							</span>
+						</span>
+						{#if r.canRetry}
+							<Button
+								variant="secondary"
+								size="sm"
+								icon="rotate-cw"
+								title={i18n.dl_retry_download()}
+								onclick={() => retry(downloadsPort, r.key)}
 							>
-								<span class="cover"><Art src={artworkAt(g.poster)} kind="poster" /></span>
-							</button>
-							<button type="button" class="gtitle" onclick={() => openGroup(g)}>
+								{i18n.dl_retry()}
+							</Button>
+						{/if}
+						<Button
+							variant="icon"
+							icon="x"
+							label={i18n.dl_cancel()}
+							title={i18n.dl_cancel()}
+							onclick={() => cancel(r.key)}
+						/>
+					</div>
+				{/each}
+			</section>
+		{/if}
+
+		{#if view.groups.length > 0}
+			<section class="done">
+				<h2>{i18n.dl_on_device()}</h2>
+				{#each view.groups as g (g.kind === "movies" ? "movies" : `${g.titleKind}:${g.titleId}`)}
+					<div class="group">
+						{#if g.kind === "show"}
+							<div class="head">
+								<button
+									type="button"
+									class="poster"
+									aria-label={i18n.dl_open({ title: g.title })}
+									onclick={() => openGroup(g)}
+								>
+									<span class="cover"><Art src={artworkAt(g.poster)} kind="poster" /></span>
+								</button>
+								<button type="button" class="gtitle" onclick={() => openGroup(g)}>
+									<span class="gname">{g.title}</span>
+									<span class="gsub">{g.sub}</span>
+								</button>
+								<Button variant="destructive" size="sm" icon="trash-2" onclick={() => removeAll(g)}>
+									{i18n.dl_remove_all()}
+								</Button>
+							</div>
+						{:else}
+							<div class="head movies">
 								<span class="gname">{g.title}</span>
 								<span class="gsub">{g.sub}</span>
-							</button>
-							<Button variant="destructive" size="sm" icon="trash-2" onclick={() => removeAll(g)}>
-								{i18n.dl_remove_all()}
-							</Button>
-						</div>
-					{:else}
-						<div class="head movies">
-							<span class="gname">{g.title}</span>
-							<span class="gsub">{g.sub}</span>
-						</div>
-					{/if}
-					{#each g.seasons as s (s.label ?? "")}
-						<div class="season">
-							{#if s.label}
-								<span class="label">{s.label}</span>
-							{/if}
-							<div class="grid">
-								{#each s.cards as c (c.key)}
-									{@const on = picked.has(c.key)}
-									<div class="card" data-key={c.key}>
-										<button
-											type="button"
-											class="still"
-											class:picked={selecting && on}
-											class:dim={selecting && !on}
-											aria-label={selecting
-												? (on ? i18n.dl_unselect_item : i18n.dl_select_item)({ title: c.fullTitle })
-												: i18n.library_play_title({ title: c.fullTitle })}
-											aria-pressed={selecting ? on : undefined}
-											onclick={() => (selecting ? pick(c.key) : play(c))}
-										>
-											<Art src={stillOf(c.key)} position={posOf(c.key)} />
-											{#if selecting}
-												<span class="box" class:on aria-hidden="true"
-													><Icon name="tick" size={13} stroke={3} /></span
-												>
-											{:else}
-												<span class="playdot"><Icon name="play" filled /></span>
-											{/if}
-										</button>
-										<div class="info">
-											<button type="button" class="text" onclick={() => open(c)}>
-												<span class="head1">{c.head}</span>
-												<span class="line1">{c.line}</span>
-												<span class="mono">{c.meta}</span>
-												<span class="mono clip">{c.tracks}</span>
-												{#if c.offText}
-													<span class="off"><Icon name="history" />{c.offText}</span>
+							</div>
+						{/if}
+						{#each g.seasons as s (s.label ?? "")}
+							<div class="season">
+								{#if s.label}
+									<span class="label">{s.label}</span>
+								{/if}
+								<div class="grid">
+									{#each s.cards as c (c.key)}
+										{@const on = picked.has(c.key)}
+										<div class="card" data-key={c.key}>
+											<button
+												type="button"
+												class="still"
+												class:picked={selecting && on}
+												class:dim={selecting && !on}
+												aria-label={selecting
+													? (on ? i18n.dl_unselect_item : i18n.dl_select_item)({
+															title: c.fullTitle,
+														})
+													: i18n.library_play_title({ title: c.fullTitle })}
+												aria-pressed={selecting ? on : undefined}
+												onclick={() => (selecting ? pick(c.key) : play(c))}
+											>
+												<Art src={stillOf(c.key)} position={posOf(c.key)} />
+												{#if selecting}
+													<span class="box" class:on aria-hidden="true"
+														><Icon name="tick" size={13} stroke={3} /></span
+													>
+												{:else}
+													<span class="playdot"><Icon name="play" filled /></span>
 												{/if}
 											</button>
-											<span class="trash">
-												<Button
-													variant="icon"
-													icon="trash-2"
-													label={i18n.dl_remove()}
-													title={i18n.dl_remove()}
-													onclick={() => removeOne(c)}
-												/>
-											</span>
+											<div class="info">
+												<button type="button" class="text" onclick={() => open(c)}>
+													<span class="head1">{c.head}</span>
+													<span class="line1">{c.line}</span>
+													<span class="mono">{c.meta}</span>
+													<span class="mono clip">{c.tracks}</span>
+													{#if c.offText}
+														<span class="off"><Icon name="history" />{c.offText}</span>
+													{/if}
+												</button>
+												<span class="trash">
+													<Button
+														variant="icon"
+														icon="trash-2"
+														label={i18n.dl_remove()}
+														title={i18n.dl_remove()}
+														onclick={() => removeOne(c)}
+													/>
+												</span>
+											</div>
 										</div>
-									</div>
-								{/each}
+									{/each}
+								</div>
 							</div>
-						</div>
-					{/each}
-				</div>
-			{/each}
-		</section>
-	{/if}
+						{/each}
+					</div>
+				{/each}
+			</section>
+		{/if}
 
-	{#if view.empty && dl.loaded}
-		<div class="none">
-			<EmptyState icon="download" title={i18n.dl_empty_title()} text={i18n.dl_empty_text()}>
-				{#snippet action()}
-					<Button variant="primary" onclick={() => goto("/library/movies")}>
-						{i18n.dl_browse()}
-					</Button>
-				{/snippet}
-			</EmptyState>
-		</div>
-	{/if}
-</div>
+		{#if view.empty && dl.loaded}
+			<div class="none">
+				<EmptyState icon="download" title={i18n.dl_empty_title()} text={i18n.dl_empty_text()}>
+					{#snippet action()}
+						<Button variant="primary" onclick={() => goto("/library/movies")}>
+							{i18n.dl_browse()}
+						</Button>
+					{/snippet}
+				</EmptyState>
+			</div>
+		{/if}
+	</div>
+{/if}
 
 <style>
 .page {

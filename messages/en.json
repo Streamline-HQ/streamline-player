@@ -1053,5 +1053,16 @@
 	"detail_phone_mode_burn": "burn-in",
 	"detail_phone_mode_shown": "shown",
 	"person_phone_on_server": "{year} · on server",
-	"person_phone_not_in_library": "{year} · not in library"
+	"person_phone_not_in_library": "{year} · not in library",
+	"settings_scope_label": "Settings for",
+	"settings_scope_yours": "Your settings",
+	"settings_admin": "Admin",
+	"server_phone_previous": "Previous",
+	"server_phone_next": "Next",
+	"server_phone_extension": "Player extension {version}",
+	"server_phone_footer": "Player extension {version} · {host}",
+	"server_phone_restart_label": "Restart the engine",
+	"welcome_phone_other_server": "Use a different server",
+	"signin_phone_lead": "Use your Streamline account. You’ll only do this once.",
+	"welcome_phone_paired_lead": "Signed in as {name}. The device key is in {keystore}."
 }

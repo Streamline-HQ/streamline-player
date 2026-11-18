@@ -35,8 +35,10 @@ import { adminPort } from "#lib/screens/admin/port.ts";
 import { downloadsPort } from "#lib/screens/downloads-port.ts";
 import CardLangPopover from "#lib/screens/CardLangPopover.svelte";
 import { currentTab, hidesTabs, type PhoneTab, TAB_PATHS } from "#lib/shells/phone/tabs.ts";
+import Sheet from "#lib/shells/phone/Sheet.svelte";
 import TabBar from "#lib/shells/phone/TabBar.svelte";
 import AskDialog from "#lib/ui/AskDialog.svelte";
+import { provideDialogSurface } from "#lib/ui/dialog-surface.ts";
 import CountdownToast from "#lib/ui/CountdownToast.svelte";
 import DesktopToast from "#lib/ui/DesktopToast.svelte";
 import DownloadPicker from "#lib/ui/DownloadPicker.svelte";
@@ -64,6 +66,8 @@ const LIBRARY_PORT = { library, watchState, home, title: fetchTitle };
 const COUNTDOWN_SHIFT = 74;
 
 let { children }: { children: Snippet } = $props();
+
+provideDialogSurface(Sheet);
 
 let content = $state<HTMLElement>();
 provideScroll(() => content);
@@ -322,18 +326,10 @@ const toastNow = $derived(activeToast());
 	<CardLangPopover barHeight={0} />
 
 	{#if popover.mounted && lastPopover && popView}
-		<button
-			type="button"
-			class="dl-scrim"
-			tabindex="-1"
-			aria-label={i18n.shell_close()}
-			style:pointer-events={dlAsking.popover ? "auto" : "none"}
-			onclick={closePopover}
-		></button>
-		<div
-			class="dl-pop"
-			class:shown={popover.shown}
-			style:pointer-events={dlAsking.popover ? "auto" : "none"}
+		<Sheet
+			closeLabel={i18n.shell_close()}
+			shown={popover.shown && !!dlAsking.popover}
+			onclose={closePopover}
 		>
 			<DownloadPopover
 				state={popView.state}
@@ -366,7 +362,7 @@ const toastNow = $derived(activeToast());
 				onremove={() => dropFromPopover(downloadsPort)}
 				onretry={() => retryFromPopover(downloadsPort)}
 			/>
-		</div>
+		</Sheet>
 	{/if}
 
 	{#if counter.mounted && lastCount}
@@ -463,35 +459,5 @@ const toastNow = $derived(activeToast());
 .toasts.countdown.shown {
 	opacity: 1;
 	transform: none;
-}
-
-.dl-scrim {
-	position: absolute;
-	inset: 0;
-	z-index: 80;
-	border: 0;
-	padding: 0;
-	background: transparent;
-}
-
-.dl-pop {
-	position: absolute;
-	left: 50%;
-	top: 50%;
-	z-index: 81;
-	width: min(320px, calc(100% - 24px));
-	opacity: 0;
-	transform: translate(-50%, -50%) scale(0.96);
-	transition:
-		opacity 130ms var(--ease-in),
-		transform 130ms var(--ease-in);
-}
-
-.dl-pop.shown {
-	opacity: 1;
-	transform: translate(-50%, -50%);
-	transition:
-		opacity 180ms var(--ease),
-		transform 180ms var(--ease);
 }
 </style>

@@ -2,7 +2,9 @@
 import { SignInError, type SignInErrorCode } from "#lib/core/auth.ts";
 import type { AuthMethods } from "#lib/core/types.ts";
 import { m as i18n } from "#lib/paraglide/messages.js";
+import { isPhone } from "#lib/platform/form-factor.svelte.ts";
 import { IS_WEB } from "#lib/platform/target.ts";
+import PhoneOnboarding from "#lib/screens/phone/Onboarding.svelte";
 import Icon from "#lib/ui/Icon.svelte";
 import Mark from "#lib/ui/Mark.svelte";
 import { authMethods, serverHost, startSignIn } from "#platform";
@@ -36,6 +38,7 @@ const KNOWN = Object.keys(COPY) as SignInErrorCode[];
 const known = (c: unknown): c is SignInErrorCode => (KNOWN as unknown[]).includes(c);
 
 const error = $derived(code ? COPY[code]() : "");
+const phone = $derived(isPhone());
 
 async function signIn() {
 	// An app may click again while its browser tab waits: the newer round trip replaces the older.
@@ -66,48 +69,66 @@ onMount(() => {
 });
 </script>
 
-<div class="page">
-	<div class="glow"></div>
+{#if phone}
 	{#if methods}
-		<div class="col">
-			<div class="card">
-				<header>
-					<Mark size={48} />
-					<span class="brand">Streamline</span>
-					<h1>{i18n.signin_title()}</h1>
-					<p class="lead">{i18n.signin_lead({ host })}</p>
-				</header>
-				{#if error}
-					<p class="error" role="alert">{error}</p>
-				{/if}
-				<button type="button" class="primary sso" onclick={signIn}>
-					{#if busy}
-						<span class="spin"></span>
-					{:else}
-						<Icon name="key-round" size={18} stroke={1.9} />
+		<PhoneOnboarding
+			kind="signin"
+			{host}
+			step={!IS_WEB}
+			lead={IS_WEB ? i18n.signin_lead({ host }) : i18n.signin_phone_lead()}
+			note={IS_WEB ? i18n.signin_note() : i18n.signin_note_app()}
+			{error}
+			{busy}
+			busyLabel={IS_WEB ? i18n.signin_continue_busy() : i18n.welcome_finish_in_browser()}
+			onsignin={signIn}
+			onchange={change}
+			register={methods.register_url ? { url: methods.register_url } : undefined}
+		/>
+	{/if}
+{:else}
+	<div class="page">
+		<div class="glow"></div>
+		{#if methods}
+			<div class="col">
+				<div class="card">
+					<header>
+						<Mark size={48} />
+						<span class="brand">Streamline</span>
+						<h1>{i18n.signin_title()}</h1>
+						<p class="lead">{i18n.signin_lead({ host })}</p>
+					</header>
+					{#if error}
+						<p class="error" role="alert">{error}</p>
 					{/if}
-					{busy
-						? IS_WEB
-							? i18n.signin_continue_busy()
-							: i18n.welcome_finish_in_browser()
-						: i18n.signin_continue()}
-				</button>
-				<p class="note">{IS_WEB ? i18n.signin_note() : i18n.signin_note_app()}</p>
-				{#if change}
-					<span class="where">
-						<Icon name="server" size={13} stroke={2} />{host}
-						<button type="button" class="link" onclick={change}>{i18n.welcome_change()}</button>
-					</span>
+					<button type="button" class="primary sso" onclick={signIn}>
+						{#if busy}
+							<span class="spin"></span>
+						{:else}
+							<Icon name="key-round" size={18} stroke={1.9} />
+						{/if}
+						{busy
+							? IS_WEB
+								? i18n.signin_continue_busy()
+								: i18n.welcome_finish_in_browser()
+							: i18n.signin_continue()}
+					</button>
+					<p class="note">{IS_WEB ? i18n.signin_note() : i18n.signin_note_app()}</p>
+					{#if change}
+						<span class="where">
+							<Icon name="server" size={13} stroke={2} />{host}
+							<button type="button" class="link" onclick={change}>{i18n.welcome_change()}</button>
+						</span>
+					{/if}
+				</div>
+				{#if methods.register_url}
+					<p class="register">
+						{i18n.signin_no_account()}<a href={methods.register_url}>{i18n.signin_create()}</a>
+					</p>
 				{/if}
 			</div>
-			{#if methods.register_url}
-				<p class="register">
-					{i18n.signin_no_account()}<a href={methods.register_url}>{i18n.signin_create()}</a>
-				</p>
-			{/if}
-		</div>
-	{/if}
-</div>
+		{/if}
+	</div>
+{/if}
 
 <style>
 .page {

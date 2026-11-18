@@ -3,6 +3,7 @@ import { normalizeCode, requestMeta } from "#lib/core/approve.ts";
 import type { PairRequest } from "#lib/core/types.ts";
 import { toast } from "#lib/core/toast.svelte.ts";
 import { m as i18n } from "#lib/paraglide/messages.js";
+import { isPhone } from "#lib/platform/form-factor.svelte.ts";
 import CodeBoxes from "#lib/ui/CodeBoxes.svelte";
 import Icon from "#lib/ui/Icon.svelte";
 import Mark from "#lib/ui/Mark.svelte";
@@ -41,6 +42,7 @@ const message = $derived(
 				: "",
 );
 
+const phone = $derived(isPhone());
 const gone = (e: unknown) => String(e).includes("no_pending_pairing");
 
 async function lookup(raw: string) {
@@ -110,7 +112,7 @@ onMount(() => {
 });
 </script>
 
-<div class="page">
+<div class="page" class:phone>
 	<div class="glow"></div>
 	{#if step === "request" && request}
 		<div class="card">
@@ -214,6 +216,14 @@ onMount(() => {
 		transparent 100%
 	);
 	pointer-events: none;
+}
+
+.page.phone :global(.approve .ch) {
+	width: 42px;
+}
+
+.page.phone :global(.approve .dash) {
+	width: 14px;
 }
 
 .card {

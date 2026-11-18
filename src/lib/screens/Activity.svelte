@@ -5,6 +5,7 @@ import { lib, loadLibrary } from "#lib/core/library.svelte.ts";
 import { toast } from "#lib/core/toast.svelte.ts";
 import type { Kind } from "#lib/core/types.ts";
 import { m as i18n } from "#lib/paraglide/messages.js";
+import { isPhone } from "#lib/platform/form-factor.svelte.ts";
 import { getLocale } from "#lib/paraglide/runtime.js";
 import ActivityRow from "#lib/ui/ActivityRow.svelte";
 import { activityWords } from "#lib/ui/activity-words.ts";
@@ -29,6 +30,8 @@ const PAD_X = 56;
 const TOP = 92;
 const BOTTOM = 32;
 const MAX_WIDTH = 980;
+const PHONE_PAD_X = 20;
+const PHONE_TOP_GAP = 12;
 const port = { activity, markActivityRead };
 const libraryPort = { library, watchState, home, title };
 
@@ -39,6 +42,7 @@ const LABELS = $derived<Record<Filter, string>>({
 	system: i18n.settings_server(),
 });
 
+const phone = $derived(isPhone());
 let filter = $state<Filter>("all");
 const now = new Date();
 
@@ -72,7 +76,14 @@ onMount(() => {
 });
 </script>
 
-<div class="page" style:padding="{TOP}px {PAD_X}px {BOTTOM}px" style:--max="{MAX_WIDTH}px">
+<div
+	class="page"
+	class:phone
+	style:padding={phone
+		? `calc(env(safe-area-inset-top) + ${PHONE_TOP_GAP}px) ${PHONE_PAD_X}px ${BOTTOM}px`
+		: `${TOP}px ${PAD_X}px ${BOTTOM}px`}
+	style:--max="{MAX_WIDTH}px"
+>
 	<div class="top">
 		<div class="titles">
 			<h1>{i18n.shell_activity()}</h1>
@@ -138,6 +149,10 @@ onMount(() => {
 	gap: 22px;
 }
 
+.page.phone {
+	max-width: none;
+}
+
 .top {
 	display: flex;
 	flex-wrap: wrap;
@@ -168,6 +183,10 @@ h1 {
 	display: flex;
 	align-items: center;
 	gap: 10px;
+}
+
+.page.phone .tools {
+	flex-wrap: wrap;
 }
 
 section {

@@ -1053,5 +1053,16 @@
 	"detail_phone_mode_burn": "incrusté",
 	"detail_phone_mode_shown": "affiché",
 	"person_phone_on_server": "{year} · sur le serveur",
-	"person_phone_not_in_library": "{year} · absent de la bibliothèque"
+	"person_phone_not_in_library": "{year} · absent de la bibliothèque",
+	"settings_scope_label": "Réglages pour",
+	"settings_scope_yours": "Vos réglages",
+	"settings_admin": "Administration",
+	"server_phone_previous": "Précédent",
+	"server_phone_next": "Suivant",
+	"server_phone_extension": "Extension Player {version}",
+	"server_phone_footer": "Extension Player {version} · {host}",
+	"server_phone_restart_label": "Redémarrer le moteur",
+	"welcome_phone_other_server": "Utiliser un autre serveur",
+	"signin_phone_lead": "Utilisez votre compte Streamline. Vous ne le ferez qu’une fois.",
+	"welcome_phone_paired_lead": "Connecté en tant que {name}. La clé de l’appareil est dans {keystore}."
 }
