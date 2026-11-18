@@ -1,4 +1,5 @@
 <script lang="ts">
+import { isTablet } from "#lib/platform/form-factor.svelte.ts";
 import { SignInError, type SignInErrorCode } from "#lib/core/auth.ts";
 import type { AuthMethods } from "#lib/core/types.ts";
 import { m as i18n } from "#lib/paraglide/messages.js";
@@ -66,7 +67,7 @@ onMount(() => {
 });
 </script>
 
-<div class="page">
+<div class="page" style:padding-top="{isTablet() ? 24 : 36}px">
 	<div class="glow"></div>
 	{#if methods}
 		<div class="col">

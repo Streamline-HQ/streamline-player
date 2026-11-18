@@ -14,6 +14,7 @@ import { storageView } from "#lib/core/downloads-view.ts";
 import { toast } from "#lib/core/toast.svelte.ts";
 import type { Device, DeviceInfo } from "#lib/core/types.ts";
 import { m as i18n } from "#lib/paraglide/messages.js";
+import { isTablet } from "#lib/platform/form-factor.svelte.ts";
 import { IS_WEB } from "#lib/platform/target.ts";
 import { downloadsPort } from "#lib/screens/downloads-port.ts";
 import Art from "#lib/ui/Art.svelte";
@@ -52,7 +53,7 @@ import {
 import { onMount } from "svelte";
 
 const APP_VERSION = import.meta.env.VITE_APP_VERSION;
-const PAD_X = 56;
+const PAD_X = $derived(isTablet() ? 44 : 56);
 const TOP = 92;
 const PING_MS = 2000;
 const SPY_OFFSET = 120;
@@ -316,7 +317,7 @@ onMount(() => {
 				{/if}
 				{#each g.items as s (s.key)}
 					<button type="button" class:on={active === s.key} onclick={() => jump(s.key)}>
-						<Icon name={s.icon} />
+						<Icon name={s.key === "device" && !IS_WEB && isTablet() ? "tablet" : s.icon} />
 						<span>{TITLES[s.key]()}</span>
 					</button>
 				{/each}
@@ -461,6 +462,18 @@ onMount(() => {
 					/>
 				{/snippet}
 			</SettingsRow>
+			{#if isTablet()}
+				<SettingsRow label={i18n.settings_cellular()} desc={i18n.settings_cellular_desc()}>
+					{#snippet control()}
+						<ChoiceMenu
+							label={i18n.settings_cellular()}
+							options={choice("cellular", ["4 Mbit/s", "8 Mbit/s", "No limit"])}
+							value={prefs.cellular}
+							onchange={(v) => setPref("cellular", v)}
+						/>
+					{/snippet}
+				</SettingsRow>
+			{/if}
 			<SettingsRow label={i18n.settings_autoplay()}>
 				{#snippet control()}
 					<Switch
@@ -598,6 +611,17 @@ onMount(() => {
 						/>
 					{/snippet}
 				</SettingsRow>
+				{#if isTablet()}
+					<SettingsRow label={i18n.dl_settings_wifi_only()}>
+						{#snippet control()}
+							<Switch
+								label={i18n.dl_settings_wifi_only()}
+								checked={prefs.wifiOnly}
+								onchange={toggle("wifiOnly")}
+							/>
+						{/snippet}
+					</SettingsRow>
+				{/if}
 				<SettingsRow
 					label={i18n.dl_settings_storage()}
 					desc={offlineItems === 1

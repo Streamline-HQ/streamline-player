@@ -1,4 +1,5 @@
 <script lang="ts">
+import { isTablet } from "#lib/platform/form-factor.svelte.ts";
 import { normalizeCode, requestMeta } from "#lib/core/approve.ts";
 import type { PairRequest } from "#lib/core/types.ts";
 import { toast } from "#lib/core/toast.svelte.ts";
@@ -110,7 +111,7 @@ onMount(() => {
 });
 </script>
 
-<div class="page">
+<div class="page" style:padding-top="{isTablet() ? 24 : 36}px">
 	<div class="glow"></div>
 	{#if step === "request" && request}
 		<div class="card">

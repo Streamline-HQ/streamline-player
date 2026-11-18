@@ -19,6 +19,7 @@ const VALUES: Record<string, () => string> = {
 	"On start": i18n.value_on_start,
 	"Pass through": i18n.value_pass_through,
 	"Decode here": i18n.value_decode_here,
+	"No limit": i18n.value_no_limit,
 };
 
 /** The subtitle language as a sentence names it: "French" in English, "français" in French. */

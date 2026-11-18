@@ -20,6 +20,8 @@ const DEFAULTS = {
 	passDTS: "Decode here",
 	dlQuality: "1080p",
 	dlPick: true,
+	cellular: "No limit",
+	wifiOnly: false,
 };
 export type Prefs = typeof DEFAULTS;
 export type ChoiceKey = { [K in keyof Prefs]: Prefs[K] extends string ? K : never }[keyof Prefs];

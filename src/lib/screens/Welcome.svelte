@@ -1,4 +1,5 @@
 <script lang="ts">
+import { isTablet } from "#lib/platform/form-factor.svelte.ts";
 import { checkAddress } from "#lib/core/pairing.svelte.ts";
 import { toast } from "#lib/core/toast.svelte.ts";
 import type { DeviceInfo, Me } from "#lib/core/types.ts";
@@ -133,7 +134,7 @@ onMount(() => {
 {#if step === "pair"}
 	<SignIn next="/" done={signedIn} change={changeServer} />
 {:else}
-	<div class="page">
+	<div class="page" style:padding-top="{isTablet() ? 24 : 36}px">
 		<div class="glow"></div>
 		{#if step === "server"}
 			<form
@@ -199,7 +200,9 @@ onMount(() => {
 				<span class="tick"><Icon name="tick" size={28} stroke={2.25} /></span>
 				<div class="head center">
 					<h1>{i18n.welcome_paired_title()}</h1>
-					<p class="lead">{i18n.welcome_paired_lead({ host })}</p>
+					<p class="lead">
+						{(isTablet() ? i18n.welcome_paired_lead_tablet : i18n.welcome_paired_lead)({ host })}
+					</p>
 				</div>
 				<div class="facts">
 					<div class="who">

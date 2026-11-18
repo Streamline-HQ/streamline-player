@@ -60,9 +60,10 @@ import {
 	title as fetchTitle,
 	watchState,
 } from "#platform";
+import { isTablet } from "#lib/platform/form-factor.svelte.ts";
 import { onMount } from "svelte";
 
-const PAD_X = 56;
+const PAD_X = $derived(isTablet() ? 44 : 56);
 const TOP = 92;
 const SPY_OFFSET = 120;
 const REFRESH_MS = 10_000;
