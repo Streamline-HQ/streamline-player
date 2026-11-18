@@ -77,4 +77,37 @@ eq(
 	false,
 	"intro auto-skip seeked a stopped player",
 );
+
+// A viewer who seeks into the intro stays there: the auto-skip is for an intro playback runs into.
+{
+	const log = [];
+	const port = {
+		playerName: "mpv",
+		command: async (cmd) => {
+			log.push(cmd);
+			return cmd === "stats" ? {} : null;
+		},
+		on: async () => () => {},
+		capabilities: async () => ({}),
+		decisions: async () => ({ bit_rate: 8e6, decisions: [] }),
+		network: async () => "home",
+		serverHost: async () => "host",
+		startSession: async () => session,
+		patchSession: async () => session,
+		sessionInfo: async () => ({ speed: null }),
+		stopSession: async () => {},
+		heartbeat: async () => {},
+		mediaTracks: async () => tracks({ intro: [0, 90], credits: null }),
+		mediaText: async () => "",
+	};
+	const pb = new Playback(port, { mediaId: "m", titleName: "T", anime: false, start: 200 });
+	const end = pb.begin();
+	await flush();
+	const before = log.length;
+	pb.seekTo(40);
+	await flush();
+	eq(log.slice(before).filter((c) => c === "seek").length, 1, "a seek into the intro was skipped past");
+	await pb.exit();
+	end();
+}
 process.exit(0);

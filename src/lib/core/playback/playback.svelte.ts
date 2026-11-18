@@ -759,6 +759,8 @@ export class Playback {
 
 	seekTo(at: number) {
 		this.position = at;
+		// A viewer who seeks into the intro wants to see it: skipping it then would throw them forward again.
+		if (this.introOn) this.#introSkipped = true;
 		this.#cmd("seek", { seconds: at });
 		this.#watch();
 	}
