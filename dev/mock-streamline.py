@@ -530,6 +530,19 @@ def summary(item):
     return {k: v for k, v in item.items() if k not in ("media_files", "seasons", "cast")}
 
 
+def series_summary(show):
+    files = [e["media_file_id"] for s in show["seasons"] for e in s["episodes"] if e["has_file"]]
+    rows = [WATCH[f] for f in files if f in WATCH]
+    return {
+        **summary(show),
+        "episodes": {
+            "total": len(files),
+            "watched": sum(1 for w in rows if w["watched"]),
+            "started": sum(1 for w in rows if w["watched"] or w["position_seconds"] > 0),
+        },
+    }
+
+
 def norm_title(s):
     return re.sub(
         r"[^a-z0-9]+",
@@ -1796,7 +1809,9 @@ class Handler(BaseHTTPRequestHandler):
         if self.path == "/extensions/player/movies":
             return self.reply(200, {"items": [summary(m) for m in MOVIES], "total": len(MOVIES)})
         if self.path == "/extensions/player/series":
-            return self.reply(200, {"items": [summary(s) for s in SERIES], "total": len(SERIES)})
+            return self.reply(
+                200, {"items": [series_summary(s) for s in SERIES], "total": len(SERIES)}
+            )
         m = re.fullmatch(r"/extensions/player/(movies|series)/(\d+)", self.path)
         if m:
             found = next(

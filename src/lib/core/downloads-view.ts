@@ -2,7 +2,13 @@ import { audioBytes, converts, estimate, sizeText, subBytes } from "#lib/core/do
 import type { Choice } from "#lib/core/playback/choice.ts";
 import type { AudioTrack, SubTrack, Tracks } from "#lib/core/playback/port.ts";
 import { language } from "#lib/core/playback/rules.ts";
-import type { DownloadEntry, DownloadError, DownloadQuality, Kind } from "#lib/core/types.ts";
+import type {
+	DownloadEntry,
+	DownloadError,
+	DownloadQuality,
+	Kind,
+	Watch,
+} from "#lib/core/types.ts";
 
 /** Every sentence and name the Downloads views show, worded by the caller: `core` stays free of the message catalogue. */
 export type Words = {
@@ -173,8 +179,10 @@ function offText(e: DownloadEntry, w: Words) {
 	return e.offline.done ? w.finishedOffline : w.watchedTo(w.clock(e.offline.position));
 }
 
-function card(e: DownloadEntry, w: Words): Card {
-	const watched = e.watched || !!e.offline?.done;
+/** `watch` is the library's, when loaded: the download's own flag is from when it was asked for. */
+function card(e: DownloadEntry, w: Words, watch: Watch[]): Card {
+	const row = watch.find((x) => x.media_id === e.media_id);
+	const watched = (row ? row.watched : e.watched) || !!e.offline?.done;
 	const audioLangs = [...new Set(e.audio.map((a) => w.language(a.language)))].join(", ");
 	const subLangs = [...new Set(e.subtitles.map((s) => w.language(s.language)))].join(", ");
 	return {
@@ -198,7 +206,7 @@ const byEpisode = (a: DownloadEntry, b: DownloadEntry) =>
 	(a.meta.season ?? 0) - (b.meta.season ?? 0) || (a.meta.episode ?? 0) - (b.meta.episode ?? 0);
 const total = (list: DownloadEntry[]) => list.reduce((n, e) => n + e.size, 0);
 
-function groupsOf(done: DownloadEntry[], w: Words): Group[] {
+function groupsOf(done: DownloadEntry[], w: Words, watch: Watch[]): Group[] {
 	const out: Group[] = [];
 	const movies = done
 		.filter((e) => !isEpisode(e))
@@ -213,7 +221,7 @@ function groupsOf(done: DownloadEntry[], w: Words): Group[] {
 			titleId: 0,
 			firstSeason: null,
 			keys: movies.map((e) => e.key),
-			seasons: [{ label: null, cards: movies.map((e) => card(e, w)) }],
+			seasons: [{ label: null, cards: movies.map((e) => card(e, w, watch)) }],
 		});
 	const shows = new Map<number, [DownloadEntry, ...DownloadEntry[]]>();
 	for (const e of done.filter(isEpisode)) {
@@ -238,7 +246,7 @@ function groupsOf(done: DownloadEntry[], w: Words): Group[] {
 				const eps = list.filter((e) => (e.meta.season ?? 0) === n);
 				return {
 					label: w.season(n, w.episodes(eps.length), gb(total(eps))),
-					cards: eps.map((e) => card(e, w)),
+					cards: eps.map((e) => card(e, w, watch)),
 				};
 			}),
 		});
@@ -247,13 +255,13 @@ function groupsOf(done: DownloadEntry[], w: Words): Group[] {
 }
 
 /** Reads only the entries: a download draws from what was saved with it, never from the library. */
-export function pageView(items: DownloadEntry[], rate: number, w: Words) {
+export function pageView(items: DownloadEntry[], rate: number, w: Words, watch: Watch[] = []) {
 	const done = items.filter((e) => e.state === "done");
 	const active = activeRows(items, rate, w);
 	return {
 		summary: w.summary(done.length, active.length),
 		active,
-		groups: groupsOf(done, w),
+		groups: groupsOf(done, w, watch),
 		empty: items.length === 0,
 	};
 }

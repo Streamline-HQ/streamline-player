@@ -1195,6 +1195,16 @@ components:
               id: { type: string }
         network: { type: string }
         total_seasons: { type: integer }
+        episodes:
+          description: >-
+            In the series list only: the signed-in user's episodes with a file,
+            how many are watched, and how many are watched or under way.
+          type: object
+          required: [total, watched, started]
+          properties:
+            total: { type: integer }
+            watched: { type: integer }
+            started: { type: integer }
         first_aired: { type: string }
         seasons:
           type: array

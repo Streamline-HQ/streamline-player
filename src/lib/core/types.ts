@@ -7,6 +7,7 @@ export type FileSummary = {
 	channels?: string;
 	/** Bytes on disk; a show's is the sum of its episode files. */
 	size?: number;
+	file_count?: number;
 };
 export type Episode = {
 	id: number;
@@ -33,6 +34,8 @@ export type Title = {
 	media_files?: { id: string }[];
 	network?: string;
 	total_seasons?: number;
+	/** The series list's count of the signed-in user's episodes; the seasons, once loaded, are what is current. */
+	episodes?: { total: number; watched: number; started: number };
 	first_aired?: string;
 	seasons?: Season[];
 	/** Principal cast in billing order; on a series, `seasons` says which seasons each appears in. */

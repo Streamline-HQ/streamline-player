@@ -1,4 +1,5 @@
 import type { Kind, Title, Watch } from "#lib/core/types.ts";
+import { watchInfo } from "#lib/core/watch-info.ts";
 
 const DAY_MS = 86_400_000;
 const NEW_DAYS = 7;
@@ -94,15 +95,8 @@ export function topGenre(titles: Title[]): string | null {
 	return ranked[0]?.[0] ?? null;
 }
 
-/** A movie is watched when its row says so; a series when every episode with a file is, which needs its seasons loaded. */
-export function watchedTitle(t: Title, kind: Kind, watch: Watch[]): boolean {
-	if (kind === "movies") return watch.some((w) => w.movie_id === t.id && w.watched);
-	const files = (t.seasons ?? []).flatMap((s) => s.episodes).filter((e) => e.has_file);
-	return (
-		files.length > 0 &&
-		files.every((e) => watch.some((w) => w.media_id === e.media_file_id && w.watched))
-	);
-}
+export const watchedTitle = (t: Title, kind: Kind, watch: Watch[]) =>
+	watchInfo(t, kind, watch).watched;
 
 export function metaLine(t: Title, kind: Kind, f: MetaFormat): string[] {
 	const stars = `★ ${f.rating(t.rating)}`;
