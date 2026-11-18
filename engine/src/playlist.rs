@@ -8,14 +8,17 @@ fn round_micros(t: f64) -> f64 {
     (t * 1e6).round() / 1e6
 }
 
+/// Where each segment starts, on the timeline the segments themselves carry: the file's, counted
+/// from its earliest stream. A copied video that starts after the audio leaves that much of the
+/// first segment without picture, as the file does.
 pub fn boundaries(plan: &Plan, a: &Analysis) -> Vec<f64> {
     match plan.video {
         VideoAction::Copy { .. } if !a.keyframes.is_empty() => {
-            let first = a.keyframes[0];
+            let start = container_start(a).min(a.keyframes[0]);
             let mut out: Vec<f64> = a
                 .keyframes
                 .iter()
-                .map(|k| round_micros(k - first))
+                .map(|k| round_micros(k - start))
                 .collect();
             out[0] = 0.0;
             out
@@ -67,50 +70,49 @@ pub fn landing_pts(a: &Analysis, seek: f64) -> f64 {
     round_micros(key - start)
 }
 
-/// The `-ss` for a run starting at segment `i`. Playlist bounds are relative to
-/// the video's first frame, but ffmpeg seeks on the container timeline, which
-/// starts at its earliest stream. A copy run starts on the keyframe the demuxer
-/// seeks to, so the target makes up for ffmpeg's pull-back and lands on segment
-/// `i`'s keyframe whatever the GOP length: Matroska and MP4 take the last
-/// keyframe at or before the target pts, MPEG-TS the first whose dts is at or
-/// after it.
+/// The `-ss` for a run starting at segment `i`, on the container timeline ffmpeg seeks on, which
+/// starts at the file's earliest stream. A copy run starts on the keyframe the demuxer seeks to,
+/// so the target makes up for ffmpeg's pull-back and lands on segment `i`'s keyframe whatever the
+/// GOP length: Matroska and MP4 take the last keyframe at or before the target pts, MPEG-TS the
+/// first whose dts is at or after it. A transcode's bounds count from the video's first frame.
 pub fn seek_time(plan: &Plan, a: &Analysis, bounds: &[f64], i: u32) -> f64 {
-    let start = bounds[i as usize];
     let container_start = container_start(a);
-    let video_start = match plan.video {
-        VideoAction::Copy { .. } => a.keyframes.first().copied(),
-        VideoAction::Transcode { .. } => a
-            .video
-            .iter()
-            .find(|v| v.index == plan.video_index)
-            .map(|v| v.start_time),
-    };
-    let Some(video_start) = video_start else {
-        return start;
-    };
     let pull_back = if pulls_seek_back(a) {
         DTS_HEURISTIC_SECS
     } else {
         0.0
     };
-    let margin = match plan.video {
-        VideoAction::Copy { .. } if a.container == "ts" => {
-            if let Some(dts) = a.keyframe_dts.get(i as usize) {
+    match plan.video {
+        VideoAction::Transcode { .. } => {
+            let video_start = a
+                .video
+                .iter()
+                .find(|v| v.index == plan.video_index)
+                .map_or(container_start, |v| v.start_time);
+            round_micros(bounds[i as usize] + video_start - container_start)
+        }
+        VideoAction::Copy { .. } => {
+            let Some(key) = a.keyframes.get(i as usize) else {
+                return bounds[i as usize];
+            };
+            let margin = if a.container == "ts"
+                && let Some(dts) = a.keyframe_dts.get(i as usize)
+            {
                 return round_micros(dts - KEYFRAME_SLACK_SECS + pull_back - container_start);
-            }
-            0.0
+            } else if a.container == "ts" {
+                0.0
+            } else if i == 0 {
+                // No keyframe precedes the first, so only the next one bounds the target. Staying
+                // past the audio encoder's priming keeps a transcoded track from starting below
+                // zero, which the muxer would make up for by shifting every stream.
+                let gop = a.keyframes.get(1).map_or(a.duration, |next| next - key);
+                (gop / 2.0).min(AUDIO_PRIMING_SECS)
+            } else {
+                pull_back + KEYFRAME_SLACK_SECS
+            };
+            round_micros(key + margin - container_start)
         }
-        // No keyframe precedes the first, so only the next one bounds the target. Staying past
-        // the audio encoder's priming keeps a transcoded track from starting below zero, which
-        // the muxer would make up for by shifting every stream.
-        VideoAction::Copy { .. } if i == 0 => {
-            let next = bounds.get(1).copied().unwrap_or(a.duration);
-            (next / 2.0).min(AUDIO_PRIMING_SECS)
-        }
-        VideoAction::Copy { .. } => pull_back + KEYFRAME_SLACK_SECS,
-        VideoAction::Transcode { .. } => 0.0,
-    };
-    round_micros(start + margin + video_start - container_start)
+    }
 }
 
 fn pulls_seek_back(a: &Analysis) -> bool {
@@ -393,12 +395,16 @@ mod tests {
 
     #[test]
     fn copy_boundaries_are_keyframes() {
-        let a = Analysis {
-            keyframes: vec![0.042, 2.044, 3.003, 9.0],
-            ..Default::default()
-        };
-        let b = boundaries(&copy(CopyTag::Hvc1, DvHandling::Keep), &a);
-        assert_close(&b, &[0.0, 2.002, 2.961, 8.958]);
+        let mut a = analysis(stream("hevc", "Main", 120, 1920, 1080, 8), "flac");
+        a.keyframes = vec![0.042, 2.044, 3.003, 9.0];
+        let plan = copy(CopyTag::Hvc1, DvHandling::Keep);
+        a.video[0].start_time = 0.042;
+        a.audio[0].start_time = 0.042;
+        assert_close(&boundaries(&plan, &a), &[0.0, 2.002, 2.961, 8.958]);
+        // The audio starts first: the segments keep the file's times, the first is that longer.
+        a.audio[0].start_time = 0.0;
+        assert_close(&boundaries(&plan, &a), &[0.0, 2.044, 3.003, 9.0]);
+        assert_close(&[seek_time(&plan, &a, &boundaries(&plan, &a), 0)], &[0.092]);
     }
 
     #[test]

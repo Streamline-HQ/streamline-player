@@ -555,6 +555,32 @@ async fn remux_restart_with_late_video_matches_in_order() {
 }
 
 #[tokio::test]
+async fn remux_playlist_keeps_the_time_of_a_late_video() {
+    if !have_ffmpeg() {
+        return;
+    }
+    let e = env().await;
+    let src = e.root.join("late.mkv");
+    make_late_video_mkv(&src);
+    let sid = id(24);
+    e.start(&sid, &src, caps_json("h264", "mp4"), json!({}))
+        .await;
+    let bounds = e.bounds(&sid).await;
+    let init = e.hls(&sid, "init.mp4").await;
+    assert_eq!(bounds[0], 0.0);
+    for i in [1, 3] {
+        let pts = first_video_pts(&e, &sid, &init, i).await;
+        assert!(
+            (pts - bounds[i]).abs() < 0.001,
+            "seg_{i}: the playlist says {}, its video starts at {pts}",
+            bounds[i]
+        );
+    }
+    // The video starts half a second after the audio.
+    assert!((first_video_pts(&e, &sid, &init, 0).await - 0.5).abs() < 0.05);
+}
+
+#[tokio::test]
 async fn transcode_restart_with_late_video_matches_in_order() {
     if !have_ffmpeg() {
         return;
