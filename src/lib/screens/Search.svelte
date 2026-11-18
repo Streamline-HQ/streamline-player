@@ -128,7 +128,7 @@ function open(t: Hit) {
 
 onMount(() => {
 	loadLibrary(port, lib.loaded);
-	input?.focus();
+	if (!isTablet()) input?.focus();
 	return () => clearTimeout(timer);
 });
 </script>

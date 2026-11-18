@@ -337,8 +337,10 @@ p {
 	display: flex;
 	flex-direction: column;
 	gap: 6px;
-	width: 140px;
+	width: max-content;
+	min-width: 140px;
 	margin-left: 10px;
+	white-space: nowrap;
 	font: 400 11.5px var(--font-mono);
 	color: var(--player-ink-muted);
 }

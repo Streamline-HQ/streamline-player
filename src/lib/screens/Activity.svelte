@@ -76,7 +76,7 @@ onMount(() => {
 <div
 	class="page"
 	style:padding="{TOP}px {PAD_X}px {BOTTOM}px"
-	style:--max="{MAX_WIDTH + 2 * PAD_X}px"
+	style:--max="{isTablet() ? MAX_WIDTH : MAX_WIDTH + 2 * PAD_X}px"
 >
 	<div class="top">
 		<div class="titles">
