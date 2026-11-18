@@ -641,11 +641,14 @@ async fn cache_clear_needs_the_bearer() {
 }
 
 #[tokio::test]
-async fn cache_reports_what_the_work_dirs_hold() {
+async fn cache_reports_what_the_streams_hold_and_not_the_kept_job_output() {
     let e = env();
     let dir = e.root.join("live").join(id(11));
     std::fs::create_dir_all(&dir).unwrap();
     std::fs::write(dir.join("seg.m4s"), vec![0u8; 500]).unwrap();
+    let kept = e.root.join("jobs").join(id(12));
+    std::fs::create_dir_all(&kept).unwrap();
+    std::fs::write(kept.join("sheet.jpg"), vec![0u8; 9000]).unwrap();
     let (status, v) = e.api("GET", "/v1/cache", None).await;
     assert_eq!(status, StatusCode::OK);
     assert_eq!(v["size"], 500);

@@ -227,9 +227,12 @@ pub async fn clear_cache(State(s): State<AppState>) -> Json<serde_json::Value> {
     Json(serde_json::json!({ "freed": freed }))
 }
 
+/// What the streams hold on disk. The jobs' output is not counted: analyses, subtitles and
+/// trickplay sheets are kept for as long as their file is, so they grow with every scan and
+/// clearing the cache leaves them, which read as a cache that fills by itself and cannot be emptied.
 pub async fn cache_usage(State(s): State<AppState>) -> Json<serde_json::Value> {
-    let dirs = [s.cfg.tmp_dir.clone(), s.cfg.jobs_dir.clone()];
-    let size = tokio::task::spawn_blocking(move || dirs.iter().map(|d| crate::disk::size(d)).sum())
+    let dir = s.cfg.tmp_dir.clone();
+    let size = tokio::task::spawn_blocking(move || crate::disk::size(&dir))
         .await
         .unwrap_or(0_u64);
     Json(serde_json::json!({ "size": size, "streams": s.sessions.list().len() }))
