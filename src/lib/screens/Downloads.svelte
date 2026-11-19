@@ -225,7 +225,7 @@ const phoneGroups = $derived<PhoneGroup[]>(
 						? (pickedKeys.length === 1 ? i18n.dl_selected_one : i18n.dl_selected_other)({
 								count: pickedKeys.length,
 							})
-						: i18n.dl_pick_none()}</span
+						: i18n.dl_pick_what()}</span
 				>
 				{#if pickedKeys.length}
 					<span class="selsize">{pickedSize}</span>

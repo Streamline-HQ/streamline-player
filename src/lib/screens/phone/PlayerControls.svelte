@@ -1227,7 +1227,7 @@ const labels = $derived({
 	transform-origin: 0 0;
 }
 
-.overlay :global(.body),
+.overlay :global(div.body),
 .overlay :global(.zoom) {
 	padding: 0 70px;
 }

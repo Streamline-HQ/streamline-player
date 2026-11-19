@@ -274,13 +274,14 @@ onMount(() => {
 			{:else}
 				<div class="genres" role="tablist" aria-label={i18n.library_genre()}>
 					{#each [
-						{ name: null, label: i18n.library_all() },
-						...genreList.map((g) => ({ name: g.name, label: g.name })),
+						{ name: null, label: i18n.library_all(), none: false },
+						...genreList.map((g) => ({ name: g.name, label: g.name, none: g.count === 0 })),
 					] as g (g.name ?? "")}
 						<button
 							type="button"
 							role="tab"
 							class="genre"
+							class:none={g.none}
 							class:on={view.genre === g.name}
 							aria-selected={view.genre === g.name}
 							onclick={() => set({ genre: g.name })}
@@ -538,6 +539,10 @@ h2 {
 	font-weight: 500;
 	white-space: nowrap;
 	cursor: pointer;
+}
+
+.genre.none {
+	color: var(--fg-faint);
 }
 
 .genre.on {

@@ -1,6 +1,6 @@
 <script lang="ts">
 import { isNew } from "#lib/core/browse.ts";
-import { addedText } from "#lib/core/format.ts";
+import { addedText, railSub } from "#lib/core/format.ts";
 import { lib, loadLibrary } from "#lib/core/library.svelte.ts";
 import {
 	browseRails,
@@ -158,6 +158,7 @@ const railNote = (r: Rail) =>
 												<BackdropCard
 													size="tv"
 													title={t.title}
+													sub={railSub(kind, t)}
 													eyebrow={t === newest
 														? i18n.rail_added_today()
 														: i18n.rail_added({ date: addedText(t.added_at, now) })}
@@ -209,6 +210,7 @@ const railNote = (r: Rail) =>
 								title={t.title}
 								src={rows.real(t.id) ? artwork(kind, t.id, "poster") : undefined}
 								info={rows.real(t.id) ? info(t) : undefined}
+								badge={isNew(t, now) ? i18n.home_new() : undefined}
 								leftLabel={i18n.card_left_label({ count: info(t).left })}
 								tv={{ fid: String(t.id) }}
 								onclick={() => open(t)}

@@ -584,11 +584,7 @@ onMount(() => {
 				{@render fact(i18n.settings_name(), info?.name ?? "—")}
 				{@render fact(i18n.settings_platform(), info?.platform ?? "—")}
 			{/if}
-			{@render fact(
-				i18n.settings_video_player(),
-				info?.player ?? "—",
-				IS_WEB ? undefined : i18n.settings_video_player_desc(),
-			)}
+			{@render fact(i18n.settings_video_player(), info?.player ?? "—")}
 			{#if !IS_WEB}
 				{@render fact(i18n.settings_device_key(), keystore, i18n.settings_device_key_desc())}
 			{/if}

@@ -1298,7 +1298,8 @@ onMount(() => {
 					class="btn-ink"
 					onclick={() => playNext()}
 				>
-					<Play size={15} fill="currentColor" /><span>{i18n.player_play_now()}</span>
+					<Play size={15} fill="currentColor" />
+					<span>{prefs.autoplay ? i18n.player_play_now() : i18n.player_play_next()}</span>
 				</button>
 				<button
 					type="button"
@@ -1477,8 +1478,9 @@ onMount(() => {
 	pointer-events: none;
 	background: linear-gradient(
 		180deg,
-		rgba(0, 0, 0, 0.62) 0%,
-		rgba(0, 0, 0, 0) 22%,
+		rgba(0, 0, 0, 0.8) 0%,
+		rgba(0, 0, 0, 0.55) 10%,
+		rgba(0, 0, 0, 0) 26%,
 		rgba(0, 0, 0, 0) 62%,
 		var(--player-scrim) 100%
 	);

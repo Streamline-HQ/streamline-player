@@ -757,7 +757,7 @@ onMount(() => {
 			{/if}
 			<SettingsRow
 				label={i18n.settings_video_player()}
-				desc={IS_WEB ? undefined : i18n.settings_video_player_desc()}
+				desc={IS_WEB || isTablet() ? undefined : i18n.settings_video_player_desc()}
 			>
 				{#snippet control()}
 					<span class="info">{info?.player ?? "—"}</span>

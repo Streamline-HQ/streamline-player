@@ -70,7 +70,7 @@ const phoneHandlers: Handlers = $derived({ ...h, go: open });
 		<div class="top">
 			<div class="heading"><ScopeMenu here="admin" title={i18n.settings_server()} {host} /></div>
 			<div class="ext">
-				<Mark size={44} />
+				<Mark size={44} radius={12} ring={false} />
 				<span class="who">
 					<span class="name">{i18n.server_phone_extension({ version })}</span>
 					<span class="where">

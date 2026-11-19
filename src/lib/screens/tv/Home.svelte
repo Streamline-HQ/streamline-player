@@ -34,6 +34,7 @@ import { focusDefault } from "#lib/tv/focus.ts";
 import { onMount, tick } from "svelte";
 
 const SCREEN_H = 1080;
+const GENRE_ROW_LIMIT = 12;
 let loaded = $state(!!cached);
 let failed = $state<string | null>(null);
 let rows = $state.raw<Row[]>(cached ?? []);
@@ -193,7 +194,7 @@ async function load() {
 			items: [
 				...movies.filter((t) => t.genres.includes(genre)).map((t) => poster("movies", t, genre)),
 				...shows.filter((t) => t.genres.includes(genre)).map((t) => poster("series", t, genre)),
-			],
+			].slice(0, GENRE_ROW_LIMIT),
 		},
 	].filter((r) => r.items.length);
 }

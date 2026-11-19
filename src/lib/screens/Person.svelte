@@ -26,7 +26,7 @@ import { isTablet } from "#lib/platform/form-factor.svelte.ts";
 const PAD_X = $derived(isTablet() ? 44 : 56);
 const TOP = 80;
 const GLOW = 480;
-const MIN_COL = 148;
+const MIN_COL = $derived(isTablet() ? 140 : 148);
 
 let { id }: { id: string } = $props();
 

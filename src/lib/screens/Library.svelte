@@ -1,7 +1,7 @@
 <script lang="ts">
 import { isTablet } from "#lib/platform/form-factor.svelte.ts";
 import { isNew, years } from "#lib/core/browse.ts";
-import { addedText, badges, sizeText } from "#lib/core/format.ts";
+import { addedText, badges, railSub, sizeText } from "#lib/core/format.ts";
 import { dl } from "#lib/core/downloads.svelte.ts";
 import { lib, loadLibrary, loadSeasons } from "#lib/core/library.svelte.ts";
 import {
@@ -134,15 +134,6 @@ const sub = (t: Title) => {
 		? [q?.resolution, q?.hdr].filter(Boolean).join(" ")
 		: badges(q).slice(0, 2).join(" ");
 	return [t.year, tech].filter(Boolean).join(" · ");
-};
-const runtime = (m: number) =>
-	i18n.common_runtime_hm({ h: Math.floor(m / 60), m: String(m % 60).padStart(2, "0") });
-const railSub = (t: Title) => {
-	if (kind === "series") {
-		const count = t.total_seasons ?? t.seasons?.length ?? 0;
-		return `${years(t)} · ${count === 1 ? i18n.common_seasons_one({ count }) : i18n.common_seasons_other({ count })}`;
-	}
-	return [t.year, t.runtime ? runtime(t.runtime) : ""].filter(Boolean).join(" · ");
 };
 const newest = $derived(
 	base.reduce<Title | null>(
@@ -364,7 +355,7 @@ const heads: { label: () => string; sort: Sort; end?: boolean }[] = [
 									<div class="cell" style:width="320px">
 										<BackdropCard
 											title={t.title}
-											sub={railSub(t)}
+											sub={railSub(kind, t)}
 											eyebrow={eyebrow(t)}
 											backdrop={artwork(kind, t.id, "backdrop")}
 											poster={artwork(kind, t.id, "poster")}
@@ -377,7 +368,7 @@ const heads: { label: () => string; sort: Sort; end?: boolean }[] = [
 									<div class="cell" style:width="168px">
 										<PosterCard
 											title={t.title}
-											sub={railSub(t)}
+											sub={railSub(kind, t)}
 											src={artwork(kind, t.id, "poster")}
 											{...card}
 											badge={undefined}

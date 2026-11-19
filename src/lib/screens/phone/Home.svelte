@@ -309,7 +309,7 @@ onMount(() => {
 				<div class="scrim"></div>
 				<div class="top">
 					<div class="brand">
-						<Mark size={28} />
+						<Mark size={28} ring={false} />
 						<span>streamline</span>
 					</div>
 					<div class="actions">
