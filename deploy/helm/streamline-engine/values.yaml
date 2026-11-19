@@ -59,6 +59,10 @@ gateway:
   parentRefs: [] # [{ name: my-gateway, namespace: gateway-system }]
   hostnames: []
 
+# Where the engine sends its traces and metrics, over OTLP gRPC. Nothing is sent when empty.
+otel:
+  endpoint: "" # e.g. http://alloy.monitoring.svc.cluster.local:4317
+
 # The GPU goes here, under whatever name the device plugin gives it, e.g.
 #   limits: { devic.es/dri: 1 }
 resources: {}

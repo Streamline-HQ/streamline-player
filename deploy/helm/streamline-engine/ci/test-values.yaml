@@ -8,3 +8,4 @@ podSecurityContext: { runAsNonRoot: true, seccompProfile: { type: RuntimeDefault
 live: { sizeLimit: 20Gi }
 jobs: { size: 50Gi, storageClass: local-path }
 nodeSelector: { kubernetes.io/hostname: valinor }
+otel: { endpoint: "http://alloy.monitoring.svc.cluster.local:4317" }

@@ -4,7 +4,7 @@ description: Streamline's streaming engine, which reads the media files and serv
 type: application
 # The chart versions on its own. There is no appVersion: `image.tag` is required,
 # so the chart never picks an engine version for you (as in Streamline's chart).
-version: 0.2.0
+version: 0.3.0
 kubeVersion: ">=1.27.0-0"
 home: https://github.com/Streamline-HQ/streamline-player
 sources:

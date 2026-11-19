@@ -40,6 +40,11 @@ spec:
           ports:
             - name: http
               containerPort: 8097
+          {{- with .Values.otel.endpoint }}
+          env:
+            - name: OTEL_EXPORTER_OTLP_ENDPOINT
+              value: {{ . | quote }}
+          {{- end }}
           # /v1/health wants the secret, so the probes only check the port.
           startupProbe:
             tcpSocket:
