@@ -399,6 +399,7 @@ onMount(() => {
 					<div class="scroller">
 						{#each resume as r (r.mediaId)}
 							{@const t = byKey(r.kind, r.id)}
+							{@const c = t ? titleCard(r.kind, t, now) : undefined}
 							<ResumeCard
 								title={r.title}
 								code={r.code}
@@ -414,6 +415,9 @@ onMount(() => {
 								progress={r.pct}
 								left={left(r.left)}
 								width={248}
+								reset={c?.reset}
+								mark={c?.mark}
+								oninfo={() => open(r.kind, r.id, r.season)}
 								onclick={() => playResume(r)}
 							/>
 						{/each}

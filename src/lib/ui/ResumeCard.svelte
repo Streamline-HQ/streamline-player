@@ -1,6 +1,12 @@
 <script lang="ts">
+import "#lib/ui/card.css";
+import { m as i18n } from "#lib/paraglide/messages.js";
 import Art from "#lib/ui/Art.svelte";
+import { hold } from "#lib/ui/hold.svelte.ts";
 import Icon from "#lib/ui/Icon.svelte";
+import WatchGlyph from "#lib/ui/WatchGlyph.svelte";
+
+type Action = { label: string; onclick: () => void };
 
 let {
 	title,
@@ -11,6 +17,9 @@ let {
 	progress,
 	left,
 	width = 300,
+	reset,
+	mark,
+	oninfo,
 	onclick,
 }: {
 	title: string;
@@ -21,34 +30,102 @@ let {
 	progress: number;
 	left?: string;
 	width?: number;
+	/** Phone: the three below come up over the still after a long press. */
+	reset?: Action;
+	mark?: Action & { on: boolean };
+	oninfo?: () => void;
 	onclick: () => void;
 } = $props();
+
+const has = $derived(!!(reset || mark || oninfo));
+let box = $state<HTMLElement>();
+const h = hold(
+	() => box,
+	() => has,
+);
 </script>
 
-<button type="button" class="resume" style:width="{width}px" {onclick}>
-	<span class="art">
-		<Art src={still} {position} />
-		<span class="shade"></span>
-		<span class="play"><Icon name="play" filled size={14} /></span>
-		{#if left}
-			<span class="left">{left}</span>
-		{/if}
-		<span class="bar"><span style:width="{progress}%"></span></span>
-	</span>
-	<span class="text">
-		<span class="title"
-			>{title}
-			{#if code}
-				<span class="code">{code}</span>
-			{/if}</span
-		>
-		{#if sub}
-			<span class="sub">{sub}</span>
-		{/if}
-	</span>
-</button>
+{#snippet card(open: () => void)}
+	<button type="button" class="resume" style:width="{width}px" onclick={open}>
+		<span class="art">
+			<Art src={still} {position} />
+			<span class="shade"></span>
+			<span class="play"><Icon name="play" filled size={14} /></span>
+			{#if left}
+				<span class="left">{left}</span>
+			{/if}
+			<span class="bar"><span style:width="{progress}%"></span></span>
+		</span>
+		<span class="text">
+			<span class="title"
+				>{title}
+				{#if code}
+					<span class="code">{code}</span>
+				{/if}</span
+			>
+			{#if sub}
+				<span class="sub">{sub}</span>
+			{/if}
+		</span>
+	</button>
+{/snippet}
+
+{#if has}
+	<!-- biome-ignore lint/a11y/useSemanticElements: a <fieldset> brings its own box and legend. -->
+	<div
+		bind:this={box}
+		class="held-box slp-mk--phone slp-resume"
+		role="group"
+		aria-label={title}
+		onpointerdown={h.press}
+		onpointerup={h.release}
+		onpointerleave={h.release}
+		onpointercancel={h.cancel}
+		oncontextmenu={(e) => e.preventDefault()}
+	>
+		{@render card(() => h.tap(onclick))}
+		<span class="slp-hover" class:slp-hover--on={h.held}>
+			{#if reset}
+				<button type="button" class="slp-glass" aria-label={reset.label} onclick={reset.onclick}>
+					<Icon name="rotate-ccw" />
+				</button>
+			{/if}
+			{#if mark}
+				<button
+					type="button"
+					class="slp-glass"
+					class:on={mark.on}
+					aria-label={mark.label}
+					onclick={mark.onclick}
+				>
+					<WatchGlyph on={mark.on} size={18} stroke={1.9} />
+				</button>
+			{/if}
+			{#if oninfo}
+				<button
+					type="button"
+					class="slp-glass"
+					aria-label={i18n.common_more_info()}
+					onclick={oninfo}
+				>
+					<Icon name="info" />
+				</button>
+			{/if}
+		</span>
+	</div>
+{:else}
+	{@render card(onclick)}
+{/if}
 
 <style>
+.held-box {
+	flex: none;
+	scroll-snap-align: start;
+	user-select: none;
+	-webkit-user-select: none;
+	-webkit-touch-callout: none;
+}
+
 .resume {
 	flex: none;
 	display: flex;

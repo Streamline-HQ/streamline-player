@@ -7,6 +7,7 @@ import "#lib/ui/card.css";
 import type { WatchInfo } from "#lib/core/watch-info.ts";
 import Art from "#lib/ui/Art.svelte";
 import DownloadButton from "#lib/ui/DownloadButton.svelte";
+import { hold } from "#lib/ui/hold.svelte.ts";
 import Icon from "#lib/ui/Icon.svelte";
 import Tip from "#lib/ui/Tip.svelte";
 import WatchGlyph from "#lib/ui/WatchGlyph.svelte";
@@ -88,41 +89,11 @@ const open = (e: KeyboardEvent) => {
 };
 
 const has = $derived(!!(onplay || reset || mark || lang));
-const HOLD_MS = 450;
 let box = $state<HTMLElement>();
-let held = $state(false);
-let holdTimer: ReturnType<typeof setTimeout> | undefined;
-// The click that ends the long press must not open the title.
-let swallow = false;
-function press() {
-	clearTimeout(holdTimer);
-	if (held || !has) return;
-	holdTimer = setTimeout(() => {
-		swallow = true;
-		held = true;
-	}, HOLD_MS);
-}
-const release = () => clearTimeout(holdTimer);
-// A press that turns into a scroll ends without a click.
-function cancel() {
-	release();
-	swallow = false;
-}
-function tap() {
-	if (swallow) swallow = false;
-	else if (!held) onclick();
-}
-$effect(() => {
-	if (!held) return;
-	const away = (e: PointerEvent) => {
-		if (box?.contains(e.target as Node)) return;
-		held = false;
-		swallow = false;
-	};
-	document.addEventListener("pointerdown", away, true);
-	return () => document.removeEventListener("pointerdown", away, true);
-});
-$effect(() => release);
+const h = hold(
+	() => box,
+	() => has,
+);
 </script>
 
 <!-- A card's stand-in while a long list mounts: its size, from the same rules, and its title as text the browser's find can match. -->
@@ -255,22 +226,22 @@ $effect(() => release);
 	<div
 		bind:this={box}
 		class="phone slp-mk--phone"
-		class:held
+		class:held={h.held}
 		role="link"
 		tabindex="0"
 		style:width={width ? `${width}px` : undefined}
 		aria-label={title}
-		onclick={tap}
+		onclick={() => h.tap(onclick)}
 		onkeydown={open}
-		onpointerdown={press}
-		onpointerup={release}
-		onpointerleave={release}
-		onpointercancel={cancel}
+		onpointerdown={h.press}
+		onpointerup={h.release}
+		onpointerleave={h.release}
+		onpointercancel={h.cancel}
 		oncontextmenu={(e) => e.preventDefault()}
 	>
 		<span class="slp-art">
 			<Art {src} kind="poster" />
-			{@render controls(held, 16)}
+			{@render controls(h.held, 16)}
 			{@render markers()}
 		</span>
 		<span class="phone-lines">
