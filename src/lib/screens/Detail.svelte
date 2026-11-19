@@ -749,11 +749,7 @@ function setSeason(n: number) {
 }
 
 const heroHeight = $derived(
-	isTablet()
-		? Math.round(innerHeight * 0.78)
-		: !series && castShown.length
-			? Math.max(420, innerHeight - 250)
-			: Math.round(innerHeight * 0.78),
+	!series && castShown.length ? Math.max(420, innerHeight - 250) : Math.round(innerHeight * 0.78),
 );
 </script>
 

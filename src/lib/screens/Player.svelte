@@ -487,7 +487,9 @@ function onKey(e: KeyboardEvent) {
 		stats: () => pb?.setStats(!pb.stats),
 		next: goNext,
 		previous: goPrevious,
-		fullscreen: () => toggleFullscreen(),
+		fullscreen: () => {
+			if (!tablet) toggleFullscreen();
+		},
 		audio: () => openMenu("audio"),
 		quality: () => openMenu("quality"),
 		speed: () => openMenu("speed"),

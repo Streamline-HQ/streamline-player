@@ -653,11 +653,13 @@ onMount(() => {
 					/>
 				{/snippet}
 			</SettingsRow>
-			<SettingsRow label={i18n.settings_shortcuts()}>
-				{#snippet control()}
-					<span class="info">{i18n.settings_shortcuts_value()}</span>
-				{/snippet}
-			</SettingsRow>
+			{#if !isTablet()}
+				<SettingsRow label={i18n.settings_shortcuts()}>
+					{#snippet control()}
+						<span class="info">{i18n.settings_shortcuts_value()}</span>
+					{/snippet}
+				</SettingsRow>
+			{/if}
 		</SettingsList>
 
 		<SettingsList id="language" title={TITLES.language()}>
