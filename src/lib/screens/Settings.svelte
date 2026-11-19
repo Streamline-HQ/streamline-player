@@ -246,9 +246,8 @@ const preview = $derived(
 			: null,
 );
 const cueColor = $derived(
-	prefs.subColor === "Yellow"
-		? "color-mix(in srgb, var(--status-wanted) 40%, var(--fg))"
-		: "var(--fg)",
+	// The cue is drawn over a picture, as in the player: its colours do not follow the theme.
+	prefs.subColor === "Yellow" ? "#fde68a" : "#fff",
 );
 const cueShadow = $derived(
 	prefs.subBg === "Shadow"
@@ -569,7 +568,7 @@ onMount(() => {
 					/>
 				{/snippet}
 			</SettingsRow>
-			<SettingsRow label={i18n.settings_preview()}>
+			<SettingsRow label={i18n.settings_preview()} subtle>
 				{#snippet below()}
 					<div class="preview">
 						{#if preview}
@@ -833,8 +832,10 @@ onMount(() => {
 		<div class="ask">
 			<p>{i18n.settings_sign_out_body()}</p>
 			<div class="ask-actions">
-				<Button variant="ghost" onclick={() => (leaving = null)}>{i18n.settings_cancel()}</Button>
-				<Button variant="danger-outline" onclick={confirmSignOut}
+				<Button variant="secondary" onclick={() => (leaving = null)}
+					>{i18n.settings_cancel()}</Button
+				>
+				<Button variant="destructive" onclick={confirmSignOut}
 					>{i18n.settings_sign_out_value()}</Button
 				>
 			</div>
@@ -1063,7 +1064,7 @@ h1 {
 	height: 150px;
 	border-radius: 12px;
 	overflow: hidden;
-	background: var(--bg-deep);
+	background: #000;
 }
 
 .preview :global(.art) {

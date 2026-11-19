@@ -106,6 +106,9 @@ export type Row =
 			title: string;
 			sub: string;
 			user: string;
+			you: boolean;
+			season?: number;
+			episode?: number;
 			short: string;
 			device: string;
 			where: string;
@@ -217,6 +220,7 @@ export type TextId =
 	| "btn_scan"
 	| "btn_scanning"
 	| "btn_revoke"
+	| "btn_end"
 	| "btn_open"
 	| "btn_make_secret"
 	| "tile_streams"
@@ -233,6 +237,7 @@ export type TextId =
 	| "tile_cache"
 	| "tile_nobody"
 	| "tile_no_requests"
+	| "tile_nothing_kept"
 	| "tile_empty"
 	| "tile_ffmpeg_missing"
 	| "tile_engine_down"
@@ -242,6 +247,8 @@ export type TextId =
 	| "hw_software"
 	| "hw_status_desc"
 	| "kv_version"
+	| "kv_location"
+	| "on_engine"
 	| "kv_status"
 	| "kv_ffmpeg"
 	| "kv_analysis"
@@ -326,6 +333,7 @@ export type Words = {
 	engineBuild(version: string, api: number | undefined): string;
 	analysisVersion(n: number): string;
 	secretSince(date: string): string;
+	pairWaiting(device: string, code: string): string;
 	sumOverview(version: string, secretSet: boolean): string;
 	sumStreams(n: number, video: number, audio: number): string;
 	sumDevices(n: number, waiting: number): string;
@@ -573,6 +581,9 @@ export function sections(
 						? [title.year, w.runtime(title.runtime ?? 0)].join(" · ")
 						: "",
 			user: x.user.you ? w.you(x.user.name) : x.user.name,
+			you: x.user.you,
+			season: x.season,
+			episode: x.episode,
 			short: x.user.name.split(" ")[0] ?? x.user.name,
 			device: x.device.name,
 			where: w.t(x.network === "home" ? "net_home" : "net_remote"),
@@ -650,7 +661,7 @@ export function sections(
 						icon: "monitor-smartphone",
 						label: w.t("tile_pairing"),
 						value: String(d.pairings.length),
-						sub: first ? first.name : w.t("tile_no_requests"),
+						sub: first ? w.pairWaiting(first.name, first.user_code) : w.t("tile_no_requests"),
 						go: "devices",
 						tone: first ? "accent" : "muted",
 					}),
@@ -730,7 +741,7 @@ export function sections(
 									icon: "cpu",
 									label: w.t("tile_cache"),
 									value: d.cacheCleared || cache.size === 0 ? w.t("tile_empty") : size(cache.size),
-									sub: d.cacheCleared ? "" : w.streamCount(cache.streams),
+									sub: d.cacheCleared ? w.t("tile_nothing_kept") : w.streamCount(cache.streams),
 									go: "transcoding",
 									tone: "ok",
 								}),
@@ -859,7 +870,7 @@ export function sections(
 				? []
 				: [
 						{
-							label: w.t("btn_revoke"),
+							label: w.t(browser ? "btn_end" : "btn_revoke"),
 							act: { do: browser ? "end" : "revoke", id: x.id },
 							tone: "danger",
 							disabled: false,
@@ -968,6 +979,7 @@ export function sections(
 				title: w.t("blk_cache"),
 				desc: w.t("blk_cache_desc"),
 				rows: [
+					kv(w.t("kv_location"), w.t("on_engine")),
 					d.cacheCleared
 						? note("ok", w.t("note_cache_cleared"))
 						: cache

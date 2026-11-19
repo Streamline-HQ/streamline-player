@@ -750,7 +750,7 @@
 	"server_tile_engine_down": "Engine unreachable",
 	"server_tile_library": "Library",
 	"server_tile_needs_secret": "Playback is off until the engine has one",
-	"server_tile_no_requests": "No requests waiting",
+	"server_tile_no_requests": "No TV waiting",
 	"server_tile_no_secret": "No secret",
 	"server_tile_nobody": "Nobody is watching",
 	"server_tile_pairing": "Pairing",
@@ -915,7 +915,7 @@
 	"shell_key_seek": "Back or forward 10 s",
 	"shell_key_shows": "Go to shows",
 	"shell_key_stats": "Playback stats",
-	"shell_key_subtitles": "Subtitles on or off",
+	"shell_key_subtitles": "Subtitles",
 	"shell_key_volume": "Volume",
 	"shell_keyboard_shortcuts": "Keyboard shortcuts",
 	"shell_keys_anywhere": "Anywhere",
@@ -1102,5 +1102,10 @@
 	"server_sum_origins_one": "{count} web origin",
 	"server_sum_origins_other": "{count} web origins",
 	"server_sum_networks_one": "{count} home network",
-	"server_sum_networks_other": "{count} home networks"
+	"server_sum_networks_other": "{count} home networks",
+	"server_btn_end": "End",
+	"server_tile_nothing_kept": "Nothing kept",
+	"server_kv_location": "Location",
+	"server_on_engine": "On the engine",
+	"server_tile_pair_code": "{device} · code {code}"
 }

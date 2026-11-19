@@ -588,7 +588,6 @@ h2 {
 }
 
 .head.movies {
-	align-items: baseline;
 	gap: 10px;
 }
 

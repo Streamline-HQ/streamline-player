@@ -750,7 +750,7 @@
 	"server_tile_engine_down": "Moteur injoignable",
 	"server_tile_library": "Bibliothèque",
 	"server_tile_needs_secret": "La lecture est coupée tant que le moteur n’en a pas",
-	"server_tile_no_requests": "Aucune demande en attente",
+	"server_tile_no_requests": "Aucune TV en attente",
 	"server_tile_no_secret": "Pas de secret",
 	"server_tile_nobody": "Personne ne regarde",
 	"server_tile_pairing": "Appairage",
@@ -915,7 +915,7 @@
 	"shell_key_seek": "Reculer ou avancer de 10 s",
 	"shell_key_shows": "Aller aux séries",
 	"shell_key_stats": "Statistiques de lecture",
-	"shell_key_subtitles": "Sous-titres activés ou non",
+	"shell_key_subtitles": "Sous-titres",
 	"shell_key_volume": "Volume",
 	"shell_keyboard_shortcuts": "Raccourcis clavier",
 	"shell_keys_anywhere": "Partout",
@@ -1102,5 +1102,10 @@
 	"server_sum_origins_one": "{count} origine web",
 	"server_sum_origins_other": "{count} origines web",
 	"server_sum_networks_one": "{count} réseau domestique",
-	"server_sum_networks_other": "{count} réseaux domestiques"
+	"server_sum_networks_other": "{count} réseaux domestiques",
+	"server_btn_end": "Terminer",
+	"server_tile_nothing_kept": "Rien de conservé",
+	"server_kv_location": "Emplacement",
+	"server_on_engine": "Sur le moteur",
+	"server_tile_pair_code": "{device} · code {code}"
 }

@@ -56,6 +56,7 @@ const TEXT: Record<TextId, () => string> = {
 	btn_scan: i18n.server_btn_scan,
 	btn_scanning: i18n.server_btn_scanning,
 	btn_revoke: i18n.server_btn_revoke,
+	btn_end: i18n.server_btn_end,
 	btn_open: i18n.server_btn_open,
 	btn_make_secret: i18n.server_btn_make_secret,
 	tile_streams: i18n.server_tile_streams,
@@ -72,6 +73,7 @@ const TEXT: Record<TextId, () => string> = {
 	tile_cache: i18n.server_tile_cache,
 	tile_nobody: i18n.server_tile_nobody,
 	tile_no_requests: i18n.server_tile_no_requests,
+	tile_nothing_kept: i18n.server_tile_nothing_kept,
 	tile_empty: i18n.server_tile_empty,
 	tile_ffmpeg_missing: i18n.server_tile_ffmpeg_missing,
 	tile_engine_down: i18n.server_tile_engine_down,
@@ -81,6 +83,8 @@ const TEXT: Record<TextId, () => string> = {
 	hw_software: i18n.server_hw_software,
 	hw_status_desc: i18n.server_hw_status_desc,
 	kv_version: i18n.server_kv_version,
+	kv_location: i18n.server_kv_location,
+	on_engine: i18n.server_on_engine,
 	kv_status: i18n.server_kv_status,
 	kv_ffmpeg: i18n.server_kv_ffmpeg,
 	kv_analysis: i18n.server_kv_analysis,
@@ -185,6 +189,7 @@ export const serverWords = (): Words => ({
 	desc: (key) => DESCS[key]?.(),
 	choice: (_key, value) => CHOICES[value]?.() ?? value,
 	size: (n, unit) => SIZES[unit]({ n }),
+	pairWaiting: (device, code) => i18n.server_tile_pair_code({ device, code }),
 	sumOverview: (version, secretSet) =>
 		secretSet
 			? i18n.server_sum_overview_ok({ version })
