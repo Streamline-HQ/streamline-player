@@ -479,7 +479,7 @@ function setSeason(n: number) {
 			<button type="button" class="cta" disabled={!primary} onclick={play}>
 				<Icon name="play" filled size={18} />{primaryText}
 			</button>
-			<div class="acts" class:wide={!!seriesDl} style:--n={tiles}>
+			<div class="acts" style:--n={tiles}>
 				{#if !series && resuming}
 					<button type="button" class="tile" onclick={() => goto(playUrl("movies", id))}>
 						<Icon name="skip-back" size={19} stroke={1.75} />{i18n.detail_phone_from_start()}
@@ -593,7 +593,7 @@ function setSeason(n: number) {
 						>
 							<span class="still">
 								<Art src={artwork("series", id, "backdrop")} position={e.pos} />
-								{#if e.isNew && e.state === "unwatched"}
+								{#if e.isNew}
 									<span class="new">{i18n.home_new()}</span>
 								{/if}
 								{#if e.state === "progress"}
@@ -677,7 +677,7 @@ function setSeason(n: number) {
 	ring: number = icon,
 )}
 	{#if look.icon}
-		<Icon name={look.icon} size={icon} stroke={1.8} />
+		<Icon name={look.icon} size={icon} stroke={1.9} />
 	{:else}
 		<span class="ring" style:--p="{look.pct}%" style:--d="{ring}px" style:--h="{hole}px">
 			<span class="hole"></span>
@@ -797,10 +797,6 @@ h1 {
 	gap: 8px;
 }
 
-.acts.wide {
-	grid-template-columns: repeat(var(--n), minmax(0, 1fr)) auto;
-}
-
 .tile {
 	position: relative;
 	display: flex;
@@ -848,6 +844,14 @@ h1 {
 	height: var(--h);
 	border-radius: 50%;
 	background: var(--bg-deep);
+}
+
+.tile .hole {
+	background: var(--bg-base);
+}
+
+.glass .hole {
+	background: #1a1a24;
 }
 
 .overview {
