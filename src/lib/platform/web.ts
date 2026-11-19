@@ -258,7 +258,7 @@ export const watchState = () => call<{ items: Watch[] }>("GET", "/watchstate").t
 export const setWatched = (mediaId: string, watched: boolean) =>
 	call("PUT", `/watchstate/${mediaId}`, { watched });
 
-export const artwork = (kind: Kind, id: number, name: "poster" | "backdrop") =>
+export const artwork = (kind: Kind, id: number, name: "poster" | "poster-w342" | "backdrop") =>
 	`${streamline}/extensions/player/posters/${kind}/${id}/${name}.jpg`;
 export const artworkAt = (path: string) =>
 	`${streamline}/extensions/player/posters/${path.replace(/^\//, "")}`;

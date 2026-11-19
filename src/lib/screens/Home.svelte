@@ -247,6 +247,7 @@ onMount(() => {
 							title={t.title}
 							sub={movieSub(t)}
 							src={artwork("movies", t.id, "poster")}
+							small={artwork("movies", t.id, "poster-w342")}
 							{...titleCard("movies", t, now)}
 							badge={badge(t, "movies")}
 							onclick={() => open("movies", t.id)}
@@ -269,6 +270,7 @@ onMount(() => {
 							title={t.title}
 							sub={showSub(t)}
 							src={artwork("series", t.id, "poster")}
+							small={artwork("series", t.id, "poster-w342")}
 							{...titleCard("series", t, now)}
 							badge={badge(t, "series")}
 							onclick={() => open("series", t.id)}
@@ -290,6 +292,7 @@ onMount(() => {
 							title={t.title}
 							sub={kind === "movies" ? movieSub(t) : showSub(t)}
 							src={artwork(kind, t.id, "poster")}
+							small={artwork(kind, t.id, "poster-w342")}
 							{...titleCard(kind, t, now)}
 							badge={undefined}
 							onclick={() => open(kind, t.id)}

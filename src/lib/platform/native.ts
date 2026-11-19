@@ -129,7 +129,7 @@ function picture(path: string) {
 	}
 	return `${ARTWORK}${path}`;
 }
-export const artwork = (kind: Kind, id: number, name: "poster" | "backdrop") =>
+export const artwork = (kind: Kind, id: number, name: "poster" | "poster-w342" | "backdrop") =>
 	picture(`${kind}/${id}/${name}.jpg`);
 /** A picture by the path a download saved it under, as the `artwork` scheme takes it. */
 export const artworkAt = (path: string) => picture(path.replace(/^\//, ""));

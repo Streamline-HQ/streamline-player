@@ -128,6 +128,9 @@ onMount(() => {
 							text={r.text}
 							at={r.at}
 							poster={r.poster && r.titleKind ? artwork(r.titleKind, r.poster.id, "poster") : null}
+							small={r.poster && r.titleKind
+								? artwork(r.titleKind, r.poster.id, "poster-w342")
+								: undefined}
 							badge={r.badge as IconName | null}
 							badgeTone={r.badgeTone}
 							icon={r.icon as IconName}

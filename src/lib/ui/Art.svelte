@@ -1,14 +1,18 @@
 <script lang="ts">
 import Icon from "#lib/ui/Icon.svelte";
+import { cardSrcset } from "#lib/ui/img.ts";
 
 let {
 	src,
+	small,
 	ratio,
 	kind = "backdrop",
 	position,
 	fallback,
 }: {
 	src?: string;
+	/** A card-sized `src`, see `cardSrcset`. */
+	small?: string;
 	ratio?: string;
 	kind?: "poster" | "backdrop";
 	position?: string;
@@ -17,6 +21,8 @@ let {
 } = $props();
 
 let failed = $state(false);
+// Offline, a downloaded title has only its full poster.
+let smallFailed = $state(false);
 let softReady = $state(false);
 let loaded = $state(false);
 let img = $state<HTMLImageElement>();
@@ -24,6 +30,7 @@ let img = $state<HTMLImageElement>();
 $effect(() => {
 	src;
 	failed = false;
+	smallFailed = false;
 	loaded = false;
 	softReady = false;
 });
@@ -52,6 +59,7 @@ $effect(() => {
 		<img
 			bind:this={img}
 			{src}
+			srcset={smallFailed ? undefined : cardSrcset(small, src)}
 			alt=""
 			draggable="false"
 			loading="lazy"
@@ -59,7 +67,10 @@ $effect(() => {
 			class:loaded
 			style:object-position={position}
 			onload={() => (loaded = true)}
-			onerror={() => (failed = true)}
+			onerror={() => {
+				if (small && !smallFailed) smallFailed = true;
+				else failed = true;
+			}}
 		>
 	{:else if fallback && failed}
 		<img

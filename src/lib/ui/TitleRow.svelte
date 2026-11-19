@@ -8,6 +8,7 @@ import type { WatchInfo } from "#lib/core/watch-info.ts";
 import { m as i18n } from "#lib/paraglide/messages.js";
 import DownloadButton from "#lib/ui/DownloadButton.svelte";
 import Icon from "#lib/ui/Icon.svelte";
+import { cardSrcset, orFull } from "#lib/ui/img.ts";
 import Tip from "#lib/ui/Tip.svelte";
 import WatchGlyph from "#lib/ui/WatchGlyph.svelte";
 import type { ComponentProps } from "svelte";
@@ -17,6 +18,7 @@ type Action = { label: string; onclick: () => void };
 let {
 	title,
 	poster,
+	small,
 	info,
 	leftLabel,
 	year,
@@ -36,6 +38,7 @@ let {
 }: {
 	title: string;
 	poster?: string;
+	small?: string;
 	info: WatchInfo;
 	leftLabel?: string;
 	year: string;
@@ -87,7 +90,13 @@ const line = $derived(
 	<button type="button" class="hit" aria-label={title} {onclick}></button>
 	<span class="thumb slp-art slp-mk--thumb">
 		{#if poster && !broken}
-			<img src={poster} alt="" loading="lazy" onerror={() => (broken = true)}>
+			<img
+				src={poster}
+				srcset={cardSrcset(small, poster)}
+				alt=""
+				loading="lazy"
+				onerror={orFull(() => (broken = true))}
+			>
 		{/if}
 		{#if info.unread}
 			<span class="slp-unread" aria-hidden="true"></span>

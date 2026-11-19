@@ -589,11 +589,15 @@ def person(pid):
 def art(kind, item_id, name):
     items = MOVIES if kind == "movies" else SERIES
     slug = next((i["slug"] for i in items if str(i["id"]) == item_id), None)
+    if not ART_ON["on"] or not slug:
+        return None
+    if name == "poster-w342":
+        # The extension serves the poster itself when it has no card-sized copy.
+        small = os.path.join(args.art, "p", f"{slug}-w342.jpg")
+        return small if os.path.exists(small) else art(kind, item_id, "poster")
     folder = {"poster": "p", "backdrop": "b"}[name]
     path = os.path.join(args.art, folder, f"{slug}.jpg")
-    if not ART_ON["on"]:
-        return None
-    return path if slug and os.path.exists(path) else None
+    return path if os.path.exists(path) else None
 
 
 def note_progress(sid, position):
@@ -1847,7 +1851,7 @@ class Handler(BaseHTTPRequestHandler):
                 return self.reply(404, {"error": {"code": "not_found"}})
             return self.image(PICTURE["data"], PICTURE["type"])
         m = re.fullmatch(
-            r"/extensions/player/posters/(movies|series|people)/([\w-]+)/(poster|backdrop|photo)\.jpg",
+            r"/extensions/player/posters/(movies|series|people)/([\w-]+)/(poster|poster-w342|backdrop|photo)\.jpg",
             self.path,
         )
         if m:

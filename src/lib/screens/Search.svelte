@@ -19,6 +19,7 @@ import LoadFailed from "#lib/screens/LoadFailed.svelte";
 import { titleCard } from "#lib/screens/title-card.svelte.ts";
 import EmptyState from "#lib/ui/EmptyState.svelte";
 import { gridNav } from "#lib/ui/grid-nav.ts";
+import { cardSrcset, orFull } from "#lib/ui/img.ts";
 import Icon from "#lib/ui/Icon.svelte";
 import { goto } from "#lib/ui/nav.ts";
 import PosterCard from "#lib/ui/PosterCard.svelte";
@@ -171,9 +172,13 @@ onMount(() => {
 						<button type="button" class="genre-tile" data-nav onclick={() => ask(g.name, false)}>
 							<img
 								src={artwork(g.cover.kind, g.cover.id, "poster")}
+								srcset={cardSrcset(
+									artwork(g.cover.kind, g.cover.id, "poster-w342"),
+									artwork(g.cover.kind, g.cover.id, "poster"),
+								)}
 								alt=""
 								loading="lazy"
-								onerror={(e) => e.currentTarget.remove()}
+								onerror={orFull((e) => (e.currentTarget as HTMLImageElement).remove())}
 							>
 							<span class="label">
 								<span class="name">{g.name}</span>
@@ -198,8 +203,12 @@ onMount(() => {
 			<button type="button" class="top" data-nav onclick={() => open(top)}>
 				<img
 					src={artwork(top.kind, top.id, "poster")}
+					srcset={cardSrcset(
+						artwork(top.kind, top.id, "poster-w342"),
+						artwork(top.kind, top.id, "poster"),
+					)}
 					alt=""
-					onerror={(e) => e.currentTarget.remove()}
+					onerror={orFull((e) => (e.currentTarget as HTMLImageElement).remove())}
 				>
 				<span class="copy">
 					<span class="eyebrow accent">{i18n.search_top_result({ kind: kindLabel(top) })}</span>
@@ -217,6 +226,7 @@ onMount(() => {
 								title={t.title}
 								sub={sub(t)}
 								src={artwork(t.kind, t.id, "poster")}
+								small={artwork(t.kind, t.id, "poster-w342")}
 								{...titleCard(t.kind, t, now)}
 								badge={undefined}
 								nav

@@ -31,6 +31,7 @@ let {
 	sub,
 	note,
 	src,
+	small,
 	badge,
 	info,
 	leftLabel,
@@ -53,6 +54,7 @@ let {
 	/** A role, between the title and the sub line. */
 	note?: string;
 	src?: string;
+	small?: string;
 	/** "New", or "2 new" for a series' new episodes. */
 	badge?: string;
 	/** The watch markers: bookmark, episode count, resume bar. */
@@ -206,7 +208,7 @@ const h = hold(
 			onfocus={tv?.onfocus}
 			{onclick}
 		>
-			<Art {src} kind="poster" />
+			<Art {src} {small} kind="poster" />
 			{@render markers()}
 		</button>
 		{#if !bare}
@@ -240,7 +242,7 @@ const h = hold(
 		oncontextmenu={(e) => e.preventDefault()}
 	>
 		<span class="slp-art">
-			<Art {src} kind="poster" />
+			<Art {src} {small} kind="poster" />
 			{@render controls(h.held, 16)}
 			{@render markers()}
 		</span>
@@ -267,7 +269,7 @@ const h = hold(
 		onkeydown={open}
 	>
 		<span class="slp-art desk-art">
-			<Art {src} kind="poster" />
+			<Art {src} {small} kind="poster" />
 			{@render controls(false, 20)}
 			{@render markers()}
 		</span>

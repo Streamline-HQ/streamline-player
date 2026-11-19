@@ -996,7 +996,12 @@ const heroHeight = $derived(
 						{#each similar as it (`${it.kind}:${it.id}`)}
 							<button type="button" onclick={() => goto(`/detail/${it.kind}/${it.id}`)}>
 								<span class="poster"
-									><Art src={artwork(it.kind, it.id, "poster")} kind="poster" ratio="2 / 3" /></span
+									><Art
+										src={artwork(it.kind, it.id, "poster")}
+										small={artwork(it.kind, it.id, "poster-w342")}
+										kind="poster"
+										ratio="2 / 3"
+									/></span
 								>
 								<span class="name">{it.title}</span>
 							</button>

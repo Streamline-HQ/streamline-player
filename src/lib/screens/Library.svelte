@@ -343,6 +343,7 @@ const heads: { label: () => string; sort: Sort; end?: boolean }[] = [
 											eyebrow={eyebrow(t)}
 											backdrop={artwork(kind, t.id, "backdrop")}
 											poster={artwork(kind, t.id, "poster")}
+											posterSmall={artwork(kind, t.id, "poster-w342")}
 											info={card.info}
 											leftLabel={card.leftLabel}
 											onclick={() => open(t)}
@@ -354,6 +355,7 @@ const heads: { label: () => string; sort: Sort; end?: boolean }[] = [
 											title={t.title}
 											sub={railSub(kind, t)}
 											src={artwork(kind, t.id, "poster")}
+											small={artwork(kind, t.id, "poster-w342")}
 											{...card}
 											badge={undefined}
 											onclick={() => open(t)}
@@ -372,6 +374,7 @@ const heads: { label: () => string; sort: Sort; end?: boolean }[] = [
 								title={t.title}
 								sub={sub(t)}
 								src={artwork(kind, t.id, "poster")}
+								small={artwork(kind, t.id, "poster-w342")}
 								{...titleCard(kind, t, now)}
 								onclick={() => open(t)}
 							/>
@@ -407,6 +410,7 @@ const heads: { label: () => string; sort: Sort; end?: boolean }[] = [
 								<TitleRow
 									title={t.title}
 									poster={artwork(kind, t.id, "poster")}
+									small={artwork(kind, t.id, "poster-w342")}
 									info={card.info}
 									leftLabel={card.leftLabel}
 									year={kind === "series" ? years(t) : String(t.year)}

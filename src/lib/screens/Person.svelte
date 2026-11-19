@@ -136,6 +136,7 @@ const subOf = (c: Credit) =>
 					note={c.character}
 					sub={subOf(c)}
 					src={artwork(c.kind, c.id, "poster")}
+					small={artwork(c.kind, c.id, "poster-w342")}
 					{...t ? titleCard(c.kind, t, now) : {}}
 					badge={undefined}
 					onclick={() => open(c)}
