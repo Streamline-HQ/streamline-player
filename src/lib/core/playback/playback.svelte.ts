@@ -677,7 +677,7 @@ export class Playback {
 	async #recoverSession() {
 		this.#lastRecovery = Date.now();
 		const at = this.position;
-		await this.#stop();
+		this.#stop();
 		await this.start(at);
 		if (this.session && (!this.halt || this.haltLeaving)) toast(i18n.player_toast_reconnected());
 	}
@@ -705,11 +705,13 @@ export class Playback {
 		if (h.kind === "busy") this.#offerAlternatives();
 	}
 
-	async #stop() {
+	// Never awaited: the engine can take half a minute to tear a session down, and what the viewer
+	// does next must not wait on it. A stop that is lost is swept server-side.
+	#stop() {
 		if (!this.session) return;
 		const id = this.session.session_id;
 		this.session = null;
-		await this.#port.stopSession(id).catch(() => {});
+		this.#port.stopSession(id).catch(() => {});
 	}
 
 	/** The viewer leaves: nothing that is still starting may survive, and the display goes back. */
@@ -723,7 +725,7 @@ export class Playback {
 	async leave() {
 		if (this.session)
 			await this.#port.heartbeat(this.session.session_id, this.position, true).catch(() => {});
-		await this.#stop();
+		this.#stop();
 		this.#cmd("stop").catch(() => {});
 		this.#cmd("subtitle", {}).catch(() => {});
 		this.#cmd("speed", { speed: 1 }).catch(() => {});
