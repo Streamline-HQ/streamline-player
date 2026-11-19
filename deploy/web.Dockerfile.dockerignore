@@ -9,4 +9,5 @@
 !messages/
 !static/
 !src/
+!deploy/web.sws.toml
 src/lib/paraglide/
