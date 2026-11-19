@@ -113,5 +113,11 @@ export function panelWords(playerName: string): Words {
 		backTo: (title) => i18n.player_back_to({ title }),
 		downloadsStillPlay: i18n.halt_downloads_still_play(),
 		watchDownload: i18n.dl_watch(),
+		openServerSettings: i18n.halt_open_server(),
+		scanLibrary: i18n.halt_scan_library(),
+		adminNotes: {
+			missing: i18n.halt_missing_note_admin(),
+			nocodec: i18n.halt_nocodec_note_admin(),
+		},
 	};
 }

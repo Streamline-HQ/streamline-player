@@ -96,6 +96,9 @@ export type Words = {
 	offsetMs(v: number): string;
 	backTo(title: string): string;
 	openServerSettings?: string;
+	/** What an admin can do about a halt, and the notes that say so instead of "ask your admin". */
+	scanLibrary?: string;
+	adminNotes?: { missing: string; nocodec: string };
 	/** Said after the offline halt's body, and the button that goes to the downloads, where the device has any. */
 	downloadsStillPlay?: string;
 	watchDownload?: string;
@@ -401,6 +404,12 @@ export function haltView(h: Halt, ctx: HaltContext, w: Words): HaltViewModel {
 	if (h.retryLabel) actions.push({ id: "retry", label: h.retryLabel, primary: true });
 	if (h.kind === "nocodec" && ctx.isAdmin && ctx.routes.serverSettings && w.openServerSettings)
 		actions.push({ id: "server-settings", label: w.openServerSettings, primary: true });
+	if (h.kind === "missing" && ctx.isAdmin && ctx.routes.serverSettings && w.scanLibrary)
+		actions.push({ id: "scan", label: w.scanLibrary, primary: true });
+	const adminNote =
+		ctx.isAdmin && (h.kind === "missing" || h.kind === "nocodec")
+			? w.adminNotes?.[h.kind]
+			: undefined;
 	const offline = h.kind === "offline" && ctx.canDownload;
 	if (ctx.canDownload && (h.kind === "offline" || h.kind === "unreachable") && w.watchDownload)
 		actions.push({ id: "downloads", label: w.watchDownload });
@@ -414,7 +423,7 @@ export function haltView(h: Halt, ctx: HaltContext, w: Words): HaltViewModel {
 		body:
 			offline && w.downloadsStillPlay ? `${h.body ?? ""} ${w.downloadsStillPlay}`.trim() : h.body,
 		mono: h.mono,
-		note: h.note,
+		note: adminNote ?? h.note,
 		wait: h.wait,
 		message: h.message,
 		countdown:

@@ -32,6 +32,7 @@ import {
 } from "#lib/core/player-panels.ts";
 import { clock, type SeekFlash, seekFlash, segments } from "#lib/core/player-view.ts";
 import { prefs, setPref as savePref } from "#lib/core/prefs.svelte.ts";
+import { toast } from "#lib/core/toast.svelte.ts";
 import { m as i18n } from "#lib/paraglide/messages.js";
 import BufferingSpinner from "#lib/ui/BufferingSpinner.svelte";
 import EndScreen from "#lib/ui/EndScreen.svelte";
@@ -44,7 +45,7 @@ import StatsPanel from "#lib/ui/StatsPanel.svelte";
 import Stepper from "#lib/ui/Stepper.svelte";
 import SubtitleStyle from "#lib/ui/SubtitleStyle.svelte";
 import UpNextCard from "#lib/ui/UpNextCard.svelte";
-import { canDownload, playbackPort } from "#platform";
+import { adminScan, canDownload, playbackPort } from "#platform";
 
 type Tab = "subs" | "audio" | "quality" | "speed";
 type Flash = { ph: "idle" | "in" | "out"; amt: number; rot: number };
@@ -489,7 +490,7 @@ const haltModel = $derived(
 					host: pb.host,
 					position: pb.position,
 					isAdmin: account.me?.role === "Admin",
-					routes: { serverSettings: false },
+					routes: { serverSettings: true },
 					canDownload,
 				},
 				words,
@@ -501,6 +502,14 @@ function haltAction(id: string) {
 	if (id === "retry") pb.retry();
 	else if (id === "back") onexit();
 	else if (id === "downloads") goto("/downloads");
+	else if (id === "server-settings") goto("/admin");
+	else if (id === "scan") {
+		adminScan().then(
+			() => toast(i18n.halt_toast_scan_started()),
+			() => {},
+		);
+		onexit();
+	}
 }
 
 const labels = $derived({

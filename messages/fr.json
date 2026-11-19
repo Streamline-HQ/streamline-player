@@ -1106,5 +1106,10 @@
 	"server_tile_nothing_kept": "Rien de conservé",
 	"server_kv_location": "Emplacement",
 	"server_on_engine": "Sur le moteur",
-	"server_tile_pair_code": "{device} · code {code}"
+	"server_tile_pair_code": "{device} · code {code}",
+	"halt_open_server": "Ouvrir les réglages du serveur",
+	"halt_scan_library": "Analyser la bibliothèque",
+	"halt_missing_note_admin": "S’il a été déplacé, une analyse de la bibliothèque le retrouvera.",
+	"halt_nocodec_note_admin": "Activez la conversion logicielle dans Réglages du serveur → Transcodage (plus lente, elle utilise le processeur), ou lisez-le sur un autre appareil.",
+	"halt_toast_scan_started": "Analyse de la bibliothèque lancée"
 }

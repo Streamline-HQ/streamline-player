@@ -1,22 +1,29 @@
 <script lang="ts">
 import {
+	ArrowLeft,
+	AudioLines,
 	Captions,
 	CaptionsOff,
 	Gauge,
 	Maximize,
 	Minimize,
-	PictureInPicture2,
-	Settings,
-	AudioLines,
-	ArrowLeft,
 	Pause,
+	PictureInPicture2,
 	Play,
 	RotateCcw,
 	RotateCw,
+	Settings,
 } from "@lucide/svelte";
+import { onMount, untrack } from "svelte";
+import { localKey, localLaunch } from "#lib/core/download-launch.ts";
+import { dl } from "#lib/core/downloads.svelte.ts";
+import { episodesOf } from "#lib/core/format.ts";
+import { lib } from "#lib/core/library.svelte.ts";
+import { account } from "#lib/core/me.svelte.ts";
+import { net } from "#lib/core/online.svelte.ts";
 import { rememberedThroughput } from "#lib/core/playback/auto.ts";
+import { localPort } from "#lib/core/playback/local-port.ts";
 import { digits, modeName, resBadge, subInfo } from "#lib/core/playback/names.ts";
-import { fmtOffset, panelWords } from "#lib/core/playback/panel-words.ts";
 import {
 	type Launch,
 	nowPlaying,
@@ -24,11 +31,21 @@ import {
 	setVolume,
 	stop,
 	toFull,
-	toMini,
 	toggleMute,
+	toMini,
 } from "#lib/core/playback/now-playing.svelte.ts";
+import { fmtOffset, panelWords } from "#lib/core/playback/panel-words.ts";
 import { UP_NEXT_SECS } from "#lib/core/playback/playback.svelte.ts";
+import type { PlaybackPort } from "#lib/core/playback/port.ts";
 import { DEFAULT_SIZE_PX, SIZE_PX } from "#lib/core/playback/rules.ts";
+import {
+	audioRows,
+	haltView,
+	qualityRows,
+	speedRows,
+	statsRows,
+	subtitleRows,
+} from "#lib/core/player-panels.ts";
 import {
 	clock,
 	endsAt,
@@ -39,42 +56,14 @@ import {
 	seekFlash,
 	segments,
 } from "#lib/core/player-view.ts";
-import { account } from "#lib/core/me.svelte.ts";
-import {
-	audioRows,
-	haltView,
-	qualityRows,
-	speedRows,
-	statsRows,
-	subtitleRows,
-} from "#lib/core/player-panels.ts";
 import { prefs, setPref as savePref } from "#lib/core/prefs.svelte.ts";
-import { isTablet } from "#lib/platform/form-factor.svelte.ts";
-import PlayerChrome from "#lib/screens/tablet/PlayerChrome.svelte";
+import { toast } from "#lib/core/toast.svelte.ts";
 import type { DownloadEntry, Kind } from "#lib/core/types.ts";
 import { m as i18n } from "#lib/paraglide/messages.js";
 import { getLocale } from "#lib/paraglide/runtime.js";
-import {
-	artwork,
-	artworkAt,
-	canDownload,
-	everything,
-	isFullscreen,
-	localPlayback,
-	noteOffline,
-	playbackPort,
-	setFullscreen,
-	title as fetchTitle,
-	watchState,
-} from "#platform";
-import { localKey, localLaunch } from "#lib/core/download-launch.ts";
-import { dl } from "#lib/core/downloads.svelte.ts";
-import { episodesOf } from "#lib/core/format.ts";
-import { lib } from "#lib/core/library.svelte.ts";
-import { localPort } from "#lib/core/playback/local-port.ts";
-import { net } from "#lib/core/online.svelte.ts";
-import type { PlaybackPort } from "#lib/core/playback/port.ts";
+import { isTablet } from "#lib/platform/form-factor.svelte.ts";
 import { downloadsPort } from "#lib/screens/downloads-port.ts";
+import PlayerChrome from "#lib/screens/tablet/PlayerChrome.svelte";
 import BufferingSpinner from "#lib/ui/BufferingSpinner.svelte";
 import Button from "#lib/ui/Button.svelte";
 import EmptyState from "#lib/ui/EmptyState.svelte";
@@ -92,8 +81,21 @@ import Stepper from "#lib/ui/Stepper.svelte";
 import SubtitleStyle from "#lib/ui/SubtitleStyle.svelte";
 import Tip from "#lib/ui/Tip.svelte";
 import UpNextCard from "#lib/ui/UpNextCard.svelte";
+import {
+	adminScan,
+	artwork,
+	artworkAt,
+	canDownload,
+	everything,
+	title as fetchTitle,
+	isFullscreen,
+	localPlayback,
+	noteOffline,
+	playbackPort,
+	setFullscreen,
+	watchState,
+} from "#platform";
 import { afterNavigate, beforeNavigate } from "$app/navigation";
-import { onMount, untrack } from "svelte";
 
 type Tab = "subs" | "audio" | "quality" | "speed";
 type Phase = "idle" | "in" | "out";
@@ -816,7 +818,7 @@ const haltModel = $derived(
 					host: pb.host,
 					position: pb.position,
 					isAdmin: account.me?.role === "Admin",
-					routes: { serverSettings: false },
+					routes: { serverSettings: true },
 					canDownload,
 				},
 				words,
@@ -827,9 +829,15 @@ const haltModel = $derived(
 function haltAction(id: string) {
 	if (id === "retry") pb?.retry();
 	else if (id === "back") exit();
-	else if (id === "downloads") {
+	else if (id === "downloads" || id === "server-settings") {
 		if (fullscreen) toggleFullscreen(false);
-		goto("/downloads");
+		goto(id === "downloads" ? "/downloads" : "/admin");
+	} else if (id === "scan") {
+		adminScan().then(
+			() => toast(i18n.halt_toast_scan_started()),
+			() => {},
+		);
+		exit();
 	}
 }
 
