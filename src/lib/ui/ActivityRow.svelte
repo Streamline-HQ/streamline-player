@@ -22,7 +22,7 @@ let {
 	at: string;
 	poster: string | null;
 	badge: IconName | null;
-	badgeTone: "accent" | "warning" | "available" | "failed" | null;
+	badgeTone: "accent" | "warning" | "available" | null;
 	icon: IconName;
 	unread: boolean;
 	onclick: () => void;
@@ -32,7 +32,6 @@ const TONES = {
 	accent: "var(--accent)",
 	warning: "var(--status-warning)",
 	available: "var(--status-available)",
-	failed: "var(--status-failed)",
 };
 </script>
 

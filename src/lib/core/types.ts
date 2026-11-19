@@ -136,7 +136,6 @@ export type ActivityKind =
 	| "season"
 	| "movie"
 	| "upgrade"
-	| "removed"
 	| "download"
 	| "device"
 	| "server"
@@ -148,8 +147,6 @@ export type ActivityEvent = {
 	at: string;
 	read: boolean;
 	title?: { kind: Kind; id: number };
-	/** A removed title's name: it may have left the library with its last file. */
-	name?: string;
 	season?: number;
 	/** The numbers added; a download's is the one episode. */
 	episodes?: number[];
