@@ -367,13 +367,6 @@ onMount(() => {
 	padding: 8px 20px 0;
 }
 
-h1 {
-	margin: 0;
-	font-size: 30px;
-	font-weight: 700;
-	letter-spacing: -0.025em;
-}
-
 .count {
 	font: 400 11.5px var(--font-mono);
 	color: var(--fg-subtle);
