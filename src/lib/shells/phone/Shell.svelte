@@ -70,12 +70,14 @@ const ACTIVITY_PORT = { activity, markActivityRead };
 const LIBRARY_PORT = { library, watchState, home, title: fetchTitle };
 const COUNTDOWN_SHIFT = 74;
 const PIP_WIDTH = 220;
+const BAND_FADE_PX = 56;
 
 let { children }: { children: Snippet } = $props();
 
 provideDialogSurface(Sheet);
 
 let content = $state<HTMLElement>();
+let scrolledBy = $state(0);
 provideScroll(() => content);
 
 const scrolls = new Map<string, number>();
@@ -349,9 +351,17 @@ const toastNow = $derived(activeToast());
 		style:--hole-w="{hole?.width ?? 0}px"
 		style:--hole-h="{hole?.height ?? 0}px"
 	>
-		<div class="content" bind:this={content}>
+		<div
+			class="content"
+			bind:this={content}
+			onscroll={() => (scrolledBy = content?.scrollTop ?? 0)}
+		>
 			{@render children()}
 		</div>
+		<div
+			class="statusband"
+			style:opacity={inPlayer ? 0 : Math.min(1, scrolledBy / BAND_FADE_PX)}
+		></div>
 
 		{#if showTabs}
 			<div class="bar">
@@ -570,6 +580,25 @@ const toastNow = $derived(activeToast());
 
 .tabbed .content {
 	padding-bottom: calc(var(--tabs-h) + 28px);
+}
+
+/* The pages run up behind the system status bar. Scrolled, their posters and text would pass
+   behind the clock: this band takes them out. At the top of a page it stays clear, so a hero
+   picture still reaches the edge. */
+.statusband {
+	position: absolute;
+	top: 0;
+	left: 0;
+	right: 0;
+	/* ponytail: the inset is the whole system bar, which leaves air under the clock and the
+	   camera (about 10 of 66 points on a Pixel 10 Pro). A fixed share, tune it per device if
+	   one shows the band cutting into its icons. */
+	height: calc(env(safe-area-inset-top) * 0.85);
+	z-index: 10;
+	pointer-events: none;
+	background: color-mix(in srgb, var(--bg-deep) 92%, transparent);
+	backdrop-filter: blur(16px);
+	-webkit-backdrop-filter: blur(16px);
 }
 
 .bar {
