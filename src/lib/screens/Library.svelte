@@ -1,17 +1,16 @@
 <script lang="ts">
-import { isTablet } from "#lib/platform/form-factor.svelte.ts";
+import { onMount, untrack } from "svelte";
 import { isNew, years } from "#lib/core/browse.ts";
 import { addedText, badges, railSub, sizeText } from "#lib/core/format.ts";
-import { dl } from "#lib/core/downloads.svelte.ts";
 import { lib, loadLibrary, loadSeasons } from "#lib/core/library.svelte.ts";
 import {
 	browseRails,
 	FLAGS,
+	type Flag,
 	genres,
+	type Layout,
 	MENU_SORTS,
 	pickSort,
-	type Flag,
-	type Layout,
 	type Rail,
 	type Sort,
 	setWatch,
@@ -24,10 +23,12 @@ import {
 	WATCH_FLAGS,
 	watchFlag,
 } from "#lib/core/library-view.ts";
-import { loadErrorText } from "#lib/core/load-error.ts";
 import { prefs } from "#lib/core/prefs.svelte.ts";
 import type { Kind, Title } from "#lib/core/types.ts";
 import { m as i18n } from "#lib/paraglide/messages.js";
+import { isTablet } from "#lib/platform/form-factor.svelte.ts";
+import LoadFailed from "#lib/screens/LoadFailed.svelte";
+import { titleCard } from "#lib/screens/title-card.svelte.ts";
 import BackdropCard from "#lib/ui/BackdropCard.svelte";
 import Button from "#lib/ui/Button.svelte";
 import Chip from "#lib/ui/Chip.svelte";
@@ -43,10 +44,8 @@ import Row from "#lib/ui/Row.svelte";
 import SegmentedControl from "#lib/ui/SegmentedControl.svelte";
 import SortMenu from "#lib/ui/SortMenu.svelte";
 import TitleRow, { skeleton as rowSkeleton } from "#lib/ui/TitleRow.svelte";
-import { titleCard } from "#lib/screens/title-card.svelte.ts";
-import { artwork, canDownload, home, library, title, watchState } from "#platform";
+import { artwork, home, library, title, watchState } from "#platform";
 import { page } from "$app/state";
-import { onMount, untrack } from "svelte";
 
 const PAD_X = $derived(isTablet() ? 44 : 56);
 const TOP = 92;
@@ -193,22 +192,7 @@ const heads: { label: () => string; sort: Sort; end?: boolean }[] = [
 
 <div class="library" style:--cols={LIST_COLS}>
 	{#if lib.error !== null}
-		<div class="state">
-			<EmptyState icon="film" title={i18n.home_error_title()} text={loadErrorText(lib.error)}>
-				{#snippet action()}
-					<div class="failed-actions">
-						<Button variant="secondary" onclick={() => loadLibrary(port, true)}>
-							{i18n.halt_try_again()}
-						</Button>
-						{#if canDownload && dl.items.some((e) => e.state === "done")}
-							<Button variant="secondary" onclick={() => goto("/downloads")}>
-								{i18n.dl_watch()}
-							</Button>
-						{/if}
-					</div>
-				{/snippet}
-			</EmptyState>
-		</div>
+		<LoadFailed error={lib.error} retry={() => loadLibrary(port, true)} />
 	{:else if empty}
 		<div class="state">
 			<EmptyState
@@ -462,11 +446,6 @@ const heads: { label: () => string; sort: Sort; end?: boolean }[] = [
 </div>
 
 <style>
-.failed-actions {
-	display: flex;
-	gap: 10px;
-}
-
 .library {
 	position: relative;
 	min-height: 100%;

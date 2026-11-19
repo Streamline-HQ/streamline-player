@@ -11,7 +11,6 @@
 	"activity_empty": "Rien pour l’instant",
 	"activity_episodes_one": "1 épisode",
 	"activity_episodes_other": "{count} épisodes",
-	"activity_error": "Impossible de charger l’activité",
 	"activity_errors_one": "{count} erreur",
 	"activity_errors_other": "{count} erreurs",
 	"activity_filter": "Filtrer l’activité",

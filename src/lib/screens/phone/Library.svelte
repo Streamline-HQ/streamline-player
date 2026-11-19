@@ -1,7 +1,7 @@
 <script lang="ts">
+import { onMount, untrack } from "svelte";
 import { isNew, years } from "#lib/core/browse.ts";
 import { addedText, badges } from "#lib/core/format.ts";
-import { dl } from "#lib/core/downloads.svelte.ts";
 import { lib, loadLibrary, loadSeasons } from "#lib/core/library.svelte.ts";
 import {
 	browseRails,
@@ -16,10 +16,10 @@ import {
 	viewToQuery,
 	visible,
 } from "#lib/core/library-view.ts";
-import { loadErrorText } from "#lib/core/load-error.ts";
 import { prefs } from "#lib/core/prefs.svelte.ts";
 import type { Kind, Title } from "#lib/core/types.ts";
 import { m as i18n } from "#lib/paraglide/messages.js";
+import LoadFailed from "#lib/screens/LoadFailed.svelte";
 import { titleCard } from "#lib/screens/title-card.svelte.ts";
 import BackdropCard from "#lib/ui/BackdropCard.svelte";
 import Button from "#lib/ui/Button.svelte";
@@ -28,9 +28,8 @@ import Icon from "#lib/ui/Icon.svelte";
 import { goto } from "#lib/ui/nav.ts";
 import PosterCard from "#lib/ui/PosterCard.svelte";
 import { progressive } from "#lib/ui/progressive.svelte.ts";
-import { artwork, canDownload, home, library, title, watchState } from "#platform";
+import { artwork, home, library, title, watchState } from "#platform";
 import { page } from "$app/state";
-import { onMount, untrack } from "svelte";
 
 const port = { library, watchState, home, title };
 
@@ -153,22 +152,7 @@ onMount(() => {
 
 <div class="library">
 	{#if lib.error !== null}
-		<div class="state">
-			<EmptyState icon="film" title={i18n.home_error_title()} text={loadErrorText(lib.error)}>
-				{#snippet action()}
-					<div class="failed-actions">
-						<Button variant="secondary" onclick={() => loadLibrary(port, true)}>
-							{i18n.halt_try_again()}
-						</Button>
-						{#if canDownload && dl.items.some((e) => e.state === "done")}
-							<Button variant="secondary" onclick={() => goto("/downloads")}>
-								{i18n.dl_watch()}
-							</Button>
-						{/if}
-					</div>
-				{/snippet}
-			</EmptyState>
-		</div>
+		<LoadFailed error={lib.error} retry={() => loadLibrary(port, true)} />
 	{:else if empty}
 		<div class="state">
 			<EmptyState
@@ -333,11 +317,6 @@ onMount(() => {
 </div>
 
 <style>
-.failed-actions {
-	display: flex;
-	gap: 10px;
-}
-
 .library {
 	position: relative;
 	min-height: 100%;

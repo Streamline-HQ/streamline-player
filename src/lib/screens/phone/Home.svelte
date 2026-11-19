@@ -1,4 +1,5 @@
 <script lang="ts">
+import { onMount, untrack } from "svelte";
 import { loadActivity, unread } from "#lib/core/activity.svelte.ts";
 import { bellLabel } from "#lib/core/activity-view.ts";
 import {
@@ -10,20 +11,19 @@ import {
 	recentCount,
 	recentlyAdded,
 	topGenre,
+	years,
 } from "#lib/core/browse.ts";
-import { dl } from "#lib/core/downloads.svelte.ts";
-import { years } from "#lib/core/browse.ts";
 import { badges, left, runtime, stillPos } from "#lib/core/format.ts";
 import { lib, loadLibrary } from "#lib/core/library.svelte.ts";
-import { loadErrorText } from "#lib/core/load-error.ts";
 import { account } from "#lib/core/me.svelte.ts";
 import { picture, syncPicture } from "#lib/core/picture.svelte.ts";
 import type { Kind, Title } from "#lib/core/types.ts";
 import { m as i18n } from "#lib/paraglide/messages.js";
+import LoadFailed from "#lib/screens/LoadFailed.svelte";
 import { titleCard } from "#lib/screens/title-card.svelte.ts";
-import { activityWords } from "#lib/ui/activity-words.ts";
 import Art from "#lib/ui/Art.svelte";
 import Avatar from "#lib/ui/Avatar.svelte";
+import { activityWords } from "#lib/ui/activity-words.ts";
 import Button from "#lib/ui/Button.svelte";
 import EmptyState from "#lib/ui/EmptyState.svelte";
 import Icon from "#lib/ui/Icon.svelte";
@@ -35,7 +35,6 @@ import { useScroll } from "#lib/ui/scroll.ts";
 import {
 	activity,
 	artwork,
-	canDownload,
 	home,
 	library,
 	markActivityRead,
@@ -43,7 +42,6 @@ import {
 	title,
 	watchState,
 } from "#platform";
-import { onMount, untrack } from "svelte";
 
 type Slide = {
 	key: string;
@@ -278,22 +276,7 @@ onMount(() => {
 
 <div class="home">
 	{#if lib.error !== null}
-		<div class="state">
-			<EmptyState icon="film" title={i18n.home_error_title()} text={loadErrorText(lib.error)}>
-				{#snippet action()}
-					<div class="failed-actions">
-						<Button variant="secondary" onclick={() => loadLibrary(port, true)}>
-							{i18n.halt_try_again()}
-						</Button>
-						{#if canDownload && dl.items.some((e) => e.state === "done")}
-							<Button variant="secondary" onclick={() => goto("/downloads")}>
-								{i18n.dl_watch()}
-							</Button>
-						{/if}
-					</div>
-				{/snippet}
-			</EmptyState>
-		</div>
+		<LoadFailed error={lib.error} retry={() => loadLibrary(port, true)} />
 	{:else if empty}
 		<div class="state">
 			<EmptyState icon="film" title={i18n.home_empty_title()} text={i18n.home_empty_text()} />
@@ -498,11 +481,6 @@ onMount(() => {
 </div>
 
 <style>
-.failed-actions {
-	display: flex;
-	gap: 10px;
-}
-
 .home {
 	position: relative;
 	min-height: 100%;

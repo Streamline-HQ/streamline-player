@@ -1,10 +1,8 @@
 <script lang="ts">
-import { isTablet } from "#lib/platform/form-factor.svelte.ts";
-import { loadErrorText } from "#lib/core/load-error.ts";
-import { lib, loadLibrary } from "#lib/core/library.svelte.ts";
+import { onMount } from "svelte";
 import { stars, years } from "#lib/core/browse.ts";
 import { runtime } from "#lib/core/format.ts";
-import { getLocale } from "#lib/paraglide/runtime.js";
+import { lib, loadLibrary } from "#lib/core/library.svelte.ts";
 import {
 	genreTiles,
 	type Hit,
@@ -15,18 +13,19 @@ import {
 	tagged,
 } from "#lib/core/search-view.ts";
 import { m as i18n } from "#lib/paraglide/messages.js";
-import Button from "#lib/ui/Button.svelte";
+import { getLocale } from "#lib/paraglide/runtime.js";
+import { isTablet } from "#lib/platform/form-factor.svelte.ts";
+import LoadFailed from "#lib/screens/LoadFailed.svelte";
+import { titleCard } from "#lib/screens/title-card.svelte.ts";
 import EmptyState from "#lib/ui/EmptyState.svelte";
+import { gridNav } from "#lib/ui/grid-nav.ts";
 import Icon from "#lib/ui/Icon.svelte";
 import { goto } from "#lib/ui/nav.ts";
-import { gridNav } from "#lib/ui/grid-nav.ts";
 import PosterCard from "#lib/ui/PosterCard.svelte";
-import { titleCard } from "#lib/screens/title-card.svelte.ts";
 import SearchField from "#lib/ui/SearchField.svelte";
 import { artwork, home, library, title, watchState } from "#platform";
 import { afterNavigate } from "$app/navigation";
 import { page } from "$app/state";
-import { onMount } from "svelte";
 
 const PAD_X = $derived(isTablet() ? 44 : 56);
 const TOP = 92;
@@ -150,13 +149,7 @@ onMount(() => {
 	/>
 
 	{#if lib.error !== null}
-		<EmptyState icon="film" title={i18n.home_error_title()} text={loadErrorText(lib.error)}>
-			{#snippet action()}
-				<Button variant="secondary" onclick={() => loadLibrary(port, true)}>
-					{i18n.halt_try_again()}
-				</Button>
-			{/snippet}
-		</EmptyState>
+		<LoadFailed error={lib.error} retry={() => loadLibrary(port, true)} />
 	{:else if empty}
 		<EmptyState icon="film" title={i18n.home_empty_title()} text={i18n.home_empty_text()} />
 	{:else if lib.loaded && !q}

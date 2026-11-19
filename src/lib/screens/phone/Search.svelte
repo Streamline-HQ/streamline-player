@@ -1,9 +1,10 @@
 <script lang="ts">
+import LoadFailed from "#lib/screens/LoadFailed.svelte";
 import "#lib/ui/card.css";
-import { lib, loadLibrary } from "#lib/core/library.svelte.ts";
-import { loadErrorText } from "#lib/core/load-error.ts";
+import { onMount } from "svelte";
 import { stars, years } from "#lib/core/browse.ts";
 import { runtime } from "#lib/core/format.ts";
+import { lib, loadLibrary } from "#lib/core/library.svelte.ts";
 import {
 	genreTiles,
 	type Hit,
@@ -17,14 +18,12 @@ import { watchInfo } from "#lib/core/watch-info.ts";
 import { m as i18n } from "#lib/paraglide/messages.js";
 import { getLocale } from "#lib/paraglide/runtime.js";
 import Art from "#lib/ui/Art.svelte";
-import Button from "#lib/ui/Button.svelte";
 import EmptyState from "#lib/ui/EmptyState.svelte";
 import Icon from "#lib/ui/Icon.svelte";
 import { goto } from "#lib/ui/nav.ts";
 import { artwork, home, library, title, watchState } from "#platform";
 import { afterNavigate } from "$app/navigation";
 import { page } from "$app/state";
-import { onMount } from "svelte";
 
 const GENRE_TILES = 8;
 const TYPE_DELAY_MS = 150;
@@ -136,13 +135,7 @@ onMount(() => {
 	</div>
 
 	{#if lib.error !== null}
-		<EmptyState icon="film" title={i18n.home_error_title()} text={loadErrorText(lib.error)}>
-			{#snippet action()}
-				<Button variant="secondary" onclick={() => loadLibrary(port, true)}>
-					{i18n.halt_try_again()}
-				</Button>
-			{/snippet}
-		</EmptyState>
+		<LoadFailed error={lib.error} retry={() => loadLibrary(port, true)} />
 	{:else if empty}
 		<EmptyState icon="film" title={i18n.home_empty_title()} text={i18n.home_empty_text()} />
 	{:else if lib.loaded && !q}

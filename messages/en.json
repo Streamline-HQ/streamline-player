@@ -11,7 +11,6 @@
 	"activity_empty": "Nothing here yet",
 	"activity_episodes_one": "1 episode",
 	"activity_episodes_other": "{count} episodes",
-	"activity_error": "Couldn’t load activity",
 	"activity_errors_one": "{count} error",
 	"activity_errors_other": "{count} errors",
 	"activity_filter": "Filter activity",

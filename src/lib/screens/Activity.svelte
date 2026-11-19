@@ -1,4 +1,5 @@
 <script lang="ts">
+import LoadFailed from "#lib/screens/LoadFailed.svelte";
 import { feed, loadActivity, markAllRead, markRead } from "#lib/core/activity.svelte.ts";
 import { FILTERS, type Filter, feedView, type RowView } from "#lib/core/activity-view.ts";
 import { lib, loadLibrary } from "#lib/core/library.svelte.ts";
@@ -114,13 +115,7 @@ onMount(() => {
 	</div>
 
 	{#if feed.error !== null && !feed.loaded}
-		<EmptyState icon="bell" title={i18n.activity_error()} text={feed.error}>
-			{#snippet action()}
-				<Button variant="secondary" onclick={() => loadActivity(port, true)}>
-					{i18n.halt_try_again()}
-				</Button>
-			{/snippet}
-		</EmptyState>
+		<LoadFailed error={feed.error} retry={() => loadActivity(port, true)} />
 	{:else}
 		{#each view.groups as g (g.group)}
 			<section>
