@@ -633,6 +633,11 @@ h1 {
 	font-weight: 700;
 	letter-spacing: -0.03em;
 	text-wrap: balance;
+	display: -webkit-box;
+	-webkit-line-clamp: 3;
+	line-clamp: 3;
+	-webkit-box-orient: vertical;
+	overflow: hidden;
 }
 
 .meta {
