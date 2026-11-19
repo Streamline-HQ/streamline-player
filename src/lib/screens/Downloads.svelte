@@ -1,6 +1,6 @@
 <script lang="ts">
 import { ask } from "#lib/core/ask.svelte.ts";
-import { removeKeys } from "#lib/core/download-ask.svelte.ts";
+import { openPopover, removeKeys } from "#lib/core/download-ask.svelte.ts";
 import { dl, retry } from "#lib/core/downloads.svelte.ts";
 import { type Card, type Group, pageView, storageView } from "#lib/core/downloads-view.ts";
 import { localUrl } from "#lib/core/download-launch.ts";
@@ -176,7 +176,8 @@ const phoneGroups = $derived<PhoneGroup[]>(
 		{allPicked}
 		{stillOf}
 		{posOf}
-		oncancel={cancel}
+		oncancel={(key) =>
+			openPopover([key], view.active.find((r) => r.key === key)?.title ?? "", null, false)}
 		onretry={(key) => retry(downloadsPort, key)}
 		onplay={play}
 		onremove={removeOne}

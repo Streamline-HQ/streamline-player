@@ -185,6 +185,46 @@ export const serverWords = (): Words => ({
 	desc: (key) => DESCS[key]?.(),
 	choice: (_key, value) => CHOICES[value]?.() ?? value,
 	size: (n, unit) => SIZES[unit]({ n }),
+	sumOverview: (version, secretSet) =>
+		secretSet
+			? i18n.server_sum_overview_ok({ version })
+			: i18n.server_sum_overview_no_secret({ version }),
+	sumStreams: (count, video, audio) =>
+		count
+			? i18n.server_sum_streams({
+					streams: one(count)
+						? i18n.server_stream_count_one({ count })
+						: i18n.server_stream_count_other({ count }),
+					video,
+					audio,
+				})
+			: i18n.server_sum_streams_none(),
+	sumDevices: (count, waiting) =>
+		(one(count)
+			? i18n.server_sum_devices_one({ count })
+			: i18n.server_sum_devices_other({ count })) +
+		(waiting ? ` · ${i18n.server_sum_waiting({ count: waiting })}` : ""),
+	sumTranscoding: (software, count) =>
+		i18n.server_sum_transcoding({
+			hw: software ? i18n.server_sum_software() : i18n.server_vaapi(),
+			count,
+		}),
+	sumLibrary: (count, day) =>
+		(one(count)
+			? i18n.server_sum_folders_one({ count })
+			: i18n.server_sum_folders_other({ count })) +
+		(day ? ` · ${i18n.server_sum_checked({ day })}` : ""),
+	sumEngine: (version) => i18n.server_sum_engine({ version }),
+	sumAccess: (origins, networks) =>
+		`${
+			one(origins)
+				? i18n.server_sum_origins_one({ count: origins })
+				: i18n.server_sum_origins_other({ count: origins })
+		} · ${
+			one(networks)
+				? i18n.server_sum_networks_one({ count: networks })
+				: i18n.server_sum_networks_other({ count: networks })
+		}`,
 	streamCount: (count) =>
 		one(count)
 			? i18n.server_stream_count_one({ count })

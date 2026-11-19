@@ -128,9 +128,7 @@ const phoneHandlers: Handlers = $derived({ ...h, go: open });
 								<Icon name={it.icon as IconName} size={19} stroke={1.75} />
 								<span class="text">
 									<span class="label">{it.title}</span>
-									{#if it.count !== undefined && !it.badge}
-										<span class="sum">{it.count}</span>
-									{/if}
+									<span class="sum">{it.sum}</span>
 								</span>
 								{#if it.badge}
 									<span class="badge">{it.badge}</span>

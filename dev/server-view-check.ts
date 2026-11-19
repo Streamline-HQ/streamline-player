@@ -171,6 +171,18 @@ const words: Words = {
 	engineBuild: (v, api) => (api === undefined ? v : `${v} · API ${api}`),
 	analysisVersion: (n) => `version ${n}`,
 	secretSince: (date) => `Set ${date}`,
+	sumOverview: (version, ok) => `${version} · ${ok ? "all good" : "no engine secret"}`,
+	sumStreams: (n, video, audio) =>
+		n
+			? `${plural(n, "stream")} · ${video} video · ${audio} audio transcoding`
+			: "Nobody is watching",
+	sumDevices: (n, waiting) =>
+		`${plural(n, "device")} paired${waiting ? ` · ${waiting} waiting` : ""}`,
+	sumTranscoding: (software, n) => `${software ? "Software" : "VAAPI"} · ${n} at once`,
+	sumLibrary: (n, day) => plural(n, "folder") + (day ? ` · checked ${day}` : ""),
+	sumEngine: (version) => `connected · ${version}`,
+	sumAccess: (origins, networks) =>
+		`${plural(origins, "web origin")} · ${plural(networks, "home network")}`,
 	t: (id) => EN[id],
 	label: (k) => LABELS[k] ?? k,
 	desc: (k) => DESCS[k],
@@ -441,6 +453,10 @@ same(
 	["", "Streaming", "Streaming", "Streaming", "Library", "System", "System"],
 );
 eq(section(all, "streams").count, 3);
+eq(
+	all.map((x) => x.sum).join(" | "),
+	"0.1.0 · all good | 3 streams · 1 video · 1 audio transcoding | 3 devices paired · 1 waiting | VAAPI · 2 at once | 2 folders · checked Tue | connected · 0.4.2 | 1 web origin · 2 home networks",
+);
 eq(section(all, "devices").badge, 1);
 eq(section(all, "overview").badge, undefined);
 

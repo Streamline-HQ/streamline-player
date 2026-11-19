@@ -10,7 +10,11 @@ import { canDownload, PLAYER_NAME, serverHost } from "#platform";
 import { onMount } from "svelte";
 
 /** A screen that could not load its data: the player's error screen in its place, retrying by itself. */
-let { error, retry }: { error: string; retry: () => unknown } = $props();
+let {
+	error,
+	retry,
+	title = i18n.home_error_title(),
+}: { error: string; retry: () => unknown; title?: string } = $props();
 
 let halt = $state.raw<Halt | null>(null);
 let timer: ReturnType<typeof setInterval> | undefined;
@@ -39,7 +43,7 @@ const view = $derived.by<HaltViewModel | null>(() => {
 		failed: halt.failed,
 		icon: halt.icon,
 		eyebrow: refused ? i18n.halt_unreachable_eyebrow() : halt.eyebrow,
-		title: refused ? i18n.home_error_title() : halt.title,
+		title: refused ? title : halt.title,
 		body: refused ? i18n.home_error_server() : halt.body,
 		wait: halt.wait,
 		countdown:

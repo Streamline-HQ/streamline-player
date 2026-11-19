@@ -227,6 +227,17 @@ function closeMenu() {
 	menu = null;
 }
 
+// A tap beside an open panel also lands on the control under it, so one tap is enough to pause or leave.
+function catchTap(e: MouseEvent) {
+	const el = e.currentTarget as HTMLElement;
+	el.style.pointerEvents = "none";
+	const under = document.elementFromPoint(e.clientX, e.clientY)?.closest("button");
+	el.style.pointerEvents = "";
+	const was = menu;
+	if (under && !under.classList.contains("surface")) under.click();
+	if (menu === was) closeMenu();
+}
+
 const ratio = (e: PointerEvent) => {
 	const r = (e.currentTarget as HTMLElement).getBoundingClientRect();
 	return Math.max(0, Math.min(1, (e.clientX - r.left) / r.width));
@@ -720,7 +731,7 @@ const labels = $derived({
 			tabindex="-1"
 			aria-label={i18n.player_close()}
 			transition:fade={{ duration: 180 }}
-			onclick={closeMenu}
+			onclick={catchTap}
 		></button>
 		<PlayerMenu
 			sheet

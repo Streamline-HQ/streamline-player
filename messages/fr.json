@@ -1085,5 +1085,22 @@
 	"dl_settings_wifi_only": "Télécharger uniquement en Wi-Fi",
 	"dl_wifi_note_on": "Les téléchargements attendent le Wi-Fi. Modifiez ce choix dans les réglages.",
 	"dl_wifi_note_off": "Les téléchargements utilisent aussi les données mobiles.",
-	"dl_got_of": "{got} sur {total}"
+	"dl_got_of": "{got} sur {total}",
+	"server_sum_overview_ok": "{version} · tout va bien",
+	"server_sum_overview_no_secret": "{version} · pas de secret pour le moteur",
+	"server_sum_streams": "{streams} · {video} vidéo · {audio} audio en transcodage",
+	"server_sum_streams_none": "Personne ne regarde",
+	"server_sum_devices_one": "{count} appareil appairé",
+	"server_sum_devices_other": "{count} appareils appairés",
+	"server_sum_waiting": "{count} en attente",
+	"server_sum_transcoding": "{hw} · {count} à la fois",
+	"server_sum_software": "Logiciel",
+	"server_sum_folders_one": "{count} dossier",
+	"server_sum_folders_other": "{count} dossiers",
+	"server_sum_checked": "vérifié {day}",
+	"server_sum_engine": "connecté · {version}",
+	"server_sum_origins_one": "{count} origine web",
+	"server_sum_origins_other": "{count} origines web",
+	"server_sum_networks_one": "{count} réseau domestique",
+	"server_sum_networks_other": "{count} réseaux domestiques"
 }

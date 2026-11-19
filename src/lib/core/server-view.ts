@@ -144,6 +144,8 @@ export type Section = {
 	title: string;
 	icon: string;
 	intro: string;
+	/** One line under the section's name where the sections are a list (phone). */
+	sum: string;
 	count?: number;
 	badge?: number;
 	blocks: Block[];
@@ -324,6 +326,14 @@ export type Words = {
 	engineBuild(version: string, api: number | undefined): string;
 	analysisVersion(n: number): string;
 	secretSince(date: string): string;
+	sumOverview(version: string, secretSet: boolean): string;
+	sumStreams(n: number, video: number, audio: number): string;
+	sumDevices(n: number, waiting: number): string;
+	sumTranscoding(software: boolean, atOnce: number): string;
+	/** `day` is null while no scan has run yet. */
+	sumLibrary(folders: number, day: string | null): string;
+	sumEngine(version: string): string;
+	sumAccess(origins: number, networks: number): string;
 };
 
 type Find = (kind: Kind, id: number) => Title | undefined;
@@ -422,6 +432,10 @@ export function sections(
 	const s = d.settings;
 	const v = (key: string) => s.values[key];
 	const hwOff = v("transcoding.hw_accel") === "none";
+	const listLen = (key: string) => {
+		const x = v(key);
+		return Array.isArray(x) ? x.length : 0;
+	};
 	const pending = s.pending;
 	const restartOn = pending.length > 0;
 	const restartable = canRestart(s);
@@ -733,6 +747,7 @@ export function sections(
 		title: w.t("sec_overview"),
 		icon: "server",
 		intro: w.t("sec_overview_intro"),
+		sum: w.sumOverview(o.extension.version, secretSet),
 		blocks: [
 			tilesNow,
 			...(restartOn ? [block({ rows: restartNote })] : []),
@@ -807,6 +822,7 @@ export function sections(
 		title: w.t("sec_streams"),
 		icon: "circle-play",
 		intro: w.t("sec_streams_intro"),
+		sum: w.sumStreams(d.streams.length, nVideo, nAudio),
 		count: d.streams.length,
 		blocks: [
 			block({
@@ -862,6 +878,7 @@ export function sections(
 		title: w.t("sec_devices"),
 		icon: "monitor-smartphone",
 		intro: w.t("sec_devices_intro"),
+		sum: w.sumDevices(apps.length, d.pairings.length),
 		count: apps.length,
 		...(d.pairings.length ? { badge: d.pairings.length } : {}),
 		blocks: [
@@ -915,6 +932,7 @@ export function sections(
 		title: w.t("sec_transcoding"),
 		icon: "cpu",
 		intro: w.t("sec_transcoding_intro"),
+		sum: w.sumTranscoding(hwOff, Number(v("stream.max_live") ?? 0)),
 		blocks: [
 			block({
 				title: w.t("blk_hw"),
@@ -1023,6 +1041,10 @@ export function sections(
 		title: w.t("sec_library"),
 		icon: "folder",
 		intro: w.t("sec_library_intro"),
+		sum: w.sumLibrary(
+			libFolders.length,
+			last ? new Date(last.at).toLocaleDateString(lang, { weekday: "short" }) : null,
+		),
 		blocks: [
 			block({
 				title: w.t("blk_folders"),
@@ -1082,6 +1104,11 @@ export function sections(
 		title: w.t("sec_engine"),
 		icon: "layers",
 		intro: w.t("sec_engine_intro"),
+		sum: !secretSet
+			? w.t("tile_waiting_secret")
+			: engineUp
+				? w.sumEngine(o.engine.version ?? "—")
+				: w.t("tile_engine_down"),
 		blocks: [
 			block({
 				title: w.t("blk_connection"),
@@ -1117,6 +1144,7 @@ export function sections(
 		title: w.t("sec_access"),
 		icon: "globe",
 		intro: w.t("sec_access_intro"),
+		sum: w.sumAccess(listLen("player.origins"), listLen("network.home")),
 		blocks: [
 			block({
 				title: w.t("blk_web"),

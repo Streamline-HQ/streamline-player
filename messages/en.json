@@ -1085,5 +1085,22 @@
 	"dl_settings_wifi_only": "Download on Wi-Fi only",
 	"dl_wifi_note_on": "Downloads wait for Wi-Fi. Change this in Settings.",
 	"dl_wifi_note_off": "Downloads also run on cellular data.",
-	"dl_got_of": "{got} of {total}"
+	"dl_got_of": "{got} of {total}",
+	"server_sum_overview_ok": "{version} · all good",
+	"server_sum_overview_no_secret": "{version} · no engine secret",
+	"server_sum_streams": "{streams} · {video} video · {audio} audio transcoding",
+	"server_sum_streams_none": "Nobody is watching",
+	"server_sum_devices_one": "{count} device paired",
+	"server_sum_devices_other": "{count} devices paired",
+	"server_sum_waiting": "{count} waiting",
+	"server_sum_transcoding": "{hw} · {count} at once",
+	"server_sum_software": "Software",
+	"server_sum_folders_one": "{count} folder",
+	"server_sum_folders_other": "{count} folders",
+	"server_sum_checked": "checked {day}",
+	"server_sum_engine": "connected · {version}",
+	"server_sum_origins_one": "{count} web origin",
+	"server_sum_origins_other": "{count} web origins",
+	"server_sum_networks_one": "{count} home network",
+	"server_sum_networks_other": "{count} home networks"
 }
