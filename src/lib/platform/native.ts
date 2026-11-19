@@ -238,6 +238,10 @@ export const reachable = () => invoke<boolean>("reachable");
 export const canMeter: boolean = /Android/.test(navigator.userAgent);
 const metered = () => (canMeter ? invoke<boolean>("metered") : Promise.resolve(false));
 
+// A page that reloads forgets what was playing, and the native player outlives the page: its
+// sound would go on with nothing on screen to stop it.
+invoke("plugin:player|stop").catch(() => {});
+
 export const playbackPort: PlaybackPort = {
 	playerName: PLAYER_NAME,
 	command: (cmd, args) => invoke(`plugin:player|${cmd}`, args),
