@@ -94,6 +94,8 @@ onMount(() => {
 	font-size: 14px;
 	line-height: 1.5;
 	-webkit-font-smoothing: antialiased;
+	/* Android's webview otherwise flashes a blue box over whatever is tapped. */
+	-webkit-tap-highlight-color: transparent;
 }
 
 :global(button) {
