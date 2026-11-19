@@ -455,7 +455,8 @@ function openMore(href: string) {
 }
 
 function onKey(e: KeyboardEvent) {
-	if (!pb) return;
+	// A tablet has no keyboard shortcuts; Escape stays, as it closes things everywhere else.
+	if (!pb || (tablet && e.key !== "Escape")) return;
 	const act = keyFor(
 		{
 			key: e.key,
@@ -487,9 +488,7 @@ function onKey(e: KeyboardEvent) {
 		stats: () => pb?.setStats(!pb.stats),
 		next: goNext,
 		previous: goPrevious,
-		fullscreen: () => {
-			if (!tablet) toggleFullscreen();
-		},
+		fullscreen: () => toggleFullscreen(),
 		audio: () => openMenu("audio"),
 		quality: () => openMenu("quality"),
 		speed: () => openMenu("speed"),
@@ -839,7 +838,7 @@ $effect(() => {
 });
 
 const menuButtons = $derived.by(() => {
-	const label = (name: string, key?: string) => ({ label: name, key });
+	const label = (name: string, key?: string) => ({ label: name, key: tablet ? undefined : key });
 	return [
 		{
 			id: "subtitles",
