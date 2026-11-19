@@ -351,7 +351,8 @@ export class Playback {
 		else this.nudgeAudio(0);
 	}
 
-	#mobileLimit: number | null = null;
+	/** The cellular cap in Mbit/s while this stream runs on mobile data, else null. */
+	mobileLimit = $state<number | null>(null);
 
 	#currentCap() {
 		if (typeof this.quality === "number") return this.quality;
@@ -637,7 +638,7 @@ export class Playback {
 			// ponytail: read when a stream starts; a watcher on the connection if leaving Wi-Fi
 			// mid-film must lower the stream at once.
 			const limit = parseInt(prefs.cellular, 10);
-			this.#mobileLimit =
+			this.mobileLimit =
 				Number.isFinite(limit) && (await this.#port.metered().catch(() => false)) ? limit : null;
 			if (id !== this.#startId) return;
 			this.autoPick = capped(
@@ -648,7 +649,7 @@ export class Playback {
 							this.originalPlays,
 						)
 					: this.autoPick,
-				this.#mobileLimit,
+				this.mobileLimit,
 			);
 			const asked = this.#sessionTracks();
 			const started = await this.#port.startSession(this.#item.mediaId, capabilities, at, asked);
@@ -863,7 +864,7 @@ export class Playback {
 	#considerStepUp() {
 		const target = capped(
 			autoCap(this.measured, this.preview && this.preview.bitRate / MBIT, this.originalPlays),
-			this.#mobileLimit,
+			this.mobileLimit,
 		);
 		const session = this.session;
 		const steady =

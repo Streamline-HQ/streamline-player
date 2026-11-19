@@ -1111,5 +1111,7 @@
 	"halt_scan_library": "Scan the library",
 	"halt_missing_note_admin": "If it was moved, a library scan finds it again.",
 	"halt_nocodec_note_admin": "Turn on software conversion in Server settings → Transcoding (slower, it uses the CPU), or play it on another device.",
-	"halt_toast_scan_started": "Library scan started"
+	"halt_toast_scan_started": "Library scan started",
+	"player_auto_capped_cellular": "capped on cellular",
+	"player_stat_away": "away from home"
 }

@@ -78,6 +78,8 @@ export type Words = {
 	autoNow(quality: string, why: string): string;
 	autoNowOnly(quality: string): string;
 	autoBasedOnConnection: string;
+	autoCappedOnCellular?: string;
+	awayFromHome?: string;
 	autoConnectionAllows: string;
 	originalFile: string;
 	nothingConverted: string;
@@ -171,6 +173,7 @@ export type QualityInput = {
 	originalPlays: boolean;
 	preview: Preview | null;
 	tracks: Tracks | null;
+	mobileLimit?: number | null;
 };
 
 export const PRESET_RATES = [20, 8, 4, 2, 1];
@@ -183,7 +186,9 @@ export function qualityRows(q: QualityInput, w: Words): Row[] {
 	const why =
 		original && !original.error && !q.originalPlays
 			? (original.video_reasons[0]?.text ?? "")
-			: w.autoBasedOnConnection;
+			: q.autoPick && q.autoPick === q.mobileLimit && w.autoCappedOnCellular
+				? w.autoCappedOnCellular
+				: w.autoBasedOnConnection;
 	let autoSub: string;
 	if (q.autoPick) autoSub = w.autoNow(w.mbit(q.autoPick), why);
 	else if (!original || original.error || q.originalPlays)
@@ -270,6 +275,7 @@ export type StatsInput = {
 	measured: number | null;
 	/** What this network last measured, when nothing was measured in this playback. */
 	throughput: number | null;
+	away?: boolean;
 	host: string;
 	playerName: string;
 	full: boolean;
@@ -359,7 +365,12 @@ export function statsRows(s: StatsInput, w: Words): StatRow[] {
 		rows.push(
 			{
 				label: L.throughput,
-				value: speed === null ? w.measuring : w.rate(speed),
+				value:
+					speed === null
+						? w.measuring
+						: s.away && w.awayFromHome
+							? `${w.rate(speed)} · ${w.awayFromHome}`
+							: w.rate(speed),
 				color: speed !== null && speed < SLOW_THROUGHPUT ? "var(--status-warning)" : undefined,
 			},
 			{ label: L.buffer, value: w.bufferAhead(w.digits(live.buffer, 1)) },

@@ -1111,5 +1111,7 @@
 	"halt_scan_library": "Analyser la bibliothèque",
 	"halt_missing_note_admin": "S’il a été déplacé, une analyse de la bibliothèque le retrouvera.",
 	"halt_nocodec_note_admin": "Activez la conversion logicielle dans Réglages du serveur → Transcodage (plus lente, elle utilise le processeur), ou lisez-le sur un autre appareil.",
-	"halt_toast_scan_started": "Analyse de la bibliothèque lancée"
+	"halt_toast_scan_started": "Analyse de la bibliothèque lancée",
+	"player_auto_capped_cellular": "plafonné en cellulaire",
+	"player_stat_away": "hors de la maison"
 }

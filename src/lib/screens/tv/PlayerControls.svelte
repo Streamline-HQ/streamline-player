@@ -387,7 +387,9 @@ const autoSub = $derived.by(() => {
 	const why =
 		d && !d.error && !pb.originalPlays
 			? (d.video_reasons[0]?.text ?? "")
-			: i18n.player_auto_based_on_connection();
+			: pb.autoPick && pb.autoPick === pb.mobileLimit
+				? i18n.player_auto_capped_cellular()
+				: i18n.player_auto_based_on_connection();
 	if (pb.autoPick)
 		return i18n.player_auto_now({ quality: i18n.player_mbit({ value: pb.autoPick }), why });
 	if (!d || d.error || pb.originalPlays)
@@ -502,7 +504,12 @@ const statRows = $derived.by(() => {
 		rows.push(
 			{
 				k: i18n.player_stat_throughput(),
-				v: speed === null ? i18n.player_measuring() : mbit(speed),
+				v:
+					speed === null
+						? i18n.player_measuring()
+						: pb.network === "away"
+							? `${mbit(speed)} · ${i18n.player_stat_away()}`
+							: mbit(speed),
 				c: speed !== null && speed < SLOW_THROUGHPUT ? "var(--status-warning)" : undefined,
 			},
 			{

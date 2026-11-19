@@ -94,6 +94,8 @@ export function panelWords(playerName: string): Words {
 		autoNow: (quality, why) => i18n.player_auto_now({ quality, why }),
 		autoNowOnly: (quality) => i18n.player_auto_now_only({ quality }),
 		autoBasedOnConnection: i18n.player_auto_based_on_connection(),
+		autoCappedOnCellular: i18n.player_auto_capped_cellular(),
+		awayFromHome: i18n.player_stat_away(),
 		autoConnectionAllows: i18n.player_auto_connection_allows(),
 		originalFile: i18n.player_stat_original_file(),
 		nothingConverted: i18n.player_stat_nothing_converted(),
