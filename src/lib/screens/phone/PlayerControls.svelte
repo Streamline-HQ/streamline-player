@@ -11,14 +11,15 @@ import {
 	Settings,
 	SkipForward,
 } from "@lucide/svelte";
+import { onMount } from "svelte";
+import { fade } from "svelte/transition";
+import { account } from "#lib/core/me.svelte.ts";
 import { rememberedThroughput } from "#lib/core/playback/auto.ts";
-import { digits, modeName, resBadge, subInfo } from "#lib/core/playback/names.ts";
-import { fmtOffset, panelWords } from "#lib/core/playback/panel-words.ts";
+import { modeName, resBadge, subInfo } from "#lib/core/playback/names.ts";
 import type { Launch } from "#lib/core/playback/now-playing.svelte.ts";
+import { fmtOffset, panelWords } from "#lib/core/playback/panel-words.ts";
 import { type Playback, UP_NEXT_SECS } from "#lib/core/playback/playback.svelte.ts";
 import { DEFAULT_SIZE_PX, SIZE_PX } from "#lib/core/playback/rules.ts";
-import { account } from "#lib/core/me.svelte.ts";
-import { clock, type SeekFlash, seekFlash, segments } from "#lib/core/player-view.ts";
 import {
 	audioRows,
 	haltView,
@@ -27,6 +28,7 @@ import {
 	statsRows,
 	subtitleRows,
 } from "#lib/core/player-panels.ts";
+import { clock, type SeekFlash, seekFlash, segments } from "#lib/core/player-view.ts";
 import { prefs, setPref as savePref } from "#lib/core/prefs.svelte.ts";
 import { m as i18n } from "#lib/paraglide/messages.js";
 import BufferingSpinner from "#lib/ui/BufferingSpinner.svelte";
@@ -41,8 +43,6 @@ import Stepper from "#lib/ui/Stepper.svelte";
 import SubtitleStyle from "#lib/ui/SubtitleStyle.svelte";
 import UpNextCard from "#lib/ui/UpNextCard.svelte";
 import { canDownload, playbackPort } from "#platform";
-import { onMount } from "svelte";
-import { fade } from "svelte/transition";
 
 type Tab = "subs" | "audio" | "quality" | "speed";
 type Flash = { ph: "idle" | "in" | "out"; amt: number; rot: number };
@@ -250,8 +250,10 @@ const modeLabel = $derived.by(() => {
 	if (!s) return "";
 	const { width, height, hdr, dv_profile } = s.video;
 	const size = resBadge(width, height);
-	if (prefs.techDetails)
-		return `${modeName(s.mode)} · ${s.video.action === "copy" ? size : i18n.player_mbit({ value: digits(s.bandwidth / 1_000_000, 1) })}`;
+	if (prefs.techDetails) {
+		const range = dv_profile !== undefined ? " DV" : hdr === "sdr" ? "" : " HDR";
+		return `${size}${range} · ${modeName(s.mode).toLowerCase()}`;
+	}
 	const range = dv_profile !== undefined ? " · Dolby Vision" : hdr === "sdr" ? "" : " · HDR";
 	return `${size}${range}`;
 });

@@ -33,7 +33,7 @@ const BOTTOM = 32;
 
 const words = $derived(downloadWords());
 const view = $derived(pageView(dl.items, dl.rate, words, lib.watch));
-const meter = $derived(dl.storage ? storageView(dl.storage, words) : null);
+const meter = $derived(dl.storage ? storageView(dl.storage, words, isPhone()) : null);
 const byKey = (key: string) => dl.items.find((e) => e.key === key);
 
 const stillOf = (key: string) => artworkAt(byKey(key)?.meta.still ?? "");
