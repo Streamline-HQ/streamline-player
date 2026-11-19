@@ -25,6 +25,7 @@ import BackdropCard from "#lib/ui/BackdropCard.svelte";
 import Button from "#lib/ui/Button.svelte";
 import EmptyState from "#lib/ui/EmptyState.svelte";
 import Icon from "#lib/ui/Icon.svelte";
+import TitleMenu from "#lib/shells/phone/TitleMenu.svelte";
 import { goto } from "#lib/ui/nav.ts";
 import PosterCard from "#lib/ui/PosterCard.svelte";
 import { progressive } from "#lib/ui/progressive.svelte.ts";
@@ -166,7 +167,27 @@ onMount(() => {
 	{:else if lib.loaded}
 		<div class="page">
 			<div class="heading">
-				<h1>{kind === "series" ? i18n.nav_shows() : i18n.nav_movies()}</h1>
+				<TitleMenu
+					here={kind}
+					title={kind === "series" ? i18n.nav_shows() : i18n.nav_movies()}
+					label={i18n.nav_library()}
+					width={260}
+					items={[
+						{
+							key: "movies",
+							icon: "film",
+							label: i18n.nav_movies(),
+							sub: i18n.library_total_movies({ count: lib.movies.length }),
+						},
+						{
+							key: "series",
+							icon: "tv-minimal",
+							label: i18n.nav_shows(),
+							sub: i18n.library_total_shows({ count: lib.shows.length }),
+						},
+					]}
+					onpick={(k) => goto(`/library/${k}`)}
+				/>
 				<span class="count"
 					>{#if isAll}
 						{kind === "movies"
