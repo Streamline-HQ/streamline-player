@@ -55,10 +55,11 @@ import {
 } from "#lib/core/playback/choice.ts";
 import {
 	audioName,
-	codecName,
 	audioOutName,
+	codecName,
 	fileMbit,
 	languageLabel,
+	modeName,
 	subInfo,
 } from "#lib/core/playback/names.ts";
 import type { Tracks } from "#lib/core/playback/port.ts";
@@ -207,6 +208,8 @@ const PLAIN = $derived({
 	audio_transcode: i18n.detail_audio_converted(),
 	transcode: i18n.detail_converted(),
 });
+/** The technical name of the mode for a viewer who asked for the details, the plain sentence otherwise. */
+const playsAs = (mode: keyof typeof PLAIN) => (prefs.techDetails ? modeName(mode) : PLAIN[mode]);
 
 // Failing to know how it will play must not get in the way of the page.
 $effect(() => {
@@ -850,7 +853,7 @@ const heroHeight = $derived(
 				{#if decided}
 					<div class="status">
 						<span class="dot" class:copy={full}></span>
-						<span class="plain">{PLAIN[decided.mode]}</span>
+						<span class="plain">{playsAs(decided.mode)}</span>
 						<span class="detail-note">{statusDetail}</span>
 					</div>
 				{/if}
@@ -923,7 +926,7 @@ const heroHeight = $derived(
 				summary={techSummary}
 				open={techOpen ?? prefs.techDetails}
 				status={{
-					label: decided ? PLAIN[decided.mode] : "",
+					label: decided ? playsAs(decided.mode) : "",
 					where: device ? i18n.detail_on_device({ device }) : "",
 					copy: !!full,
 				}}

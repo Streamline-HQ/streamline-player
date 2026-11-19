@@ -220,8 +220,8 @@ onMount(() => {
 					note={i18n.home_count_in_progress({ count: resume.length })}
 					padX={PAD_X}
 					arrows={!isTablet()}
-					prevLabel={i18n.home_scroll_left()}
-					nextLabel={i18n.home_scroll_right()}
+					prevLabel={i18n.row_scroll_left({ title: i18n.home_continue_watching() })}
+					nextLabel={i18n.row_scroll_right({ title: i18n.home_continue_watching() })}
 				>
 					{#each resume as r (r.mediaId)}
 						{@const t = byKey(r.kind, r.id)}
@@ -250,8 +250,8 @@ onMount(() => {
 					note={i18n.home_count_month({ count: recentCount(recentMovies, now) })}
 					padX={PAD_X}
 					arrows={!isTablet()}
-					prevLabel={i18n.home_scroll_left()}
-					nextLabel={i18n.home_scroll_right()}
+					prevLabel={i18n.row_scroll_left({ title: i18n.home_recent_movies() })}
+					nextLabel={i18n.row_scroll_right({ title: i18n.home_recent_movies() })}
 				>
 					{#each recentMovies as t (t.id)}
 						<PosterCard
@@ -272,8 +272,8 @@ onMount(() => {
 					note={i18n.home_count_month({ count: recentCount(recentShows, now) })}
 					padX={PAD_X}
 					arrows={!isTablet()}
-					prevLabel={i18n.home_scroll_left()}
-					nextLabel={i18n.home_scroll_right()}
+					prevLabel={i18n.row_scroll_left({ title: i18n.home_recent_shows() })}
+					nextLabel={i18n.row_scroll_right({ title: i18n.home_recent_shows() })}
 				>
 					{#each recentShows as t (t.id)}
 						<PosterCard
@@ -293,8 +293,8 @@ onMount(() => {
 					title={genre}
 					padX={PAD_X}
 					arrows={!isTablet()}
-					prevLabel={i18n.home_scroll_left()}
-					nextLabel={i18n.home_scroll_right()}
+					prevLabel={i18n.row_scroll_left({ title: genre })}
+					nextLabel={i18n.row_scroll_right({ title: genre })}
 				>
 					{#each genreTitles as { kind, t } (`${kind}:${t.id}`)}
 						<PosterCard

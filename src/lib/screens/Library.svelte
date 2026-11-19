@@ -345,8 +345,8 @@ const heads: { label: () => string; sort: Sort; end?: boolean }[] = [
 							note={railNote(r)}
 							padX={PAD_X}
 							gap={r.wide ? 16 : 18}
-							prevLabel={i18n.home_scroll_left()}
-							nextLabel={i18n.home_scroll_right()}
+							prevLabel={i18n.row_scroll_left({ title: railTitle(r) })}
+							nextLabel={i18n.row_scroll_right({ title: railTitle(r) })}
 							seeAll={{ label: i18n.rail_see_all(), onclick: () => seeAll(r) }}
 						>
 							{#each r.titles as t (t.id)}

@@ -3,6 +3,7 @@ import { m as i18n } from "#lib/paraglide/messages.js";
 import { goto } from "#lib/ui/nav.ts";
 import { page } from "$app/state";
 import { autoCap, PRESETS, presetOf, rememberedThroughput } from "#lib/core/playback/auto.ts";
+import { modeName } from "#lib/core/playback/names.ts";
 import { prefs } from "#lib/core/prefs.svelte.ts";
 import LoadFailed from "#lib/tv/LoadFailed.svelte";
 import TvScreen from "#lib/tv/TvScreen.svelte";
@@ -308,7 +309,7 @@ async function resetProgress() {
 								? "var(--status-available) 18%"
 								: "var(--status-downloading) 20%"}, transparent)"
 						></span>
-						<span>{PLAIN[playback.mode]}</span>
+						<span>{prefs.techDetails ? modeName(playback.mode) : PLAIN[playback.mode]}</span>
 					</div>
 				{/if}
 			</div>

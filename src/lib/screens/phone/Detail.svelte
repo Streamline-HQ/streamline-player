@@ -35,7 +35,7 @@ import {
 } from "#lib/core/format.ts";
 import { applyWatch, lib, loadLibrary } from "#lib/core/library.svelte.ts";
 import { autoCap, PRESETS, presetOf, rememberedThroughput } from "#lib/core/playback/auto.ts";
-import { audioOutName, codecName, fileMbit, subInfo } from "#lib/core/playback/names.ts";
+import { audioOutName, codecName, fileMbit, modeName, subInfo } from "#lib/core/playback/names.ts";
 import type { Tracks } from "#lib/core/playback/port.ts";
 import { prefs } from "#lib/core/prefs.svelte.ts";
 import { toast } from "#lib/core/toast.svelte.ts";
@@ -538,7 +538,13 @@ function setSeason(n: number) {
 						onclick={() => (techOpen = !showTech)}
 					>
 						<span class="dot" class:copy={full}></span>
-						<span class="what">{decided ? PLAIN[decided.mode] : ""}</span>
+						<span class="what"
+							>{decided
+								? prefs.techDetails
+									? modeName(decided.mode)
+									: PLAIN[decided.mode]
+								: ""}</span
+						>
 						<span class="where">{device ? i18n.detail_on_device({ device }) : ""}</span>
 						<span class="chev" class:open={showTech}
 							><Icon name="chevron-down" size={16} stroke={2} /></span
