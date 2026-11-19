@@ -405,6 +405,7 @@ h2 {
 }
 
 .top .poster {
+	position: relative;
 	width: 84px;
 	aspect-ratio: 2 / 3;
 	border-radius: var(--radius-md);
