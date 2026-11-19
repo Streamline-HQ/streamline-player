@@ -982,6 +982,7 @@ async fn intro_job_finds_the_shared_intro_and_credits_of_a_season() {
         tokio::time::sleep(std::time::Duration::from_millis(100)).await;
     }
     assert_eq!(status["state"], "done", "{status}");
+    assert_eq!(status["progress"], 1.0, "{status}");
     let result = &status["result"];
     let near = |v: &Value, want: f64| {
         let got = v.as_f64().unwrap();

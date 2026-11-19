@@ -39,6 +39,7 @@ pub struct Health {
     /// Absent while a restart's backlog is still being read.
     #[serde(skip_serializing_if = "Option::is_none")]
     jobs_owed: Option<usize>,
+    jobs_running: std::collections::HashMap<String, f64>,
 }
 
 fn encoder_names(set: &EncoderSet) -> Vec<&'static str> {
@@ -62,6 +63,7 @@ pub async fn health(State(s): State<AppState>) -> Json<Health> {
         encoders: encoder_names(&s.hw.encoders),
         decoders: s.hw.decoders(),
         jobs_owed: s.jobs.owed(),
+        jobs_running: s.jobs.running(),
     })
 }
 

@@ -511,7 +511,7 @@ async fn execute(
                 });
             }
             Ok(serde_json::to_value(
-                intro::run(cfg, paths, &analyses).await,
+                intro::run(cfg, paths, &analyses, progress).await,
             )?)
         }
     }
@@ -785,6 +785,18 @@ impl Jobs {
             .filter(|e| matches!(e.state, JobState::Queued | JobState::Running))
             .count();
         Some(unfinished + undelivered)
+    }
+
+    /// How far each running job says it is, from 0 to 1, for a caller that counts jobs to count
+    /// the part of one too. A job that reports nothing is left out.
+    pub fn running(&self) -> HashMap<String, f64> {
+        self.0
+            .lock()
+            .jobs
+            .iter()
+            .filter(|(_, e)| e.state == JobState::Running)
+            .filter_map(|(id, e)| Some((id.clone(), e.progress?)))
+            .collect()
     }
 
     fn restore_backlog(&self) {

@@ -1,6 +1,7 @@
 use std::collections::HashMap;
 use std::path::Path;
 use std::process::Stdio;
+use std::sync::atomic::{AtomicUsize, Ordering};
 
 use serde::Serialize;
 use tokio::process::Command;
@@ -189,11 +190,13 @@ async fn window(
     cfg: &Config,
     inputs: &[Option<(std::path::PathBuf, f64)>],
     tail: bool,
+    read: &(dyn Fn() + Sync),
 ) -> Vec<(f64, Option<Vec<u32>>)> {
     let mut out = Vec::with_capacity(inputs.len());
     for input in inputs {
         let Some((path, duration)) = input else {
             out.push((0.0, None));
+            read();
             continue;
         };
         // Half the file at most, so a short episode's credits can't pass for its intro.
@@ -207,6 +210,7 @@ async fn window(
             }
         };
         out.push((start, print));
+        read();
     }
     out
 }
@@ -222,7 +226,12 @@ fn shared_at(window: &[(f64, Option<Vec<u32>>)]) -> Vec<Option<[f64; 2]>> {
 
 /// A season's markers, in the order of `paths`. A file that can't be read gets no markers and
 /// doesn't cost the others theirs: Streamline sends the season again when an episode changes.
-pub async fn run(cfg: &Config, paths: &[String], analyses: &[Option<Analysis>]) -> Vec<Markers> {
+pub async fn run(
+    cfg: &Config,
+    paths: &[String],
+    analyses: &[Option<Analysis>],
+    progress: &(dyn Fn(f32) + Send + Sync),
+) -> Vec<Markers> {
     let mut markers: Vec<Markers> = paths
         .iter()
         .zip(analyses)
@@ -249,8 +258,13 @@ pub async fn run(cfg: &Config, paths: &[String], analyses: &[Option<Analysis>]) 
             Some((cfg.path_map.rewrite(path), a.duration))
         })
         .collect();
-    let heads = shared_at(&window(cfg, &inputs, false).await);
-    let tails = shared_at(&window(cfg, &inputs, true).await);
+    // A season is one job of ten minutes and more: without a share per window read, whoever
+    // watches a scan sees nothing move until the last episode.
+    let windows = (inputs.len() * 2) as f32;
+    let done = AtomicUsize::new(0);
+    let read = || progress((done.fetch_add(1, Ordering::Relaxed) + 1) as f32 / windows);
+    let heads = shared_at(&window(cfg, &inputs, false, &read).await);
+    let tails = shared_at(&window(cfg, &inputs, true, &read).await);
     for ((m, head), tail) in markers.iter_mut().zip(heads).zip(tails) {
         if m.intro.is_none() && head.is_some() {
             m.intro = head;
