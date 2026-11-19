@@ -133,6 +133,7 @@ const railNote = (r: Rail) =>
 						<button
 							type="button"
 							data-tv="1"
+							data-tv-default={t === "browse" ? "1" : undefined}
 							role="tab"
 							class="filter tab"
 							class:on={tab === t}
@@ -152,7 +153,7 @@ const railNote = (r: Rail) =>
 									<span class="note">{railNote(r)}</span>
 								</div>
 								<div class="rail">
-									{#each r.titles as t, ti (t.id)}
+									{#each r.titles as t (t.id)}
 										{#if r.wide}
 											<div class="cell" style:width="480px">
 												<BackdropCard
@@ -166,7 +167,7 @@ const railNote = (r: Rail) =>
 													poster={artwork(kind, t.id, "poster")}
 													info={info(t)}
 													leftLabel={i18n.card_left_label({ count: info(t).left })}
-													tv={{ fid: `${r.id}:${t.id}`, isDefault: ti === 0 }}
+													tv={{ fid: `${r.id}:${t.id}` }}
 													onclick={() => open(t)}
 												/>
 											</div>

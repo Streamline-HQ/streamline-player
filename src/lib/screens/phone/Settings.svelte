@@ -1,4 +1,5 @@
 <script lang="ts">
+import { otherDevices } from "#lib/core/devices.ts";
 import { ask } from "#lib/core/ask.svelte.ts";
 import { type FieldError, PICTURE_TYPES, pictureProblem, refusal } from "#lib/core/account.ts";
 import { type Caps, chips } from "#lib/core/capabilities.ts";
@@ -138,7 +139,7 @@ const choice = (key: ChoiceKey, vals: string[]) =>
 const toggle = (key: ToggleKey) => (on: boolean) => setPref(key, on);
 
 const selfDevice = $derived(devices.find((d) => d.current));
-const others = $derived(devices.filter((d) => !d.current));
+const others = $derived(otherDevices(devices));
 const pairPage = $derived(me?.player_url ? `${me.player_url.replace(/\/+$/, "")}/pair` : null);
 const deviceIcon = (d: Device): IconName =>
 	/browser/i.test(d.platform)

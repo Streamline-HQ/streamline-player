@@ -29,6 +29,8 @@ import { onMount } from "svelte";
 const PAD_X = $derived(isTablet() ? 44 : 56);
 const TOP = 92;
 const BOTTOM = 32;
+// The phone shell already leaves 28 under its pages.
+const PHONE_BOTTOM = 4;
 const MAX_WIDTH = 980;
 const PHONE_PAD_X = 20;
 const PHONE_TOP_GAP = 12;
@@ -80,7 +82,7 @@ onMount(() => {
 	class="page"
 	class:phone
 	style:padding={phone
-		? `calc(env(safe-area-inset-top) + ${PHONE_TOP_GAP}px) ${PHONE_PAD_X}px ${BOTTOM}px`
+		? `calc(env(safe-area-inset-top) + ${PHONE_TOP_GAP}px) ${PHONE_PAD_X}px ${PHONE_BOTTOM}px`
 		: `${TOP}px ${PAD_X}px ${BOTTOM}px`}
 	style:--max="{isTablet() ? MAX_WIDTH : MAX_WIDTH + 2 * PAD_X}px"
 >

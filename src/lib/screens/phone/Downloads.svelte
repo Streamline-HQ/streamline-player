@@ -301,7 +301,8 @@ const keysOf = (cards: Card[]) => cards.map((c) => c.key);
 	display: flex;
 	flex-direction: column;
 	gap: 22px;
-	padding: calc(env(safe-area-inset-top) + 12px) 20px 32px;
+	/* 4 on top of the 28 the shell leaves under its pages. */
+	padding: calc(env(safe-area-inset-top) + 12px) 20px 4px;
 }
 
 .none {

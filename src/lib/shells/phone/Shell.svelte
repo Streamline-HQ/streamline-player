@@ -46,6 +46,7 @@ import DownloadPicker from "#lib/ui/DownloadPicker.svelte";
 import DownloadPopover from "#lib/ui/DownloadPopover.svelte";
 import MiniPlayer from "#lib/ui/MiniPlayer.svelte";
 import { downloadWords } from "#lib/ui/download-words.ts";
+import Icon from "#lib/ui/Icon.svelte";
 import { presence } from "#lib/ui/presence.svelte.ts";
 import { provideScroll } from "#lib/ui/scroll.ts";
 import {
@@ -85,6 +86,7 @@ beforeNavigate(({ from }) => {
 	if (from?.url && content) scrolls.set(from.url.href, content.scrollTop);
 });
 afterNavigate(({ from, to, type }) => {
+	libPick = false;
 	if (!content || !to?.url || from?.url?.pathname === to.url.pathname) return;
 	content.scrollTop = type === "popstate" ? (scrolls.get(to.url.href) ?? 0) : 0;
 });
@@ -166,7 +168,28 @@ const tabs = $derived<{ id: PhoneTab; label: string }[]>([
 	...(canDownload ? [{ id: "downloads" as const, label: i18n.shell_downloads() }] : []),
 ]);
 
-const go = (id: PhoneTab) => goto(TAB_PATHS[id]);
+// The Library tab holds two libraries: it asks which one before going.
+let libPick = $state(false);
+const libMenu = presence(() => libPick && showTabs, 200);
+const libKinds = [
+	{ kind: "movies", label: i18n.nav_movies(), icon: "film" },
+	{ kind: "series", label: i18n.nav_shows(), icon: "tv-minimal" },
+] as const;
+const libAt = $derived(
+	`${((tabs.findIndex((t) => t.id === "library") + 0.5) / tabs.length) * 100}%`,
+);
+function go(id: PhoneTab) {
+	if (id === "library") {
+		libPick = !libPick;
+		return;
+	}
+	libPick = false;
+	goto(TAB_PATHS[id]);
+}
+function pickLibrary(kind: string) {
+	libPick = false;
+	goto(`/library/${kind}`);
+}
 
 const question = presence(() => !!asking.spec, 230);
 const counter = presence(() => !!counting.spec, 240);
@@ -373,6 +396,39 @@ const toastNow = $derived(activeToast());
 					onnavigate={go}
 				/>
 			</div>
+			{#if libMenu.mounted}
+				<button
+					type="button"
+					class="lib-catch"
+					tabindex="-1"
+					aria-label={i18n.shell_close()}
+					onclick={() => (libPick = false)}
+				></button>
+				<div
+					class="lib-pick"
+					class:on={libMenu.shown}
+					role="menu"
+					aria-label={i18n.nav_library()}
+					style:left={libAt}
+				>
+					{#each libKinds as k (k.kind)}
+						{@const on = route === "/library/[kind]" && page.params.kind === k.kind}
+						<button
+							type="button"
+							role="menuitemradio"
+							aria-checked={on}
+							class:on
+							onclick={() => pickLibrary(k.kind)}
+						>
+							<Icon name={k.icon} size={20} stroke={1.75} />
+							<span>{k.label}</span>
+							{#if on}
+								<Icon name="tick" size={18} stroke={2.2} />
+							{/if}
+						</button>
+					{/each}
+				</div>
+			{/if}
 		{/if}
 	</div>
 
@@ -607,6 +663,73 @@ const toastNow = $derived(activeToast());
 	right: 0;
 	bottom: 0;
 	z-index: 20;
+}
+
+.lib-catch {
+	position: absolute;
+	inset: 0;
+	z-index: 21;
+	padding: 0;
+	border: 0;
+	background: transparent;
+}
+
+.lib-pick {
+	position: absolute;
+	bottom: calc(var(--tabs-h) + 8px);
+	z-index: 22;
+	width: 184px;
+	margin-left: -92px;
+	padding: 6px;
+	border: 1px solid var(--border-strong);
+	border-radius: var(--radius-lg);
+	background: var(--bg-elevated);
+	box-shadow: var(--shadow-4);
+	transform-origin: 50% 100%;
+	opacity: 0;
+	transform: translateY(8px) scale(0.96);
+	transition:
+		opacity var(--dur-exit) var(--ease-in),
+		transform var(--dur-exit) var(--ease-in);
+}
+
+.lib-pick.on {
+	opacity: 1;
+	transform: none;
+	transition:
+		opacity var(--dur-base) var(--ease),
+		transform var(--dur-base) var(--ease);
+}
+
+.lib-pick button {
+	width: 100%;
+	height: 48px;
+	display: flex;
+	align-items: center;
+	gap: 12px;
+	padding: 0 12px;
+	border: 0;
+	border-radius: var(--radius-md);
+	background: transparent;
+	color: var(--fg-muted);
+	font-size: 15px;
+	font-weight: 500;
+	text-align: left;
+	cursor: pointer;
+}
+
+.lib-pick button.on {
+	background: var(--bg-selected);
+	color: var(--fg);
+	font-weight: 600;
+}
+
+.lib-pick button span {
+	flex: 1;
+}
+
+.lib-pick button :global(svg:last-child:not(:first-child)) {
+	color: var(--accent-text);
 }
 
 .toasts {

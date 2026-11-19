@@ -182,7 +182,7 @@ onMount(() => {
 	{:else if lib.loaded}
 		<div class="page">
 			<div class="heading">
-				<h1>{i18n.nav_library()}</h1>
+				<h1>{kind === "series" ? i18n.nav_shows() : i18n.nav_movies()}</h1>
 				<span class="count"
 					>{#if isAll}
 						{kind === "movies"
@@ -194,21 +194,6 @@ onMount(() => {
 							: i18n.library_total_shows({ count: base.length })}
 					{/if}</span
 				>
-			</div>
-			<div class="kinds">
-				{#each [
-					["movies", i18n.nav_movies()],
-					["series", i18n.nav_shows()],
-				] as [k, label] (k)}
-					<button
-						type="button"
-						class="kind"
-						class:on={kind === k}
-						onclick={() => go(k as Kind, { ...view, flags: [], genre: null })}
-					>
-						{label}
-					</button>
-				{/each}
 			</div>
 			<nav class="tabs" aria-label={i18n.library_view_label()}>
 				{#each [
@@ -392,32 +377,6 @@ h1 {
 .count {
 	font: 400 11.5px var(--font-mono);
 	color: var(--fg-subtle);
-}
-
-.kinds {
-	display: grid;
-	grid-template-columns: 1fr 1fr;
-	margin: 0 20px;
-	padding: 3px;
-	border: 1px solid var(--border);
-	border-radius: 12px;
-	background: var(--bg-elevated);
-}
-
-.kind {
-	height: 38px;
-	border: 0;
-	border-radius: 9px;
-	background: transparent;
-	color: var(--fg-subtle);
-	font-size: 14px;
-	font-weight: 600;
-	cursor: pointer;
-}
-
-.kind.on {
-	background: var(--bg-selected);
-	color: var(--fg);
 }
 
 .tabs {
