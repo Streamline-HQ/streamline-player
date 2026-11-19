@@ -657,16 +657,22 @@ onMount(() => {
 .page {
 	box-sizing: border-box;
 	min-height: 100%;
-	padding: env(safe-area-inset-top) 0 24px;
+	padding: 0 0 24px;
 	background: var(--bg-deep);
 	color: var(--fg);
 }
 
 .top {
+	position: sticky;
+	top: 0;
+	z-index: 2;
 	display: flex;
 	align-items: center;
 	gap: 4px;
-	padding: 6px 12px 0;
+	padding: calc(env(safe-area-inset-top) + 6px) 12px 0;
+	background: color-mix(in srgb, var(--bg-deep) 92%, transparent);
+	backdrop-filter: blur(16px);
+	-webkit-backdrop-filter: blur(16px);
 }
 
 .back {
