@@ -1,5 +1,4 @@
 import type { PlayerCommand, PlayerEvent, Stats } from "#lib/core/playback/port.ts";
-import { isPhone } from "#lib/platform/form-factor.svelte.ts";
 import shaka from "shaka-player";
 
 type Handler = (payload: never) => void;
@@ -279,24 +278,6 @@ function stats(): Stats {
 	};
 }
 
-/**
- * The web's share of what the Android app does for a film on a phone: the whole screen, turned to
- * landscape. A browser allows the turn only in fullscreen, and fullscreen only shortly after a tap.
- */
-function fillScreen(on: boolean) {
-	if (!isPhone()) return;
-	if (!on) {
-		if (document.fullscreenElement) document.exitFullscreen().catch(() => {});
-		return;
-	}
-	if (document.fullscreenElement) return;
-	const turn = screen.orientation as { lock?: (to: string) => Promise<void> };
-	document.documentElement
-		.requestFullscreen()
-		.then(() => turn.lock?.("landscape"))
-		.catch(() => {});
-}
-
 export async function command(
 	cmd: PlayerCommand,
 	args: Record<string, unknown> = {},
@@ -319,7 +300,6 @@ export async function command(
 		case "stop":
 			await unload();
 			if (video) video.style.display = "none";
-			fillScreen(false);
 			emit("state", { state: "idle" });
 			return null;
 		case "stats":
@@ -333,7 +313,6 @@ export async function command(
 		case "viewport":
 			rect = args as Rect;
 			place();
-			fillScreen(!!args.full);
 			return null;
 		case "subtitle":
 			if (args.kind !== "ass") return dropStyled();
