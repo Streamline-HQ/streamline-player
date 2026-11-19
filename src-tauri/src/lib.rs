@@ -789,6 +789,12 @@ fn list_downloads(queue: tauri::State<'_, Downloads>) -> Vec<downloads::Download
 #[cfg(downloads)]
 static WIFI_ONLY: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
 
+#[cfg(target_os = "android")]
+#[tauri::command]
+async fn metered(app: AppHandle) -> bool {
+    android_service::metered(&app)
+}
+
 /// The "Download on Wi-Fi only" setting, which lives with the page's other preferences.
 #[cfg(downloads)]
 #[tauri::command]
@@ -988,6 +994,8 @@ pub fn run() {
             stop_session,
             heartbeat,
             reachable,
+            #[cfg(target_os = "android")]
+            metered,
             #[cfg(downloads)]
             list_downloads,
             #[cfg(downloads)]

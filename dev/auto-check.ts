@@ -1,6 +1,6 @@
 // node dev/auto-check.ts
 import { strictEqual as eq } from "node:assert";
-import { autoCap, stepDown } from "../src/lib/core/playback/auto.ts";
+import { autoCap, capped, stepDown } from "../src/lib/core/playback/auto.ts";
 
 const M = 1_000_000;
 
@@ -14,6 +14,13 @@ eq(autoCap(0.5 * M, 60, true), 1);
 eq(autoCap(null, 60, false), 20);
 eq(autoCap(100 * M, 2, false), 20);
 eq(autoCap(8 * M, null, true), 4);
+
+// A mobile-data limit holds Auto down, the original included, and never raises it.
+eq(capped(null, null), null);
+eq(capped(20, null), 20);
+eq(capped(null, 8), 8);
+eq(capped(20, 8), 8);
+eq(capped(2, 8), 2);
 
 // Measured: follows the link, stays when the link holds the stream.
 eq(stepDown(8 * M, 60, true), 4);

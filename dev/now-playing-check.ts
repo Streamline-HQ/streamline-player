@@ -45,6 +45,7 @@ const port = {
 	capabilities: async () => ({}),
 	decisions: async () => ({ bit_rate: 8e6, decisions: [] }),
 	network: async () => "home" as const,
+	metered: async () => false,
 	serverHost: async () => "host",
 	startSession: async () => {
 		log.push("startSession");

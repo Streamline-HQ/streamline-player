@@ -31,6 +31,7 @@ import {
 	artwork,
 	authState,
 	canDownload,
+	canMeter,
 	deviceInfo,
 	devices as listDevices,
 	home,
@@ -392,6 +393,14 @@ onMount(() => {
 				QUALITIES,
 				i18n.settings_quality_away_desc(),
 			)}
+			{#if canMeter}
+				{@render select(
+					i18n.settings_cellular(),
+					"cellular",
+					["4 Mbit/s", "8 Mbit/s", "No limit"],
+					i18n.settings_cellular_desc(),
+				)}
+			{/if}
 			{@render flag(i18n.settings_autoplay(), "autoplay")}
 			{@render flag(i18n.settings_auto_skip(), "autoSkip", i18n.settings_auto_skip_desc())}
 		</div>

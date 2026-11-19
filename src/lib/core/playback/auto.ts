@@ -28,6 +28,10 @@ export function autoCap(
 	return PRESETS.find((n) => n <= usable) ?? 1;
 }
 
+/** Auto's pick under the viewer's limit for mobile data; a null pick is the original. */
+export const capped = (pick: number | null, limit: number | null) =>
+	limit === null ? pick : Math.min(pick ?? Infinity, limit);
+
 /**
  * Where a stall takes Auto, or null to stay. `measured` must come from this stall: a stream that
  * restarts after a seek stalls too, and an older reading says nothing about why. `mayGuess` is for a

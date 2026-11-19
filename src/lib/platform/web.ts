@@ -397,6 +397,11 @@ export const onPlayer = <T = undefined>(
 ): Promise<() => Promise<void>> =>
 	shaka.on<T>(event as PlayerEvent, cb).then((off) => async () => off());
 
+// Chromium on Android names the link; Firefox and Safari have no such API.
+const link = (navigator as { connection?: { type?: string } }).connection;
+export const canMeter: boolean = link?.type !== undefined;
+const metered = async () => link?.type === "cellular";
+
 export const playbackPort: PlaybackPort = {
 	playerName: PLAYER_NAME,
 	command: shaka.command,
@@ -404,6 +409,7 @@ export const playbackPort: PlaybackPort = {
 	capabilities: playerCapabilities,
 	decisions,
 	network,
+	metered,
 	serverHost,
 	startSession: (mediaId, capabilities, position, tracks) =>
 		call<Session>("POST", "/playback/sessions", {

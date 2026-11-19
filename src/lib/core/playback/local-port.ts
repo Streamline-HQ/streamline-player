@@ -71,6 +71,7 @@ export function localPort(
 		stopSession: async () => {},
 		mediaTracks: async () => tracks,
 		network: async () => "home",
+		metered: async () => false,
 		serverHost: async () => "",
 		heartbeat: (_id, position) =>
 			note(local.key, position, local.duration > 0 && position / local.duration >= WATCHED_AT),

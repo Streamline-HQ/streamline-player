@@ -47,6 +47,7 @@ const base: PlaybackPort = {
 	capabilities: async () => ({}),
 	decisions: refuse("decisions"),
 	network: refuse("network"),
+	metered: refuse("metered"),
 	serverHost: refuse("serverHost"),
 	startSession: refuse("startSession"),
 	patchSession: refuse("patchSession"),

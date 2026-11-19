@@ -106,6 +106,8 @@ export type PlaybackPort = {
 		options: DecisionOption[],
 	): Promise<{ bit_rate: number; decisions: Decision[] }>;
 	network(): Promise<"home" | "away">;
+	/** Whether this device is on mobile data right now. */
+	metered(): Promise<boolean>;
 	serverHost(): Promise<string>;
 	startSession(
 		mediaId: string,

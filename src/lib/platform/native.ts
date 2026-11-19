@@ -234,6 +234,10 @@ export const noteOffline = (key: string, position: number, done: boolean) =>
 export const syncOffline = () => invoke<number>("sync_offline");
 export const reachable = () => invoke<boolean>("reachable");
 
+/** Android alone says whether its connection is billed by volume, which is how it sees mobile data. */
+export const canMeter: boolean = /Android/.test(navigator.userAgent);
+const metered = () => (canMeter ? invoke<boolean>("metered") : Promise.resolve(false));
+
 export const playbackPort: PlaybackPort = {
 	playerName: PLAYER_NAME,
 	command: (cmd, args) => invoke(`plugin:player|${cmd}`, args),
@@ -241,6 +245,7 @@ export const playbackPort: PlaybackPort = {
 	capabilities: playerCapabilities,
 	decisions,
 	network,
+	metered,
 	serverHost,
 	startSession: (mediaId, capabilities, position, tracks) =>
 		invoke<Session>("start_session", { mediaId, capabilities, position, tracks }),

@@ -49,6 +49,7 @@ import {
 	signOut as signOutNow,
 	title as fetchTitle,
 	watchState,
+	canMeter,
 } from "#platform";
 import { onMount } from "svelte";
 
@@ -462,7 +463,7 @@ onMount(() => {
 					/>
 				{/snippet}
 			</SettingsRow>
-			{#if isTablet()}
+			{#if canMeter && isTablet()}
 				<SettingsRow label={i18n.settings_cellular()} desc={i18n.settings_cellular_desc()}>
 					{#snippet control()}
 						<ChoiceMenu
