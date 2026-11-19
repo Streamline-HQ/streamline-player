@@ -272,6 +272,18 @@ onMount(() => {
 		clearTimeout(swap);
 	};
 });
+
+// The header stays at the top of the page and takes a background once the hero starts to leave.
+const PIN_AFTER_PX = 24;
+let scrolled = $state(false);
+$effect(() => {
+	const el = scroller?.();
+	if (!el) return;
+	const on = () => (scrolled = el.scrollTop > PIN_AFTER_PX);
+	on();
+	el.addEventListener("scroll", on, { passive: true });
+	return () => el.removeEventListener("scroll", on);
+});
 </script>
 
 <div class="home">
@@ -282,6 +294,41 @@ onMount(() => {
 			<EmptyState icon="film" title={i18n.home_empty_title()} text={i18n.home_empty_text()} />
 		</div>
 	{:else if lib.loaded}
+		<div class="pin">
+			<div class="top" class:scrolled>
+				<div class="brand">
+					<Mark size={28} ring={false} />
+					<span>streamline</span>
+				</div>
+				<div class="actions">
+					<span class="bell">
+						<Button
+							variant="icon"
+							icon="bell"
+							label={bell}
+							title={bell}
+							dot={unread() > 0}
+							onclick={() => goto("/activity")}
+						/>
+					</span>
+					<button
+						type="button"
+						class="account"
+						aria-label={i18n.nav_settings()}
+						onclick={() => goto("/settings")}
+					>
+						<Avatar
+							name={me?.name}
+							email={me?.email}
+							initials={me?.initials}
+							color={AVATAR_COLOR}
+							picture={picture.url}
+							size={32}
+						/>
+					</button>
+				</div>
+			</div>
+		</div>
 		{#if slide}
 			<section class="hero" use:swipe>
 				{#each slides as s, i (s.key)}
@@ -290,39 +337,6 @@ onMount(() => {
 					</div>
 				{/each}
 				<div class="scrim"></div>
-				<div class="top">
-					<div class="brand">
-						<Mark size={28} ring={false} />
-						<span>streamline</span>
-					</div>
-					<div class="actions">
-						<span class="bell">
-							<Button
-								variant="icon"
-								icon="bell"
-								label={bell}
-								title={bell}
-								dot={unread() > 0}
-								onclick={() => goto("/activity")}
-							/>
-						</span>
-						<button
-							type="button"
-							class="account"
-							aria-label={i18n.nav_settings()}
-							onclick={() => goto("/settings")}
-						>
-							<Avatar
-								name={me?.name}
-								email={me?.email}
-								initials={me?.initials}
-								color={AVATAR_COLOR}
-								picture={picture.url}
-								size={32}
-							/>
-						</button>
-					</div>
-				</div>
 				<div class="body" style={text}>
 					<div class="eyebrow">{slide.eyebrow}</div>
 					<h1>{slide.title}</h1>
@@ -521,16 +535,34 @@ onMount(() => {
 	);
 }
 
+.pin {
+	position: sticky;
+	top: 0;
+	z-index: 20;
+	height: 0;
+}
+
 .top {
 	position: absolute;
 	left: 0;
 	right: 0;
-	top: env(safe-area-inset-top);
-	height: 52px;
+	top: 0;
+	height: calc(env(safe-area-inset-top) + 52px);
+	box-sizing: border-box;
 	display: flex;
 	align-items: center;
 	justify-content: space-between;
-	padding: 0 20px;
+	padding: env(safe-area-inset-top) 20px 0;
+	transition:
+		background var(--dur-base),
+		box-shadow var(--dur-base);
+}
+
+.top.scrolled {
+	background: color-mix(in srgb, var(--bg-deep) 78%, transparent);
+	backdrop-filter: blur(16px) saturate(150%);
+	-webkit-backdrop-filter: blur(16px) saturate(150%);
+	box-shadow: inset 0 -1px 0 var(--border);
 }
 
 .brand {
@@ -730,7 +762,7 @@ h1 {
 }
 
 .rows.bare {
-	padding-top: calc(env(safe-area-inset-top) + 20px);
+	padding-top: calc(env(safe-area-inset-top) + 60px);
 }
 
 .rows section {
