@@ -109,6 +109,8 @@ const BAR = 64;
 const MAX_SIMILAR = 8;
 const MAX_CAST = 14;
 const POPOVER_W = 264;
+const POPOVER_EDGE = 12;
+const POPOVER_OVERHANG = 8;
 const POPOVER_H = 330;
 const port = { library, watchState, home, title: fetchTitle };
 
@@ -654,7 +656,13 @@ function openLang(scope: Scope, el: HTMLElement, ep: number | null) {
 	if (box) {
 		const b = box.getBoundingClientRect();
 		const r = el.getBoundingClientRect();
-		x = Math.max(0, Math.min(box.offsetWidth - POPOVER_W, r.right - b.left - POPOVER_W));
+		x = Math.max(
+			POPOVER_EDGE,
+			Math.min(
+				box.offsetWidth - POPOVER_W - POPOVER_EDGE,
+				r.right - b.left - POPOVER_W + POPOVER_OVERHANG,
+			),
+		);
 		y = r.bottom - b.top + 8;
 		const host = scroller?.();
 		const bottom = host ? host.getBoundingClientRect().bottom : window.innerHeight;
@@ -771,7 +779,11 @@ const heroHeight = $derived(
 	{:else if t && ready}
 		<section class="hero" style:min-height="{heroHeight}px" style:padding-inline="{PAD_X}px">
 			<div class="backdrop">
-				<Art src={artwork(kind, t.id, "backdrop")} position="50% 25%" />
+				<Art
+					src={artwork(kind, t.id, "backdrop")}
+					fallback={artwork(kind, t.id, "poster")}
+					position="50% 25%"
+				/>
 				<div class="side"></div>
 				<div class="low"></div>
 			</div>

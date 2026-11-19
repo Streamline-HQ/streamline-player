@@ -6,9 +6,18 @@ let {
 	ratio,
 	kind = "backdrop",
 	position,
-}: { src?: string; ratio?: string; kind?: "poster" | "backdrop"; position?: string } = $props();
+	fallback,
+}: {
+	src?: string;
+	ratio?: string;
+	kind?: "poster" | "backdrop";
+	position?: string;
+	/** Shown blurred when `src` cannot load: a title with no backdrop still gets its poster's colours. */
+	fallback?: string;
+} = $props();
 
 let failed = $state(false);
+let softReady = $state(false);
 let loaded = $state(false);
 let img = $state<HTMLImageElement>();
 
@@ -16,6 +25,7 @@ $effect(() => {
 	src;
 	failed = false;
 	loaded = false;
+	softReady = false;
 });
 // A cached image can finish before the handlers are attached. `complete` alone is no verdict:
 // WebKit also says it of an image it has not decoded or has put off loading, with no size yet,
@@ -50,6 +60,15 @@ $effect(() => {
 			style:object-position={position}
 			onload={() => (loaded = true)}
 			onerror={() => (failed = true)}
+		>
+	{:else if fallback && failed}
+		<img
+			src={fallback}
+			alt=""
+			draggable="false"
+			class="soft"
+			class:loaded={softReady}
+			onload={() => (softReady = true)}
 		>
 	{/if}
 </span>
@@ -117,5 +136,10 @@ img {
 
 img.loaded {
 	opacity: 1;
+}
+
+img.soft {
+	filter: blur(36px) saturate(1.3);
+	transform: scale(1.25);
 }
 </style>

@@ -462,7 +462,11 @@ function setSeason(n: number) {
 		</div>
 	{:else if t && ready}
 		<div class="hero">
-			<Art src={artwork(kind, t.id, "backdrop")} position="50% 30%" />
+			<Art
+				src={artwork(kind, t.id, "backdrop")}
+				fallback={artwork(kind, t.id, "poster")}
+				position="50% 30%"
+			/>
 			<div class="scrim"></div>
 		</div>
 		<button type="button" class="back" aria-label={i18n.common_back()} onclick={back}>
