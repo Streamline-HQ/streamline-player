@@ -1,12 +1,12 @@
 import type { Kind, Title, Watch } from "#lib/core/types.ts";
 
-/** Where the viewer stands in a title: what a card's corner, count and bar draw. */
+/** Where the viewer stands in a title: what a card's bookmark, count and bar draw. */
 export type WatchInfo = {
 	watched: boolean;
 	/** Percent of the unfinished play, 0 when there is none. */
 	pct: number;
 	inProgress: boolean;
-	/** Nothing watched or started: the folded corner. */
+	/** Nothing watched or started: the bookmark. */
 	unread: boolean;
 	/** A series' episodes not watched yet, the one under way included; 0 for a movie. */
 	left: number;

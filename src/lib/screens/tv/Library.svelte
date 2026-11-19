@@ -173,7 +173,7 @@ const railNote = (r: Rail) =>
 											<PosterCard
 												size="tv"
 												bare
-												width={212}
+												width={232}
 												title={t.title}
 												src={artwork(kind, t.id, "poster")}
 												info={info(t)}

@@ -177,7 +177,7 @@ onMount(() => {
 					<span class="slp-art slp-mk--thumb thumb">
 						<Art src={artwork(t.kind, t.id, "poster")} kind="poster" />
 						{#if info.unread}
-							<span class="slp-corner" aria-hidden="true"></span>
+							<span class="slp-unread" aria-hidden="true"></span>
 						{/if}
 						{#if info.inProgress}
 							<span class="slp-prog"

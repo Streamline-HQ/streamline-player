@@ -100,7 +100,7 @@ const heading = $derived(
 						{@const info = watchInfo(t, t.kind, lib.watch)}
 						<PosterCard
 							size="tv"
-							width={196}
+							width={232}
 							title={t.title}
 							src={artwork(t.kind, t.id, "poster")}
 							{info}
@@ -235,7 +235,7 @@ const heading = $derived(
 
 .grid {
 	display: grid;
-	grid-template-columns: repeat(auto-fill, 196px);
+	grid-template-columns: repeat(auto-fill, 232px);
 	gap: 40px 30px;
 }
 </style>

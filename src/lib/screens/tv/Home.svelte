@@ -165,13 +165,13 @@ async function load() {
 	const genre = [...counts].sort((a, b) => b[1] - a[1])[0]?.[0] ?? "";
 	rows = [
 		...(cont.length
-			? [{ title: i18n.home_continue_watching(), wide: true, h: 362, ch: 225, items: cont }]
+			? [{ title: i18n.home_continue_watching(), wide: true, h: 407, ch: 270, items: cont }]
 			: []),
 		{
 			title: i18n.home_recent_movies(),
 			wide: false,
-			h: 400,
-			ch: 294,
+			h: 454,
+			ch: 348,
 			items: recent(movies)
 				.slice(0, 12)
 				.map((t) => poster("movies", t, i18n.home_recently_added())),
@@ -179,8 +179,8 @@ async function load() {
 		{
 			title: i18n.home_recent_shows(),
 			wide: false,
-			h: 400,
-			ch: 294,
+			h: 454,
+			ch: 348,
 			items: recent(shows)
 				.slice(0, 12)
 				.map((t) => poster("series", t, i18n.home_new_episodes())),
@@ -188,8 +188,8 @@ async function load() {
 		{
 			title: genre,
 			wide: false,
-			h: 400,
-			ch: 294,
+			h: 454,
+			ch: 348,
 			items: [
 				...movies.filter((t) => t.genres.includes(genre)).map((t) => poster("movies", t, genre)),
 				...shows.filter((t) => t.genres.includes(genre)).map((t) => poster("series", t, genre)),
@@ -285,7 +285,7 @@ const onFocus = (it: Item, ri: number) => {
 								<PosterCard
 									size="tv"
 									bare
-									width={196}
+									width={232}
 									title={it.t.title}
 									src={artwork(it.kind, it.t.id, "poster")}
 									info={watchInfo(it.t, it.kind, lib.watch)}
@@ -493,7 +493,7 @@ h2 {
 }
 
 .wide {
-	width: 400px;
+	width: 480px;
 	aspect-ratio: 16 / 9;
 	border-radius: 14px;
 }

@@ -46,7 +46,7 @@ let {
 			<img src={backdrop} alt="" loading="lazy" onerror={orPoster(poster)}>
 			<span class="slp-bd__shade" aria-hidden="true"></span>
 			{#if info?.unread}
-				<span class="slp-corner" aria-hidden="true"></span>
+				<span class="slp-unread" aria-hidden="true"></span>
 			{/if}
 			{#if info && info.left > 0}
 				<span class="slp-count" role="img" aria-label={leftLabel}>{info.left}</span>

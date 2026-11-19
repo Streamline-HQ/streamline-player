@@ -90,7 +90,7 @@ const line = $derived(
 			<img src={poster} alt="" loading="lazy" onerror={() => (broken = true)}>
 		{/if}
 		{#if info.unread}
-			<span class="slp-corner" aria-hidden="true"></span>
+			<span class="slp-unread" aria-hidden="true"></span>
 		{/if}
 	</span>
 	<span class="main">

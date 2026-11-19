@@ -54,7 +54,7 @@ let {
 	src?: string;
 	/** "New", or "2 new" for a series' new episodes. */
 	badge?: string;
-	/** The watch markers: corner, episode count, resume bar. */
+	/** The watch markers: bookmark, episode count, resume bar. */
 	info?: WatchInfo;
 	/** What the episode count reads out: "3 unwatched episodes". */
 	leftLabel?: string;
@@ -78,7 +78,7 @@ let {
 	onclick: () => void;
 } = $props();
 
-const corner = $derived(!!info?.unread);
+const unread = $derived(!!info?.unread);
 const stop = (e: Event, then: () => void) => {
 	e.stopPropagation();
 	then();
@@ -139,14 +139,14 @@ $effect(() => release);
 {/snippet}
 
 {#snippet markers()}
-	{#if corner}
-		<span class="slp-corner" aria-hidden="true"></span>
+	{#if unread}
+		<span class="slp-unread" aria-hidden="true"></span>
 	{/if}
 	{#if info && info.left > 0}
 		<span class="slp-count" role="img" aria-label={leftLabel}>{info.left}</span>
 	{/if}
 	{#if badge}
-		<span class="slp-new" style:left="calc({corner ? 28 : 8}px * var(--mk, 1))">{badge}</span>
+		<span class="slp-new" style:left="calc({unread ? 28 : 8}px * var(--mk, 1))">{badge}</span>
 	{/if}
 	{#if info?.inProgress}
 		<span class="slp-prog"

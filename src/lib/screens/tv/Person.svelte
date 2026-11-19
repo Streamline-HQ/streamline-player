@@ -410,7 +410,7 @@ h2 {
 
 .grid {
 	display: grid;
-	grid-template-columns: repeat(auto-fill, 220px);
+	grid-template-columns: repeat(auto-fill, 232px);
 	gap: 44px 30px;
 }
 </style>
