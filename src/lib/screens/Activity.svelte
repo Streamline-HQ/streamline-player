@@ -12,7 +12,7 @@ import { activityWords } from "#lib/ui/activity-words.ts";
 import Button from "#lib/ui/Button.svelte";
 import ChoicePills from "#lib/ui/ChoicePills.svelte";
 import EmptyState from "#lib/ui/EmptyState.svelte";
-import type { IconName } from "#lib/ui/Icon.svelte";
+import Icon, { type IconName } from "#lib/ui/Icon.svelte";
 import { goto } from "#lib/ui/nav.ts";
 import {
 	activity,
@@ -85,9 +85,16 @@ onMount(() => {
 	style:--max="{isTablet() ? MAX_WIDTH : MAX_WIDTH + 2 * PAD_X}px"
 >
 	<div class="top">
-		<div class="titles">
-			<h1>{i18n.shell_activity()}</h1>
-			<span class="summary">{view.summary}</span>
+		<div class="lead">
+			<div class="titles">
+				<h1>{i18n.shell_activity()}</h1>
+				<span class="summary">{view.summary}</span>
+			</div>
+			{#if phone}
+				<button type="button" class="read-all" disabled={view.unread === 0} onclick={readAll}>
+					<Icon name="check-check" size={16} stroke={2} />{i18n.activity_mark_all_short()}
+				</button>
+			{/if}
 		</div>
 		<div class="tools">
 			<ChoicePills
@@ -96,9 +103,11 @@ onMount(() => {
 				label={i18n.activity_filter()}
 				onchange={(v) => (filter = v as Filter)}
 			/>
-			<Button variant="secondary" icon="tick" disabled={view.unread === 0} onclick={readAll}>
-				{i18n.activity_mark_all()}
-			</Button>
+			{#if !phone}
+				<Button variant="secondary" icon="tick" disabled={view.unread === 0} onclick={readAll}>
+					{i18n.activity_mark_all()}
+				</Button>
+			{/if}
 		</div>
 	</div>
 
@@ -185,8 +194,47 @@ h1 {
 	gap: 10px;
 }
 
+.lead {
+	display: flex;
+	align-items: flex-end;
+	justify-content: space-between;
+	gap: 12px;
+}
+
+.page.phone .lead,
 .page.phone .tools {
-	flex-wrap: wrap;
+	flex: 1 1 100%;
+}
+
+.page.phone .tools :global(.filters) {
+	flex: 1 1 0;
+}
+
+.page.phone .tools :global(.filters button) {
+	height: 36px;
+}
+
+.read-all {
+	flex: none;
+	display: flex;
+	align-items: center;
+	gap: 6px;
+	height: 44px;
+	margin: 0 -10px -12px 0;
+	padding: 0 10px;
+	border: 0;
+	border-radius: var(--radius-md);
+	background: transparent;
+	color: var(--accent-text);
+	font-size: 13.5px;
+	font-weight: 600;
+	white-space: nowrap;
+	cursor: pointer;
+}
+
+.read-all:disabled {
+	color: var(--fg-faint);
+	cursor: default;
 }
 
 section {

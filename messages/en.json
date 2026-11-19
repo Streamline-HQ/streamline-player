@@ -17,6 +17,7 @@
 	"activity_filter": "Filter activity",
 	"activity_filter_library": "Library",
 	"activity_mark_all": "Mark all as read",
+	"activity_mark_all_short": "Mark all read",
 	"activity_movie_removed": "Removed from Movies",
 	"activity_episode_removed": "Episode removed",
 	"activity_removed_file": "The file is no longer on the server",

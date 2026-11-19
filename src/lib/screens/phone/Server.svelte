@@ -330,6 +330,46 @@ h1.small {
 	min-height: 44px;
 }
 
+/* Touch sizes for the rows the desktop page draws small. */
+.blocks :global(.filters.compact button) {
+	height: 36px;
+}
+
+.blocks :global(.sl-btn--sm) {
+	height: 44px;
+}
+
+.blocks :global(.tiles:has(.value.mono)) {
+	--tile-min: 280px;
+}
+
+.blocks :global(.pair .bottom) {
+	padding-left: 0;
+}
+
+.blocks :global(.pair .to),
+.blocks :global(.pair .to .filters) {
+	flex: 1 1 100%;
+}
+
+.blocks :global(.pair .btns) {
+	flex: 1 1 100%;
+	gap: 8px;
+}
+
+.blocks :global(.pair .btns button) {
+	flex: 1 1 0;
+	height: 44px;
+}
+
+.blocks :global(.thumb) {
+	width: 104px;
+}
+
+.blocks :global(.stop) {
+	height: 40px;
+}
+
 .index {
 	display: flex;
 	flex-direction: column;

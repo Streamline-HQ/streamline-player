@@ -615,6 +615,7 @@ if (import.meta.env.DEV)
 					downloadsOn={route === "/downloads"}
 					account={{ name, email: account.me?.email ?? "", initials, color: AVATAR_COLOR, picture }}
 					accountLabel={i18n.shell_account_menu()}
+					accountDot={pendingPairs.n > 0 && !menuOpen}
 					{menuOpen}
 					accountOn={route === "/settings" || route === "/admin"}
 					onhome={() => go("home")}
