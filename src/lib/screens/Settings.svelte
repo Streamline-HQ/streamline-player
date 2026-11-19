@@ -16,6 +16,7 @@ import { toast } from "#lib/core/toast.svelte.ts";
 import type { Device, DeviceInfo } from "#lib/core/types.ts";
 import { m as i18n } from "#lib/paraglide/messages.js";
 import { isTablet } from "#lib/platform/form-factor.svelte.ts";
+import ScopeMenu from "#lib/shells/phone/ScopeMenu.svelte";
 import { IS_WEB } from "#lib/platform/target.ts";
 import { downloadsPort } from "#lib/screens/downloads-port.ts";
 import Art from "#lib/ui/Art.svelte";
@@ -337,7 +338,11 @@ onMount(() => {
 				picture={me?.picture ? profilePicture.url : undefined}
 			/>
 			<span class="who">
-				<h1>{i18n.settings_title()}</h1>
+				{#if me?.role === "Admin"}
+					<ScopeMenu here="settings" title={i18n.settings_title()} {host} />
+				{:else}
+					<h1>{i18n.settings_title()}</h1>
+				{/if}
 				<span class="mono">{me?.name} · {me?.email} · {me?.role}</span>
 			</span>
 			{#if me?.role === "Admin"}

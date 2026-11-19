@@ -85,7 +85,7 @@ function pick(key: string) {
 
 h1 {
 	margin: 0;
-	font-size: 30px;
+	font-size: var(--title-size, 30px);
 	font-weight: 700;
 	letter-spacing: -0.025em;
 }
