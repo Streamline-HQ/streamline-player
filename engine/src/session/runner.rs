@@ -13,6 +13,7 @@ use tokio::sync::{Mutex as AsyncMutex, OwnedSemaphorePermit};
 use tokio::time::{self, Instant};
 use tracing::Instrument;
 
+use super::seam::{self, Seam};
 use super::{
     AudioOut, KEEP_BEHIND_SECS, RESUME_MARGIN_SECS, RUN_AHEAD_SECS, SEGMENT_WAIT, Served,
     SourceCodecs, VideoOut, bandwidth, hw_name, live_for, unix_now,
@@ -306,6 +307,18 @@ impl Session {
         self.clear_speed();
     }
 
+    /// Read before `clear_from`: a run restarting on its own first segment loses its init there.
+    async fn seam(&self, st: &State, start: u32) -> Option<Seam> {
+        let prev = start.checked_sub(1)?;
+        if !st.completed.contains(&prev) {
+            return None;
+        }
+        let init = self
+            .dir
+            .join(format!("init_{}.mp4", st.run.as_ref()?.start));
+        seam::read(&init, &self.dir.join(format!("seg_{prev}.m4s"))).await
+    }
+
     async fn clear_from(&self, start: u32) {
         let Ok(mut entries) = tokio::fs::read_dir(&self.dir).await else {
             return;
@@ -362,6 +375,7 @@ impl Session {
 
     async fn spawn_run_inner(self: &Arc<Self>, st: &mut State, start: u32) -> Result<(), ApiError> {
         self.stop_run(st).await;
+        let seam = self.seam(st, start).await;
         self.clear_from(start).await;
         st.completed.retain(|i| *i < start);
 
@@ -373,6 +387,8 @@ impl Session {
             start_index: start,
             start_time: playlist::seek_time(&st.plan, &st.analysis, &st.bounds, start),
             out_dir: &self.dir,
+            bounds: &st.bounds,
+            seam,
         };
         let mut upstream = Vec::new();
         let mut feed = Stdio::null();

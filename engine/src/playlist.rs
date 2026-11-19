@@ -55,7 +55,7 @@ const KEYFRAME_SLACK_SECS: f64 = 0.001;
 /// Above AAC's 1024 samples at 22.05 kHz, the longest encoder priming the engine produces.
 const AUDIO_PRIMING_SECS: f64 = 0.05;
 
-fn container_start(a: &Analysis) -> f64 {
+pub(crate) fn container_start(a: &Analysis) -> f64 {
     let start = a
         .video
         .iter()

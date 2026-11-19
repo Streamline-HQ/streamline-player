@@ -869,6 +869,170 @@ async fn audio_transcode_restart_starts_audio_with_the_keyframe() {
     );
 }
 
+/// Long enough that a run copying it is still under way when the engine stops it for being far
+/// enough ahead.
+fn make_long_mkv(path: &Path) {
+    ffmpeg(&[
+        "-f",
+        "lavfi",
+        "-i",
+        "testsrc2=size=160x90:rate=25:duration=2400",
+        "-f",
+        "lavfi",
+        "-i",
+        "sine=frequency=440:sample_rate=44100:duration=2400",
+        "-c:v",
+        "libx264",
+        "-preset",
+        "ultrafast",
+        "-bf",
+        "2",
+        "-g",
+        "50",
+        "-sc_threshold",
+        "0",
+        "-pix_fmt",
+        "yuv420p",
+        "-c:a",
+        "aac",
+        "-ac",
+        "2",
+        path.to_str().unwrap(),
+    ]);
+}
+
+/// pts, dts, duration and size of each packet, in the track's own ticks.
+fn packets(file: &Path, stream: &str) -> Vec<[i64; 4]> {
+    let out = Command::new("ffprobe")
+        .args(["-v", "error", "-select_streams", stream])
+        .args(["-show_entries", "packet=pts,dts,duration,size"])
+        .args(["-of", "csv=p=0"])
+        .arg(file)
+        .output()
+        .unwrap();
+    assert!(out.status.success());
+    String::from_utf8_lossy(&out.stdout)
+        .lines()
+        .filter_map(|l| {
+            let f: Vec<i64> = l
+                .split(',')
+                .take(4)
+                .filter_map(|x| x.parse().ok())
+                .collect();
+            f.try_into().ok()
+        })
+        .collect()
+}
+
+/// A run stopped for being far ahead and resumed on its next segment has to hand over as if it
+/// had never stopped: the resumed segments are compared with those of a run that did not.
+async fn assert_resume_is_seamless(audio_codecs: Value, mode: &str, exact_audio: bool, n: u8) {
+    if !have_ffmpeg() {
+        return;
+    }
+    let slow = env().await;
+    let src = slow.root.join("long.mkv");
+    make_long_mkv(&src);
+    let mut caps = caps_json("h264", "mp4");
+    caps["audio"]["codecs"] = audio_codecs;
+
+    let sid = id(n);
+    let r = slow.start(&sid, &src, caps.clone(), json!({})).await;
+    assert_eq!(r["mode"], mode, "{r}");
+    let init = slow.hls(&sid, "init.mp4").await;
+    slow.hls(&sid, "seg_0.m4s").await;
+    let playlist = slow.root.join("live").join(&sid).join("ffmpeg_0.m3u8");
+    let written = || {
+        std::fs::read_to_string(&playlist)
+            .map(|t| t.lines().filter(|l| l.ends_with(".m4s")).count())
+            .unwrap_or(0)
+    };
+    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(60);
+    let mut edge = written();
+    loop {
+        tokio::time::sleep(std::time::Duration::from_secs(1)).await;
+        let now = written();
+        if now == edge && now > 0 {
+            break;
+        }
+        edge = now;
+        assert!(
+            std::time::Instant::now() < deadline,
+            "the run never stopped"
+        );
+    }
+    let bounds = slow.bounds(&sid).await;
+    assert!(
+        edge > 20 && edge + 2 < bounds.len(),
+        "the run finished: {edge} of {}",
+        bounds.len()
+    );
+
+    // Started well before the seam and stopped well after it: these segments are mid-run.
+    let fast = env().await;
+    let reference = id(n + 1);
+    fast.start(
+        &reference,
+        &src,
+        caps,
+        json!({"position": bounds[edge - 20]}),
+    )
+    .await;
+    let reference_init = fast.hls(&reference, "init.mp4").await;
+
+    let slack = |ticks_per_sec: i64| ticks_per_sec * 2 / 1000;
+    let before = packets(&joined_segment(&slow, &sid, &init, edge - 1).await, "a:0");
+    let audio_end = before.iter().map(|p| p[0] + p[2]).max().unwrap();
+    for i in edge..edge + 2 {
+        // A player playing on through the resume keeps the init it already has.
+        let resumed = joined_segment(&slow, &sid, &init, i).await;
+        let in_order = joined_segment(&fast, &reference, &reference_init, i).await;
+        let (video, want) = (packets(&resumed, "v:0"), packets(&in_order, "v:0"));
+        assert_eq!(video.len(), want.len(), "seg_{i}: video packets");
+        for (got, want) in video.iter().zip(&want) {
+            // Matroska's millisecond timestamps: the muxer rounds a run's first packet either way.
+            assert!(
+                got[3] == want[3] && (0..3).all(|f| (got[f] - want[f]).abs() <= slack(16_000)),
+                "seg_{i}: video packet {got:?}, in order {want:?}"
+            );
+        }
+        let (audio, want) = (packets(&resumed, "a:0"), packets(&in_order, "a:0"));
+        if i == edge {
+            let gap = audio[0][0] - audio_end;
+            let allowed = if exact_audio { 0 } else { slack(44_100) };
+            assert!(
+                gap.abs() <= allowed,
+                "audio resumes {gap} ticks after it stopped"
+            );
+        }
+        if exact_audio {
+            // Its frames follow one another to the tick, into the next segment too.
+            let mut next = audio[0][0];
+            for p in &audio {
+                assert_eq!(p[0], next, "seg_{i}: audio frame out of place");
+                next += p[2];
+            }
+            if i == edge {
+                let after = packets(&joined_segment(&slow, &sid, &init, i + 1).await, "a:0");
+                assert_eq!(after[0][0], next, "seg_{}: audio start", i + 1);
+            }
+        } else {
+            let sizes = |p: &[[i64; 4]]| p.iter().map(|x| x[3]).collect::<Vec<_>>();
+            assert_eq!(sizes(&audio), sizes(&want), "seg_{i}: audio packets");
+        }
+    }
+}
+
+#[tokio::test]
+async fn resume_with_transcoded_audio_is_seamless() {
+    assert_resume_is_seamless(json!(["opus"]), "audio_transcode", true, 90).await;
+}
+
+#[tokio::test]
+async fn resume_with_copied_audio_is_seamless() {
+    assert_resume_is_seamless(json!(["aac"]), "remux", false, 92).await;
+}
+
 #[tokio::test]
 async fn transcode_cpu_h264() {
     if !have_ffmpeg() {

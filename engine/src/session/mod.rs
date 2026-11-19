@@ -1,4 +1,5 @@
 mod runner;
+pub mod seam;
 
 use std::collections::{BTreeSet, HashMap};
 use std::path::PathBuf;

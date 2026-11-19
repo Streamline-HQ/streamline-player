@@ -4,6 +4,7 @@ use crate::analysis::{Analysis, Hdr};
 use crate::decision::{AudioAction, CopyTag, DvHandling, HdrOut, Plan, VideoAction, VideoCodec};
 use crate::hw::{Backend, Hw};
 use crate::playlist;
+use crate::session::seam::Seam;
 
 pub const TRANSCODE_SEGMENT_SECS: f64 = 6.0;
 
@@ -17,6 +18,101 @@ pub struct RunSpec<'a> {
     pub start_index: u32,
     pub start_time: f64,
     pub out_dir: &'a Path,
+    pub bounds: &'a [f64],
+    /// Set when the segment before `start_index` is on disk: the run then takes over exactly
+    /// where that segment's audio ends, instead of where a seek happens to land it.
+    pub seam: Option<Seam>,
+}
+
+/// Audio a seamed run encodes ahead of the seam and then drops, so that the encoder's overlap
+/// and bit reservoir are those of a run that never stopped.
+const SEAM_PREROLL_FRAMES: u64 = 24;
+/// What the decoder gets ahead of that pre-roll.
+const SEAM_DECODE_LEAD_SECS: f64 = 0.4;
+/// A copied track only needs its packets to start before the seam.
+const SEAM_COPY_LEAD_SECS: f64 = 0.5;
+/// Under a packet's length and over a Matroska timestamp's rounding.
+const SEAM_SLACK_SECS: f64 = 0.005;
+
+struct AudioSeam {
+    end: f64,
+    /// First sample the encoder is given, in samples.
+    trim: Option<u64>,
+    /// How long before `end` the input has to start.
+    lead: f64,
+}
+
+fn encoder_frame(codec: &str) -> Option<u64> {
+    match codec {
+        "aac" => Some(1024),
+        "eac3" => Some(1536),
+        _ => None,
+    }
+}
+
+// ponytail: MPEG-TS seams keep the plain restart, their timeline was not measured.
+fn audio_seam(s: &RunSpec) -> Option<AudioSeam> {
+    let seam = s.seam?;
+    if s.start_index == 0
+        || s.plan.audio_index.is_none()
+        || s.analysis.container == "ts"
+        || s.bounds.len() <= s.start_index as usize
+    {
+        return None;
+    }
+    let end = seam.audio_end_secs();
+    match &s.plan.audio {
+        AudioAction::Copy => Some(AudioSeam {
+            end,
+            trim: None,
+            lead: SEAM_COPY_LEAD_SECS,
+        }),
+        AudioAction::Transcode { codec, .. } => {
+            let pre = SEAM_PREROLL_FRAMES * encoder_frame(codec)?;
+            Some(AudioSeam {
+                end,
+                trim: Some(seam.audio_end.checked_sub(pre)?),
+                lead: pre as f64 / f64::from(seam.timescale) + SEAM_DECODE_LEAD_SECS,
+            })
+        }
+    }
+}
+
+/// Drops every packet until the keyframe at `key`: what the demuxer read ahead of it so that
+/// the keyframe's own timestamps are those of a run already under way.
+fn drop_until_keyframe(key: f64) -> String {
+    format!(
+        "noise=drop='if(key*gte(pts*tb\\,{:.6})\\,st(1\\,1)\\,0)*0+not(ld(1))'",
+        key - 0.002
+    )
+}
+
+fn drop_audio_before(end: f64) -> String {
+    format!("noise=drop='lt(pts*tb\\,{:.6})'", end - SEAM_SLACK_SECS)
+}
+
+/// Puts each decoded frame on the source's own frame grid. Matroska rounds timestamps to the
+/// millisecond and ffmpeg smooths them from wherever the run started, so without this two runs
+/// place the same samples up to a millisecond apart and their AAC frames cannot line up.
+/// Only for codecs whose frames all have one length.
+fn snap_filter(s: &RunSpec) -> Option<String> {
+    let src = s
+        .analysis
+        .audio
+        .iter()
+        .find(|a| Some(a.index) == s.plan.audio_index)?;
+    if !matches!(
+        src.codec.as_str(),
+        "aac" | "ac3" | "eac3" | "dts" | "mp2" | "mp3"
+    ) {
+        return None;
+    }
+    let origin = src.start_time - playlist::container_start(s.analysis);
+    Some(if origin.abs() < 1e-6 {
+        "asetpts=round(PTS/S)*S".to_owned()
+    } else {
+        format!("asetpts=round((PTS-round({origin}*SR))/S)*S+round({origin}*SR)")
+    })
 }
 
 fn owned(args: &[&str]) -> Vec<String> {
@@ -235,7 +331,13 @@ fn push(args: &mut Vec<String>, items: &[&str]) {
     args.extend(items.iter().map(|i| (*i).to_owned()));
 }
 
-fn video_copy_args(args: &mut Vec<String>, tag: CopyTag, dv: DvHandling, s: &RunSpec) {
+fn video_copy_args(
+    args: &mut Vec<String>,
+    tag: CopyTag,
+    dv: DvHandling,
+    s: &RunSpec,
+    drop: Option<String>,
+) {
     push(args, &["-c:v", "copy"]);
     match tag {
         CopyTag::Hvc1 => push(args, &["-tag:v", "hvc1"]),
@@ -245,9 +347,15 @@ fn video_copy_args(args: &mut Vec<String>, tag: CopyTag, dv: DvHandling, s: &Run
         CopyTag::Dav1 => push(args, &["-tag:v", "dav1"]),
         CopyTag::Other => {}
     }
+    let mut bsf: Vec<String> = drop.into_iter().collect();
+    if dv == DvHandling::Strip {
+        bsf.push("dovi_rpu=strip=1".to_owned());
+    }
+    if !bsf.is_empty() {
+        args.extend(["-bsf:v".to_owned(), bsf.join(",")]);
+    }
     match dv {
-        DvHandling::Keep => {}
-        DvHandling::Strip => push(args, &["-bsf:v", "dovi_rpu=strip=1"]),
+        DvHandling::Keep | DvHandling::Strip => {}
         DvHandling::P7ToP81 => {
             let offset = p7_source_pts(s);
             args.extend([
@@ -361,7 +469,7 @@ pub fn file_video_args(plan: &Plan, a: &Analysis, hw: &Hw) -> FileVideo {
     }
 }
 
-fn audio_args(args: &mut Vec<String>, s: &RunSpec) {
+fn audio_args(args: &mut Vec<String>, s: &RunSpec, seam: Option<&AudioSeam>) {
     match &s.plan.audio {
         AudioAction::Copy => push(args, &["-c:a", "copy"]),
         AudioAction::Transcode {
@@ -382,14 +490,27 @@ fn audio_args(args: &mut Vec<String>, s: &RunSpec) {
                 .audio
                 .iter()
                 .find(|a| Some(a.index) == s.plan.audio_index);
+            let mut filters: Vec<String> = snap_filter(s).into_iter().collect();
             if let Some(src) = source
                 && *channels == 2
                 && src.channels > 2
                 && let Some(filter) = downmix_filter(&src.layout)
             {
-                args.extend(["-af".to_owned(), filter]);
+                filters.push(filter);
+            }
+            if let Some(trim) = seam.and_then(|m| m.trim) {
+                filters.push(format!("atrim=start_pts={trim}"));
+            }
+            if !filters.is_empty() {
+                args.extend(["-af".to_owned(), filters.join(",")]);
             }
         }
+    }
+    if let Some(m) = seam {
+        args.extend(["-bsf:a".to_owned(), drop_audio_before(m.end)]);
+    } else if s.start_index == 0 && s.plan.audio == AudioAction::Copy {
+        // A copied AAC track opens with its priming packet, below zero, which fMP4 cannot hold.
+        push(args, &["-bsf:a", "noise=drop='lt(pts\\,0)'"]);
     }
 }
 
@@ -460,6 +581,22 @@ pub fn live_args(s: &RunSpec) -> Vec<String> {
     args.extend(pipe.init.iter().cloned());
     args.extend(pipe.decode.iter().cloned());
     let p7 = has_dv_pipeline(plan);
+    let seam = audio_seam(s);
+    // A copied video takes over from a keyframe or more ahead on the one input, and what comes
+    // before the seam is dropped: a second input could not give the first keyframe the
+    // timestamps it has mid-run, and an open GOP's leading pictures went missing.
+    let early = seam
+        .as_ref()
+        .filter(|_| matches!(plan.video, VideoAction::Copy { .. }) && !p7)
+        .map(|m| {
+            s.bounds[..s.start_index as usize]
+                .iter()
+                .rposition(|b| *b <= m.end - m.lead)
+                .unwrap_or(0) as u32
+        });
+    let start_time = early.map_or(s.start_time, |i| {
+        playlist::seek_time(plan, s.analysis, s.bounds, i)
+    });
     if p7 {
         args.extend([
             "-f".to_owned(),
@@ -472,12 +609,24 @@ pub fn live_args(s: &RunSpec) -> Vec<String> {
     }
     args.extend([
         "-ss".to_owned(),
-        s.start_time.to_string(),
+        start_time.to_string(),
         "-copyts".to_owned(),
         "-start_at_zero".to_owned(),
         "-i".to_owned(),
         s.input.display().to_string(),
     ]);
+    // An encoded or piped video starts where it always did: only the audio is read from earlier.
+    let audio_input = seam.as_ref().filter(|_| early.is_none()).map(|m| {
+        args.extend([
+            "-ss".to_owned(),
+            format!("{:.6}", (m.end - m.lead).max(0.0)),
+            "-copyts".to_owned(),
+            "-start_at_zero".to_owned(),
+            "-i".to_owned(),
+            s.input.display().to_string(),
+        ]);
+        u8::from(p7) + 1
+    });
 
     if pipe.burn_in {
         push(&mut args, &["-map", "[v]"]);
@@ -487,7 +636,7 @@ pub fn live_args(s: &RunSpec) -> Vec<String> {
         args.extend(["-map".to_owned(), format!("0:{}", plan.video_index)]);
     }
     if let Some(audio) = plan.audio_index {
-        let input = u8::from(p7);
+        let input = audio_input.unwrap_or(u8::from(p7));
         args.extend(["-map".to_owned(), format!("{input}:{audio}")]);
     }
     push(
@@ -496,10 +645,13 @@ pub fn live_args(s: &RunSpec) -> Vec<String> {
     );
 
     match plan.video {
-        VideoAction::Copy { tag, dv } => video_copy_args(&mut args, tag, dv, s),
+        VideoAction::Copy { tag, dv } => {
+            let drop = early.map(|_| drop_until_keyframe(s.bounds[s.start_index as usize]));
+            video_copy_args(&mut args, tag, dv, s, drop);
+        }
         VideoAction::Transcode { .. } => video_transcode_args(&mut args, plan, s.hw, &pipe),
     }
-    audio_args(&mut args, s);
+    audio_args(&mut args, s, seam.as_ref());
 
     let n = s.start_index;
     let dir = s.out_dir.display();
@@ -513,7 +665,12 @@ pub fn live_args(s: &RunSpec) -> Vec<String> {
     // ponytail: hls_time 0.001 cuts at every keyframe, one segment per GOP. On
     // 1-second-GOP Blu-ray remuxes that is many small requests; the upgrade is an
     // explicit segmenter that groups GOPs.
+    // A file with B-frames opens on a negative dts. Left to itself ffmpeg shifts every stream
+    // of that run up by it, two frames: the run from the first segment then sat that much later
+    // than any run started by a seek, and the two could not meet.
     args.extend(owned(&[
+        "-avoid_negative_ts",
+        "disabled",
         "-f",
         "hls",
         "-hls_segment_type",
@@ -615,6 +772,8 @@ mod tests {
             start_index,
             start_time,
             out_dir: &PathBuf::from("/tmp/s"),
+            bounds: &[],
+            seam: None,
         })
     }
 
@@ -713,7 +872,104 @@ mod tests {
             &args,
             &["-c:a", "eac3", "-b:a", "640000", "-ac", "6"]
         ));
+        assert_eq!(value_of(&args, "-af"), "asetpts=round(PTS/S)*S");
+    }
+
+    fn seamed(p: &Plan, a: &Analysis) -> Vec<String> {
+        let bounds = [0.0, 4.0, 8.0, 11.5, 12.0];
+        live_args(&RunSpec {
+            input: Path::new("/media/in.mkv"),
+            plan: p,
+            analysis: a,
+            hw: &hw(Backend::Cpu, false),
+            start_index: 4,
+            start_time: 12.5,
+            out_dir: &PathBuf::from("/tmp/s"),
+            bounds: &bounds,
+            seam: Some(Seam {
+                audio_end: 572_000,
+                timescale: 48_000,
+            }),
+        })
+    }
+
+    #[test]
+    fn seamed_copy_starts_early_and_drops_up_to_the_seam() {
+        let mut a = analysis(false);
+        a.keyframes = vec![0.0, 4.0, 8.0, 11.5, 12.0];
+        let p = plan(
+            copy(CopyTag::Hvc1, DvHandling::Strip),
+            AudioAction::Transcode {
+                codec: "aac",
+                channels: 2,
+                bitrate: 192_000,
+            },
+        );
+        let args = seamed(&p, &a);
+        // The audio ends at 11.9167 s and needs 0.912 s before it: segment 3, at 11.5 s, starts too late.
+        assert_eq!(value_of(&args, "-ss"), "8.001");
+        assert_eq!(args.iter().filter(|x| *x == "-i").count(), 1);
+        assert_eq!(
+            value_of(&args, "-bsf:v"),
+            "noise=drop='if(key*gte(pts*tb\\,11.998000)\\,st(1\\,1)\\,0)*0+not(ld(1))',dovi_rpu=strip=1"
+        );
+        assert!(
+            value_of(&args, "-af").ends_with(&format!(",atrim=start_pts={}", 572_000 - 24 * 1024))
+        );
+        assert_eq!(
+            value_of(&args, "-bsf:a"),
+            "noise=drop='lt(pts*tb\\,11.911667)'"
+        );
+        assert!(contains_seq(&args, &["-start_number", "4"]));
+    }
+
+    #[test]
+    fn seamed_copy_of_both_tracks_only_drops() {
+        let mut a = analysis(false);
+        a.keyframes = vec![0.0, 4.0, 8.0, 11.5, 12.0];
+        let args = seamed(
+            &plan(copy(CopyTag::Hvc1, DvHandling::Keep), AudioAction::Copy),
+            &a,
+        );
+        assert_eq!(value_of(&args, "-ss"), "8.001");
         assert!(!args.contains(&"-af".to_owned()));
+        assert!(value_of(&args, "-bsf:v").starts_with("noise=drop="));
+        assert!(value_of(&args, "-bsf:a").starts_with("noise=drop='lt("));
+    }
+
+    #[test]
+    fn seamed_transcode_reads_the_audio_from_its_own_input() {
+        let p = plan(
+            transcode(VideoCodec::H264, HdrOut::Tonemap, false),
+            AudioAction::Transcode {
+                codec: "aac",
+                channels: 2,
+                bitrate: 192_000,
+            },
+        );
+        let args = seamed(&p, &analysis(false));
+        let ss: Vec<&String> = args
+            .iter()
+            .zip(args.iter().skip(1))
+            .filter(|(flag, _)| *flag == "-ss")
+            .map(|(_, v)| v)
+            .collect();
+        assert_eq!(ss, ["12.5", "11.004667"]);
+        assert!(contains_seq(&args, &["-map", "1:1"]));
+        assert!(!args.contains(&"-bsf:v".to_owned()));
+        assert!(value_of(&args, "-bsf:a").starts_with("noise=drop='lt("));
+    }
+
+    #[test]
+    fn no_seam_on_the_first_segment_or_mpeg_ts() {
+        let mut a = analysis(false);
+        a.container = "ts".into();
+        let args = seamed(
+            &plan(copy(CopyTag::Hvc1, DvHandling::Keep), AudioAction::Copy),
+            &a,
+        );
+        assert_eq!(value_of(&args, "-ss"), "12.5");
+        assert!(!args.contains(&"-bsf:a".to_owned()));
     }
 
     #[test]
@@ -740,7 +996,13 @@ mod tests {
             },
         );
         let args = run(&p, &hw(Backend::Cpu, false), 0, 0.0);
-        assert_eq!(value_of(&args, "-af"), downmix_filter("5.1(side)").unwrap());
+        assert_eq!(
+            value_of(&args, "-af"),
+            format!(
+                "asetpts=round(PTS/S)*S,{}",
+                downmix_filter("5.1(side)").unwrap()
+            )
+        );
         assert!(contains_seq(&args, &["-ac", "2"]));
     }
 
@@ -1027,6 +1289,8 @@ mod tests {
             start_index: 2,
             start_time: 5.5,
             out_dir: &PathBuf::from("/tmp/s"),
+            bounds: &[],
+            seam: None,
         });
         assert!(contains_seq(
             &source,
