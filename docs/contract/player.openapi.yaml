@@ -679,7 +679,7 @@ paths:
   /admin/library/scan:
     post:
       operationId: adminScan
-      description: Server settings, Library. Starts a scan of one folder, or of all without `folder_id`. A folder already scanning is left alone. Admin only.
+      description: Server settings, Library, and the Scan buttons of a title and a season. Starts a scan of one folder, of the given movies and episodes, or of all without any; `movies` and `episodes` win over `folder_id`. A folder already scanning is left alone. Admin only.
       requestBody:
         required: true
         content:
@@ -688,6 +688,8 @@ paths:
               type: object
               properties:
                 folder_id: { type: string }
+                movies: { type: array, items: { type: integer } }
+                episodes: { type: array, items: { type: integer } }
       responses:
         "202": { description: The scan runs; its progress is in `/admin/library`. }
         "404":
@@ -1291,8 +1293,8 @@ components:
         id: { type: integer }
         reason:
           type: string
-          enum: [continue, new_episodes, added]
-          description: The billboard's eyebrow, Continue watching, New episodes, or Added today.
+          enum: [continue, next, new_episodes, added]
+          description: The billboard's eyebrow, Continue watching, Up next (the episode after a finished one), New episodes, or Added today.
         season: { type: integer }
         episodes: { type: array, items: { type: integer } }
     Arrival:

@@ -11,6 +11,7 @@ import type {
 	ActivityEvent,
 	AdminDevice,
 	AdminLibrary,
+	ScanScope,
 	AdminOverview,
 	AdminPairing,
 	AdminSettings,
@@ -335,6 +336,8 @@ export const adminRevokeDevice = (id: string) =>
 export const adminLibrary = () => call<AdminLibrary>("GET", "/admin/library");
 export const adminScan = (folderId?: string) =>
 	call<void>("POST", "/admin/library/scan", folderId === undefined ? {} : { folder_id: folderId });
+export const adminScanTitles = (scope: ScanScope) =>
+	call<void>("POST", "/admin/library/scan", scope);
 export const adminEngineSecret = () => call<EngineSecretStatus>("GET", "/admin/engine/secret");
 export const adminRotateEngineSecret = () =>
 	call<{ secret: string }>("POST", "/admin/engine/secret");

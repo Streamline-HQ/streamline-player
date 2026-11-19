@@ -1117,5 +1117,13 @@
 	"player_stat_display_matched": "{hz} Hz · matched to the video",
 	"player_toast_subs_ready": "Subtitles ready",
 	"player_toast_subs_ready_text": "{count} tracks for this file",
-	"player_toast_resumed": "Playback resumed"
+	"player_toast_resumed": "Playback resumed",
+	"home_up_next": "Up next",
+	"home_up_next_episode": "Up next · S{season} E{episode} · {title}",
+	"detail_scan_title": "Scan {title}",
+	"detail_scan_season": "Scan Season {season}",
+	"detail_scan_short": "Scan",
+	"detail_toast_scanning_title": "Scanning {title}…",
+	"detail_toast_scanning_season": "Scanning Season {season}…",
+	"detail_toast_scan_text": "New and changed files are processed again"
 }

@@ -85,12 +85,14 @@ const showSub = (t: Title) =>
 const quality = (t: Title) =>
 	[t.file_summary?.resolution, t.file_summary?.hdr].filter(Boolean).join(" ");
 
-const playResume = (r: (typeof resume)[number]) => goto(playUrl(r.kind, r.id, r.episodeId, true));
+const playResume = (r: (typeof resume)[number]) =>
+	goto(playUrl(r.kind, r.id, r.episodeId, !r.next));
 const open = (kind: Kind, id: number, season?: number) =>
 	goto(`/detail/${kind}/${id}${season ? `?s=${season}` : ""}`);
 
 function eyebrow(f: NonNullable<typeof lib.feed>["featured"][number], t: Title) {
 	if (f.reason === "continue") return i18n.home_continue_watching();
+	if (f.reason === "next") return i18n.home_up_next();
 	if (f.reason === "new_episodes" && f.season !== undefined && f.episodes?.length) {
 		const first = f.episodes[0];
 		const last = f.episodes.at(-1);
@@ -131,15 +133,19 @@ const slides = $derived.by(() => {
 						})
 					: [t.year, t.runtime ? runtime(t.runtime) : "", quality(t)].filter(Boolean).join(" · "),
 				primary: episode
-					? i18n.detail_resume_episode({
+					? (going.next ? i18n.detail_play_episode : i18n.detail_resume_episode)({
 							season: going.season as number,
 							episode: going.episode as number,
 						})
 					: i18n.common_resume(),
-				progress: {
-					pct: going.pct,
-					left: going.sub ? `${going.sub} · ${left(going.left)}` : left(going.left),
-				},
+				...(going.next
+					? {}
+					: {
+							progress: {
+								pct: going.pct,
+								left: going.sub ? `${going.sub} · ${left(going.left)}` : left(going.left),
+							},
+						}),
 				onprimary: () => playResume(going),
 			});
 			continue;

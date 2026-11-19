@@ -9,6 +9,8 @@ export type FileSummary = {
 	size?: number;
 	file_count?: number;
 };
+/** What an admin's scan of some titles covers: movie ids and episode ids. */
+export type ScanScope = { movies?: number[]; episodes?: number[] };
 export type Episode = {
 	id: number;
 	number: number;
@@ -115,7 +117,7 @@ export type Me = {
 export type Featured = {
 	kind: Kind;
 	id: number;
-	reason: "continue" | "new_episodes" | "added";
+	reason: "continue" | "next" | "new_episodes" | "added";
 	season?: number;
 	episodes?: number[];
 };

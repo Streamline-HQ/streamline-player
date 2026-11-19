@@ -36,7 +36,9 @@ import { applyWatch, lib, loadLibrary } from "#lib/core/library.svelte.ts";
 import WatchGlyph from "#lib/ui/WatchGlyph.svelte";
 import { hideBroken, orPoster } from "#lib/ui/img.ts";
 import { toast } from "#lib/core/toast.svelte.ts";
-import { Play, RotateCcw, SkipBack } from "@lucide/svelte";
+import { canScan, scanTitle } from "#lib/screens/scan.ts";
+import "#lib/ui/card.css";
+import { Play, RefreshCw, RotateCcw, SkipBack } from "@lucide/svelte";
 
 const MAX_SIMILAR = 10;
 const MAX_CAST = 14;
@@ -301,6 +303,19 @@ const arrived = $derived(newEpisodes(lib.feed, id, new Date()));
 						<WatchGlyph on={watched} size={26} stroke={2.2} />
 						{watched ? i18n.detail_watched() : i18n.detail_mark_watched()}
 					</button>
+					{#if canScan()}
+						{@const title = t}
+						<button
+							type="button"
+							data-tv="1"
+							class="act"
+							aria-label={i18n.detail_scan_title({ title: title.title })}
+							onclick={() =>
+								scanTitle(kind, id, i18n.detail_toast_scanning_title({ title: title.title }), eps)}
+						>
+							<RefreshCw size={26} strokeWidth={2} />{i18n.detail_scan_short()}
+						</button>
+					{/if}
 				</div>
 				{#if playback && !playback.error}
 					<div class="status">
@@ -330,10 +345,28 @@ const arrived = $derived(newEpisodes(lib.feed, id, new Date()));
 								{i18n.common_season_n({ n: s.number })}
 							</button>
 						{/each}
+						{#if canScan()}
+							<button
+								type="button"
+								data-tv="1"
+								class="season scan"
+								onclick={() =>
+									scanTitle(
+										kind,
+										id,
+										i18n.detail_toast_scanning_season({ season: curSeason }),
+										shown,
+									)}
+							>
+								<RefreshCw size={24} strokeWidth={2} />
+								{i18n.detail_scan_season({ season: curSeason })}
+							</button>
+						{/if}
 					</div>
 					<div class="eps">
 						{#each shown as e}
 							{@const w = stateOf(e.media_file_id)}
+							{@const unread = e.has_file && !w?.watched && !inProgress(w)}
 							<button
 								type="button"
 								data-tv="1"
@@ -353,8 +386,11 @@ const arrived = $derived(newEpisodes(lib.feed, id, new Date()));
 										style:filter={e.has_file ? "none" : "grayscale(1)"}
 										onerror={orPoster(artwork("series", id, "poster"))}
 									>
+									{#if unread}
+										<span class="slp-unread slp-mk--tv" aria-hidden="true"></span>
+									{/if}
 									{#if e.has_file && arrived.has(`${curSeason}:${e.number}`)}
-										<span class="new">{i18n.home_new()}</span>
+										<span class="new" class:after-unread={unread}>{i18n.home_new()}</span>
 									{/if}
 									{#if inProgress(w)}
 										<span class="bar"><span style:width="{pct(w)}%"></span></span>
@@ -600,6 +636,15 @@ p {
 	transition: transform var(--dur-fast);
 }
 
+.season.scan {
+	margin-left: auto;
+	display: flex;
+	align-items: center;
+	gap: 14px;
+	background: rgba(255, 255, 255, 0.08);
+	color: var(--fg);
+}
+
 .season.on {
 	background: rgba(255, 255, 255, 0.14);
 	color: var(--fg);
@@ -660,6 +705,10 @@ p {
 	letter-spacing: 0.08em;
 	text-transform: uppercase;
 	color: var(--accent-text);
+}
+
+.new.after-unread {
+	left: 44px;
 }
 
 .still img {

@@ -516,8 +516,17 @@ async fn admin_library(api: tauri::State<'_, Api>) -> Result<Value, String> {
 }
 
 #[tauri::command]
-async fn admin_scan(api: tauri::State<'_, Api>, folder_id: Option<String>) -> Result<(), String> {
-    let body = folder_id.map_or_else(|| json!({}), |id| json!({ "folder_id": id }));
+async fn admin_scan(
+    api: tauri::State<'_, Api>,
+    folder_id: Option<String>,
+    movies: Option<Vec<i64>>,
+    episodes: Option<Vec<i64>>,
+) -> Result<(), String> {
+    let body = match (movies, episodes, folder_id) {
+        (None, None, Some(id)) => json!({ "folder_id": id }),
+        (None, None, None) => json!({}),
+        (movies, episodes, _) => json!({ "movies": movies, "episodes": episodes }),
+    };
     api.call(reqwest::Method::POST, "/admin/library/scan", Some(body))
         .await
         .map(drop)

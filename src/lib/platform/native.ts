@@ -10,6 +10,7 @@ import type {
 	ActivityEvent,
 	AdminDevice,
 	AdminLibrary,
+	ScanScope,
 	AdminOverview,
 	AdminPairing,
 	AdminSettings,
@@ -182,6 +183,8 @@ export const adminResolvePairing = (code: string, approve: boolean, userId?: num
 export const adminRevokeDevice = (id: string) => invoke<void>("admin_revoke_device", { id });
 export const adminLibrary = () => invoke<AdminLibrary>("admin_library");
 export const adminScan = (folderId?: string) => invoke<void>("admin_scan", { folderId });
+export const adminScanTitles = ({ movies, episodes }: ScanScope) =>
+	invoke<void>("admin_scan", { movies, episodes });
 export const adminEngineSecret = () => invoke<EngineSecretStatus>("admin_engine_secret");
 export const adminRotateEngineSecret = () =>
 	invoke<{ secret: string }>("admin_rotate_engine_secret");

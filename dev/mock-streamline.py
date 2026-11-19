@@ -1767,7 +1767,10 @@ class Handler(BaseHTTPRequestHandler):
                 return self.reply(204)
             return not_found()
         if method == "POST" and path == "/library/scan":
-            folder = self.body().get("folder_id")
+            body = self.body()
+            if body.get("movies") or body.get("episodes"):
+                return self.reply(202)
+            folder = body.get("folder_id")
             known = ("movies", "series")
             if folder is not None and folder not in known:
                 return not_found()

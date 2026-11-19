@@ -1117,5 +1117,13 @@
 	"player_stat_display_matched": "{hz} Hz · synchronisée avec la vidéo",
 	"player_toast_subs_ready": "Sous-titres prêts",
 	"player_toast_subs_ready_text": "{count} pistes pour ce fichier",
-	"player_toast_resumed": "Lecture reprise"
+	"player_toast_resumed": "Lecture reprise",
+	"home_up_next": "À suivre",
+	"home_up_next_episode": "À suivre · S{season} É{episode} · {title}",
+	"detail_scan_title": "Analyser {title}",
+	"detail_scan_season": "Analyser la saison {season}",
+	"detail_scan_short": "Analyser",
+	"detail_toast_scanning_title": "Analyse de {title}…",
+	"detail_toast_scanning_season": "Analyse de la saison {season}…",
+	"detail_toast_scan_text": "Les fichiers nouveaux ou modifiés sont traités à nouveau"
 }

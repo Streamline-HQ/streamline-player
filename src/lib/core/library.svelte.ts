@@ -21,12 +21,24 @@ export const lib: {
 
 let inflight: Promise<void> | null = null;
 
-const seriesOnHome = (watch: Watch[], feed: HomeFeed) => [
-	...new Set([
-		...watch.filter((w) => !w.watched && w.position_seconds > 0).flatMap((w) => w.series_id ?? []),
-		...feed.featured.filter((f) => f.kind === "series").map((f) => f.id),
-	]),
-];
+// ponytail: one title request per series on Home; a watch history of hundreds of shows would want the next episode from the server instead.
+const RECENT_SERIES = 20;
+
+/** The series Continue watching may name: the ones whose newest play (watch is newest first) is under way or finished, and the billboard's. */
+const seriesOnHome = (watch: Watch[], feed: HomeFeed) => {
+	const newest = new Map<number, Watch>();
+	for (const w of watch)
+		if (w.series_id !== undefined && !newest.has(w.series_id)) newest.set(w.series_id, w);
+	return [
+		...new Set([
+			...[...newest]
+				.filter(([, w]) => w.watched || w.position_seconds > 0)
+				.slice(0, RECENT_SERIES)
+				.map(([id]) => id),
+			...feed.featured.filter((f) => f.kind === "series").map((f) => f.id),
+		]),
+	];
+};
 
 async function fetchAll(port: LibraryPort) {
 	const [movies, shows, watch, feed] = await Promise.all([

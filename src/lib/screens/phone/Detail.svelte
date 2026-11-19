@@ -39,6 +39,7 @@ import { audioOutName, codecName, fileMbit, modeName, subInfo } from "#lib/core/
 import type { Tracks } from "#lib/core/playback/port.ts";
 import { prefs } from "#lib/core/prefs.svelte.ts";
 import { toast } from "#lib/core/toast.svelte.ts";
+import { canScan as isAdmin, scanTitle } from "#lib/screens/scan.ts";
 import type { Decision, Kind, Title } from "#lib/core/types.ts";
 import { m as i18n } from "#lib/paraglide/messages.js";
 import { askPort } from "#lib/screens/downloads-port.ts";
@@ -449,7 +450,10 @@ const facts = $derived.by(() => {
 	}));
 });
 
-const tiles = $derived((!series && resuming ? 1 : 0) + (resuming ? 1 : 0) + 1 + (movieDl ? 1 : 0));
+const canScan = $derived(isAdmin());
+const tiles = $derived(
+	(!series && resuming ? 1 : 0) + (resuming ? 1 : 0) + 1 + (movieDl ? 1 : 0) + (canScan ? 1 : 0),
+);
 const showTech = $derived(techOpen ?? prefs.techDetails);
 
 function setSeason(n: number) {
@@ -533,6 +537,16 @@ function setSeason(n: number) {
 						{@render dlGlyph(movieDl.look, 19, 13)}{movieDl.look.short}
 					</button>
 				{/if}
+				{#if canScan}
+					<button
+						type="button"
+						class="tile"
+						onclick={() =>
+							scanTitle(kind, id, i18n.detail_toast_scanning_title({ title: t?.title ?? "" }), eps)}
+					>
+						<Icon name="refresh-cw" size={19} stroke={1.75} />{i18n.detail_scan_short()}
+					</button>
+				{/if}
 				{#if seriesDl}
 					<button
 						type="button"
@@ -594,6 +608,17 @@ function setSeason(n: number) {
 							{i18n.common_season_n({ n: s.number })}
 						</button>
 					{/each}
+					{#if canScan}
+						<button
+							type="button"
+							class="scan"
+							aria-label={i18n.detail_scan_season({ season })}
+							onclick={() =>
+								scanTitle(kind, id, i18n.detail_toast_scanning_season({ season }), seasonEps)}
+						>
+							<Icon name="refresh-cw" size={17} stroke={1.8} />
+						</button>
+					{/if}
 				</div>
 				{#each episodes as e (e.id)}
 					<div class="ep">
@@ -607,8 +632,13 @@ function setSeason(n: number) {
 						>
 							<span class="still">
 								<Art src={artwork("series", id, "backdrop")} position={e.pos} />
+								{#if e.state === "unwatched"}
+									<span class="slp-unread slp-mk--thumb" aria-hidden="true"></span>
+								{/if}
 								{#if e.isNew}
-									<span class="new">{i18n.home_new()}</span>
+									<span class="new" class:after-unread={e.state === "unwatched"}
+										>{i18n.home_new()}</span
+									>
 								{/if}
 								{#if e.state === "progress"}
 									<span class="bar"><span style:width="{e.pct}%"></span></span>
@@ -977,6 +1007,21 @@ h1 {
 	scrollbar-width: none;
 }
 
+.scan {
+	flex: none;
+	width: 36px;
+	height: 36px;
+	margin-left: auto;
+	display: grid;
+	place-items: center;
+	padding: 0;
+	border: 0;
+	border-radius: 50%;
+	background: transparent;
+	color: var(--fg-subtle);
+	cursor: pointer;
+}
+
 .pill {
 	flex: none;
 	height: 36px;
@@ -1044,6 +1089,10 @@ h1 {
 	letter-spacing: 0.08em;
 	text-transform: uppercase;
 	color: var(--accent-text);
+}
+
+.new.after-unread {
+	left: 15px;
 }
 
 .bar {

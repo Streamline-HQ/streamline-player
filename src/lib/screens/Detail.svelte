@@ -66,6 +66,7 @@ import type { Tracks } from "#lib/core/playback/port.ts";
 import { isAnime, language } from "#lib/core/playback/rules.ts";
 import { myLanguage, prefs } from "#lib/core/prefs.svelte.ts";
 import { toast } from "#lib/core/toast.svelte.ts";
+import { canScan as isAdmin, scanTitle } from "#lib/screens/scan.ts";
 import type { Decision, Kind, Title } from "#lib/core/types.ts";
 import { m as i18n } from "#lib/paraglide/messages.js";
 import { askPort } from "#lib/screens/downloads-port.ts";
@@ -352,6 +353,7 @@ const toggleWatched = () =>
 	);
 
 const seasonEps = $derived(t?.seasons?.find((s) => s.number === season)?.episodes ?? []);
+const canScan = $derived(isAdmin());
 const seasonTargets = $derived(
 	seasonEps.filter((e) => e.has_file).map((e) => episodeTarget({ ...e, season })),
 );
@@ -846,6 +848,25 @@ const heroHeight = $derived(
 						<Tip text={heroLang} />
 						<Icon name="languages" size={19} stroke={1.9} />
 					</button>
+					{#if canScan && t}
+						{@const label = i18n.detail_scan_title({ title: t.title })}
+						{@const title = t}
+						<button
+							type="button"
+							class="glass sq"
+							aria-label={label}
+							onclick={() =>
+								scanTitle(
+									kind,
+									id,
+									i18n.detail_toast_scanning_title({ title: title.title }),
+									episodesOf(title),
+								)}
+						>
+							<Tip text={label} />
+							<Icon name="refresh-cw" size={19} stroke={1.9} />
+						</button>
+					{/if}
 					{#if seriesDl}
 						<DownloadButton
 							variant="hero"
@@ -912,6 +933,13 @@ const heroHeight = $derived(
 						label: seasonLang,
 						onclick: (e) => openLang("season", e.currentTarget as HTMLElement, null),
 					}}
+					seasonScan={canScan
+						? {
+								label: i18n.detail_scan_season({ season }),
+								onclick: () =>
+									scanTitle(kind, id, i18n.detail_toast_scanning_season({ season }), seasonEps),
+							}
+						: null}
 					seasonDl={seasonDl && {
 						look: seasonDl.state,
 						label: seasonDl.state.label,
