@@ -242,7 +242,7 @@ const modeLabel = $derived.by(() => {
 	const { width, height, hdr, dv_profile } = pb.session.video;
 	const range = dv_profile !== undefined ? " · Dolby Vision" : hdr === "sdr" ? "" : " · HDR";
 	const size = resBadge(width, height);
-	return `${size}${range}`;
+	return prefs.techDetails ? `${modeName(pb.session.mode)} · ${size}` : `${size}${range}`;
 });
 const fileRate = $derived(pb.preview ? fileMbit(pb.preview.bitRate) : "");
 const qualText = $derived(
@@ -958,7 +958,15 @@ onMount(() => {
 					<span class="tv-heading"
 						><span class="tv-eyebrow">{eyebrow}</span><span class="tv-title">{heading}</span></span
 					>
-					<span class="mode">{modeLabel}</span>
+					<span class="mode"
+						>{#if prefs.techDetails && pb.session}
+							<span
+								class="mode-dot"
+								style:background={pb.full ? "var(--status-available)" : "var(--status-downloading)"}
+							></span>
+						{/if}
+						{modeLabel}</span
+					>
 				</div>
 				<button
 					type="button"
@@ -1641,6 +1649,12 @@ onMount(() => {
 	gap: 12px;
 	font: 500 22px var(--font-mono);
 	color: var(--player-ink-muted);
+}
+
+.mode-dot {
+	width: 12px;
+	height: 12px;
+	border-radius: 50%;
 }
 
 .scrub {

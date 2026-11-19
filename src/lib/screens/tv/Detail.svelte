@@ -3,6 +3,7 @@ import { m as i18n } from "#lib/paraglide/messages.js";
 import { goto } from "#lib/ui/nav.ts";
 import { page } from "$app/state";
 import { autoCap, PRESETS, presetOf, rememberedThroughput } from "#lib/core/playback/auto.ts";
+import { newEpisodes } from "#lib/core/detail.ts";
 import { modeName } from "#lib/core/playback/names.ts";
 import { prefs } from "#lib/core/prefs.svelte.ts";
 import LoadFailed from "#lib/tv/LoadFailed.svelte";
@@ -211,6 +212,7 @@ async function resetProgress() {
 				: i18n.card_reset_text({ title: t.title }),
 	});
 }
+const arrived = $derived(newEpisodes(lib.feed, id, new Date()));
 </script>
 
 {#snippet castRow()}
@@ -351,6 +353,9 @@ async function resetProgress() {
 										style:filter={e.has_file ? "none" : "grayscale(1)"}
 										onerror={orPoster(artwork("series", id, "poster"))}
 									>
+									{#if e.has_file && arrived.has(`${curSeason}:${e.number}`)}
+										<span class="new">{i18n.home_new()}</span>
+									{/if}
 									{#if inProgress(w)}
 										<span class="bar"><span style:width="{pct(w)}%"></span></span>
 									{/if}
@@ -642,6 +647,19 @@ p {
 	border-radius: var(--radius-lg);
 	overflow: hidden;
 	background: var(--bg-card);
+}
+
+.new {
+	position: absolute;
+	left: 14px;
+	top: 14px;
+	padding: 4px 10px;
+	border-radius: 8px;
+	background: color-mix(in srgb, var(--bg-deep) 85%, transparent);
+	font: 500 17px var(--font-mono);
+	letter-spacing: 0.08em;
+	text-transform: uppercase;
+	color: var(--accent-text);
 }
 
 .still img {
