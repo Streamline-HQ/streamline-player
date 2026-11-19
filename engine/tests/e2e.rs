@@ -1339,3 +1339,31 @@ async fn transcode_playlist_keeps_the_time_of_a_late_video() {
         );
     }
 }
+
+#[tokio::test]
+async fn transcode_from_the_start_writes_no_audio_below_zero() {
+    if !have_ffmpeg() {
+        return;
+    }
+    let e = env().await;
+    let src = e.root.join("surround.mkv");
+    make_surround_flac_mkv(&src);
+    let sid = id(96);
+    let r = e
+        .start(
+            &sid,
+            &src,
+            caps_json("h264", "mp4"),
+            json!({"max_bitrate": 2_000_000}),
+        )
+        .await;
+    assert_eq!(r["mode"], "transcode", "{r}");
+    assert_eq!(r["audio"]["action"], "transcode", "{r}");
+    let init = e.hls(&sid, "init.mp4").await;
+    let seg = e.hls(&sid, "seg_0.m4s").await;
+    let (video, _) = video_timescale(&init);
+    let audio = if video == 1 { 2 } else { 1 };
+    // The encoder's priming packet sits 1024 samples before zero, and a decode time is unsigned.
+    let tfdt = video_tfdt(&seg, audio);
+    assert!(tfdt < 1 << 62, "the audio's first decode time is {tfdt:#x}");
+}

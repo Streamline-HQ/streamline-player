@@ -508,8 +508,9 @@ fn audio_args(args: &mut Vec<String>, s: &RunSpec, seam: Option<&AudioSeam>) {
     }
     if let Some(m) = seam {
         args.extend(["-bsf:a".to_owned(), drop_audio_before(m.end)]);
-    } else if s.start_index == 0 && s.plan.audio == AudioAction::Copy {
-        // A copied AAC track opens with its priming packet, below zero, which fMP4 cannot hold.
+    } else if s.start_index == 0 {
+        // An AAC track, copied or encoded, opens with its priming packet below zero, and an fMP4
+        // decode time cannot be negative.
         push(args, &["-bsf:a", "noise=drop='lt(pts\\,0)'"]);
     }
 }
