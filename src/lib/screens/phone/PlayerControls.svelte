@@ -30,7 +30,7 @@ import {
 	statsRows,
 	subtitleRows,
 } from "#lib/core/player-panels.ts";
-import { clock, type SeekFlash, seekFlash, segments } from "#lib/core/player-view.ts";
+import { clock, SEEK_STEP, type SeekFlash, seekFlash, segments } from "#lib/core/player-view.ts";
 import { prefs, setPref as savePref } from "#lib/core/prefs.svelte.ts";
 import { toast } from "#lib/core/toast.svelte.ts";
 import { m as i18n } from "#lib/paraglide/messages.js";
@@ -69,7 +69,6 @@ let {
 const HIDE_MS = 3200;
 const OSD_MS = 900;
 const MAX_EXTRAPOLATION = 1.5;
-const SEEK_STEP = 10;
 const SUB_STEP = 0.1;
 const AUDIO_STEP = 10;
 const CUE_SCALE = 0.72;

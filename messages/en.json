@@ -1117,5 +1117,9 @@
 	"player_pass_through": "pass-through",
 	"detail_mode_pass": "✓ pass-through",
 	"player_audio_note_pass": "{name} goes to your TV or receiver as-is (pass-through).",
-	"player_audio_note_pass_off": "Pass-through is off for {name} and this device can’t decode it, so the server converts it to {out}. Change it in Settings → This device."
+	"player_audio_note_pass_off": "Pass-through is off for {name} and this device can’t decode it, so the server converts it to {out}. Change it in Settings → This device.",
+	"player_stat_display_matched": "{hz} Hz · matched to the video",
+	"player_toast_subs_ready": "Subtitles ready",
+	"player_toast_subs_ready_text": "{count} tracks for this file",
+	"player_toast_resumed": "Playback resumed"
 }

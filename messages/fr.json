@@ -1117,5 +1117,9 @@
 	"player_pass_through": "transmis tel quel",
 	"detail_mode_pass": "✓ transmis tel quel",
 	"player_audio_note_pass": "{name} est transmis tel quel à votre téléviseur ou ampli.",
-	"player_audio_note_pass_off": "La transmission est désactivée pour {name} et cet appareil ne peut pas le décoder : le serveur le convertit en {out}. Modifiez-le dans Réglages → Cet appareil."
+	"player_audio_note_pass_off": "La transmission est désactivée pour {name} et cet appareil ne peut pas le décoder : le serveur le convertit en {out}. Modifiez-le dans Réglages → Cet appareil.",
+	"player_stat_display_matched": "{hz} Hz · synchronisée avec la vidéo",
+	"player_toast_subs_ready": "Sous-titres prêts",
+	"player_toast_subs_ready_text": "{count} pistes pour ce fichier",
+	"player_toast_resumed": "Lecture reprise"
 }

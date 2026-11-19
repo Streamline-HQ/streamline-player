@@ -294,6 +294,13 @@ function setPref(key: "subSize" | "subBg" | "subColor", value: string) {
 	pb.syncTiming();
 }
 
+// The display runs at the video's rate or a whole multiple of it, the same test the player switches modes by.
+function matched(hz: number, fps?: number) {
+	if (!fps || fps <= 0 || hz <= 0) return false;
+	const multiple = Math.round(hz / fps);
+	return multiple >= 1 && Math.abs(hz - multiple * fps) <= 0.01 * multiple;
+}
+
 const PASS_PREF: Record<string, "passEAC3" | "passTrueHD" | "passDTS"> = {
 	eac3: "passEAC3",
 	truehd: "passTrueHD",
@@ -535,7 +542,9 @@ const statRows = $derived.by(() => {
 			},
 			{
 				k: i18n.player_stat_display(),
-				v: i18n.player_stat_display_value({
+				v: (matched(live.displayHz, live.videoFps)
+					? i18n.player_stat_display_matched
+					: i18n.player_stat_display_value)({
 					hz: (Math.round(live.displayHz * 1000) / 1000).toLocaleString(getLocale()),
 				}),
 			},

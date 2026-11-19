@@ -52,6 +52,7 @@ import {
 	keyFor,
 	loadLaunch,
 	type PlayerKey,
+	SEEK_STEP,
 	type SeekFlash,
 	seekFlash,
 	segments,
@@ -424,11 +425,28 @@ function pressSurface() {
 	pressedOn = controlsOn && !!pb?.playing;
 }
 
-function tapSurface() {
+// Tablet: a second tap on the same side within this long skips that way, and so does each tap after it.
+const DOUBLE_TAP_MS = 320;
+const SIDE = 0.4;
+let lastTap = { side: 0, at: 0, running: false, controls: true };
+
+function tapSurface(e: MouseEvent) {
 	if (pressClosedMenu) {
 		pressClosedMenu = false;
 		return;
 	}
+	const r = (e.currentTarget as HTMLElement).getBoundingClientRect();
+	const x = (e.clientX - r.left) / r.width;
+	const side = x < SIDE ? -1 : x > 1 - SIDE ? 1 : 0;
+	const now = Date.now();
+	if (side !== 0 && lastTap.side === side && now - lastTap.at < DOUBLE_TAP_MS && !pb?.ended) {
+		// The pair's first tap toggled the controls: put them back as they were.
+		if (!lastTap.running) controls = lastTap.controls;
+		lastTap = { ...lastTap, at: now, running: true };
+		seek(side * SEEK_STEP);
+		return;
+	}
+	lastTap = { side, at: now, running: false, controls };
 	controls = !pressedOn;
 	lastMove = Date.now();
 }

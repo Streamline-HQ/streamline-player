@@ -535,8 +535,13 @@ export class Playback {
 
 	async refreshTracks() {
 		clearTimeout(this.#tracksTimer);
+		const wasPreparing = !!this.tracks?.preparing;
 		this.tracks = await this.#port.mediaTracks(this.#item.mediaId).catch(() => this.tracks);
 		if (this.#gone) return;
+		if (wasPreparing && this.tracks && !this.tracks.preparing)
+			toast(i18n.player_toast_subs_ready(), {
+				text: i18n.player_toast_subs_ready_text({ count: this.tracks.subtitles.length }),
+			});
 		if (!this.tracks) this.#tracksTimer = setTimeout(() => this.refreshTracks(), TRACKS_RETRY_MS);
 		if (this.tracks && !this.#picked) {
 			this.#picked = true;
@@ -828,8 +833,10 @@ export class Playback {
 		this.upNextDismissed = true;
 	}
 
-	retry() {
-		return this.start();
+	async retry() {
+		const stopped = this.halt?.kind === "stop";
+		await this.start();
+		if (stopped && !this.halt) toast(i18n.player_toast_resumed());
 	}
 
 	async pickQuality(q: Quality) {

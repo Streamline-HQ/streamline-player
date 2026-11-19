@@ -749,6 +749,7 @@ class PlayerPlugin(private val activity: Activity) : Plugin(activity) {
                 put("rendered", frames?.renderedOutputBufferCount ?: 0)
                 put("dropped", frames?.droppedBufferCount ?: 0)
                 put("displayHz", activity.windowManager.defaultDisplay.refreshRate.toDouble())
+                put("videoFps", p.videoFormat?.frameRate?.toDouble() ?: -1.0)
             })
         }
     }
