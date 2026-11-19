@@ -1104,6 +1104,7 @@ components:
         owner: { type: string, enum: [engine, player], description: "`read_only`: whose config is locked." }
         by: { type: string, description: "`session_stopped`, `server_restarting`: the admin who did it." }
         retry_after: { type: integer, description: "`server_restarting`: seconds before the player retries." }
+        need: { type: string, description: "`transcode_limit`: why this stream needs a conversion slot, as the decision words it." }
     Error:
       type: object
       required: [error]

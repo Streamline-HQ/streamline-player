@@ -419,8 +419,8 @@ impl Sessions {
             .ok_or_else(|| ApiError::not_found("unknown session"))
     }
 
-    fn permit_for(&self, mode: Mode) -> Result<Option<OwnedSemaphorePermit>, ApiError> {
-        if !is_transcode(mode) {
+    fn permit_for(&self, plan: &Plan) -> Result<Option<OwnedSemaphorePermit>, ApiError> {
+        if !is_transcode(plan.mode) {
             return Ok(None);
         }
         self.inner
@@ -428,7 +428,10 @@ impl Sessions {
             .clone()
             .try_acquire_owned()
             .map(Some)
-            .map_err(|_| ApiError::transcode_limit(TRANSCODE_RETRY_AFTER))
+            .map_err(|_| {
+                let need = plan.video_reasons.first().or(plan.audio_reasons.first());
+                ApiError::transcode_limit(TRANSCODE_RETRY_AFTER, need.map(|r| r.text.clone()))
+            })
     }
 
     /// `to_play` asks for the keyframes too, which can mean reading the whole file.
@@ -534,7 +537,7 @@ impl Sessions {
             max_height: None,
         };
         let plan = decide(&r.capabilities, &analysis, &params, &self.inner.hw.encoders)?;
-        let permit = self.permit_for(plan.mode)?;
+        let permit = self.permit_for(&plan)?;
 
         let hw = &self.inner.hw;
         let reply = response(&plan, &analysis, hw);
@@ -597,7 +600,7 @@ impl Sessions {
         let analysis = st.analysis.clone();
         let plan = decide(&st.caps, &analysis, &params, &self.inner.hw.encoders)?;
         let permit = match (is_transcode(plan.mode), st.permit.is_some()) {
-            (true, false) => self.permit_for(plan.mode)?,
+            (true, false) => self.permit_for(&plan)?,
             (true, true) => st.permit.take(),
             (false, _) => None,
         };
