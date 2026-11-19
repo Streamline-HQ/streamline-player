@@ -353,6 +353,8 @@ export class Playback {
 
 	/** The cellular cap in Mbit/s while this stream runs on mobile data, else null. */
 	mobileLimit = $state<number | null>(null);
+	/** Audio codecs this device hands to the TV or receiver undecoded. */
+	passthrough = $state<string[]>([]);
 
 	#currentCap() {
 		if (typeof this.quality === "number") return this.quality;
@@ -630,6 +632,8 @@ export class Playback {
 			if (!this.#picked)
 				this.quality = presetOf(this.network === "home" ? prefs.qHome : prefs.qAway);
 			const capabilities = await this.#port.capabilities();
+			this.passthrough =
+				(capabilities as { audio?: { passthrough?: string[] } } | null)?.audio?.passthrough ?? [];
 			await Promise.race([
 				this.refreshTracks(),
 				new Promise((done) => setTimeout(done, TRACKS_WAIT_MS)),

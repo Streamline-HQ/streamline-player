@@ -1113,5 +1113,9 @@
 	"halt_nocodec_note_admin": "Activez la conversion logicielle dans Réglages du serveur → Transcodage (plus lente, elle utilise le processeur), ou lisez-le sur un autre appareil.",
 	"halt_toast_scan_started": "Analyse de la bibliothèque lancée",
 	"player_auto_capped_cellular": "plafonné en cellulaire",
-	"player_stat_away": "hors de la maison"
+	"player_stat_away": "hors de la maison",
+	"player_pass_through": "transmis tel quel",
+	"detail_mode_pass": "✓ transmis tel quel",
+	"player_audio_note_pass": "{name} est transmis tel quel à votre téléviseur ou ampli.",
+	"player_audio_note_pass_off": "La transmission est désactivée pour {name} et cet appareil ne peut pas le décoder : le serveur le convertit en {out}. Modifiez-le dans Réglages → Cet appareil."
 }

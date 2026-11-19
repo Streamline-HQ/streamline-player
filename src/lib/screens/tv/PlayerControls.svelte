@@ -294,16 +294,26 @@ function setPref(key: "subSize" | "subBg" | "subColor", value: string) {
 	pb.syncTiming();
 }
 
+const PASS_PREF: Record<string, "passEAC3" | "passTrueHD" | "passDTS"> = {
+	eac3: "passEAC3",
+	truehd: "passTrueHD",
+	dts: "passDTS",
+};
+const passes = (codec: string) => pb.passthrough.includes(codec);
+
 const audioNote = $derived.by(() => {
 	if (!pb.selectedAudio || !pb.session) return "";
 	const name = audioName(pb.selectedAudio);
-	return pb.session.audio.action === "copy"
-		? i18n.player_audio_note_as_is({ player: PLAYER_NAME, name })
-		: i18n.player_audio_note_convert({
-				player: PLAYER_NAME,
-				name,
-				out: audioOutName(pb.session),
-			});
+	const out = audioOutName(pb.session);
+	if (pb.session.audio.action === "copy")
+		return passes(pb.session.audio.codec)
+			? i18n.player_audio_note_pass({ name })
+			: i18n.player_audio_note_as_is({ player: PLAYER_NAME, name });
+	// The viewer chose "Decode here" for this codec and the device cannot: say where to change it.
+	const pref = PASS_PREF[pb.selectedAudio.codec];
+	return pref && prefs[pref] === "Decode here"
+		? i18n.player_audio_note_pass_off({ name, out })
+		: i18n.player_audio_note_convert({ player: PLAYER_NAME, name, out });
 });
 
 const styleNote = $derived(
@@ -446,7 +456,7 @@ const statRows = $derived.by(() => {
 			k: i18n.player_audio(),
 			v:
 				session.audio.action === "copy"
-					? `${audioIn} · ${i18n.player_stat_as_is()}`
+					? `${audioIn} · ${passes(session.audio.codec) ? i18n.player_pass_through() : i18n.player_stat_as_is()}`
 					: `${audioIn} → ${audioOut}`,
 			c: "var(--player-ink)",
 		},
@@ -1157,7 +1167,11 @@ onMount(() => {
 								: languageLabel(t.language),
 							t.index === pb.selectedAudio?.index,
 							() => pb.pickAudio(t),
-							out && !asIs ? `${audioName(t)} \u2192 ${audioOutName(out)}` : audioName(t),
+							out && !asIs
+								? `${audioName(t)} \u2192 ${audioOutName(out)}`
+								: asIs && passes(out.audio.codec)
+									? `${audioName(t)} · ${i18n.player_pass_through()}`
+									: audioName(t),
 							out ? (asIs ? i18n.player_badge_as_is() : i18n.player_badge_converted()) : "",
 							asIs ? "ok" : "conv",
 						)}

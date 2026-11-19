@@ -100,6 +100,7 @@ export function panelWords(playerName: string): Words {
 		originalFile: i18n.player_stat_original_file(),
 		nothingConverted: i18n.player_stat_nothing_converted(),
 		statAsIs: i18n.player_stat_as_is(),
+		passThrough: i18n.player_pass_through(),
 		fileItself: i18n.player_stat_file_itself(),
 		audioOnly: i18n.player_stat_audio_only(),
 		burnedIn: i18n.player_stat_burned_in(),

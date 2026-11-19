@@ -308,7 +308,9 @@ const cue = $derived.by(() => {
 	};
 });
 
-const audioList = $derived(audioRows(pb.tracks, pb.selectedAudio, pb.preview, pb.session, words));
+const audioList = $derived(
+	audioRows(pb.tracks, pb.selectedAudio, pb.preview, pb.session, words, pb.passthrough),
+);
 const subList = $derived(subtitleRows(pb.tracks, pb.subPick, words));
 const qualityList = $derived(
 	qualityRows(
@@ -365,7 +367,9 @@ const menuNote = $derived.by(() => {
 		const asIs = session.audio.action === "copy";
 		return {
 			text: asIs
-				? i18n.player_audio_note_as_is({ player: playbackPort.playerName, name })
+				? pb.passthrough.includes(session.audio.codec)
+					? i18n.player_audio_note_pass({ name })
+					: i18n.player_audio_note_as_is({ player: playbackPort.playerName, name })
 				: i18n.player_audio_note_convert({
 						player: playbackPort.playerName,
 						name,
@@ -474,6 +478,8 @@ const statList = $derived.by(() => {
 			measured: pb.measured,
 			throughput: pb.network ? rememberedThroughput(pb.network) : null,
 			away: pb.network === "away",
+			passAudio:
+				pb.session?.audio.action === "copy" && pb.passthrough.includes(pb.session.audio.codec),
 			host: URL.canParse(pb.session.url) ? new URL(pb.session.url).host : "",
 			playerName: playbackPort.playerName,
 			full: pb.full,

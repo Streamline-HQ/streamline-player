@@ -84,6 +84,7 @@ export type Words = {
 	originalFile: string;
 	nothingConverted: string;
 	statAsIs: string;
+	passThrough?: string;
 	fileItself: string;
 	audioOnly: string;
 	burnedIn: string;
@@ -116,6 +117,7 @@ export function audioRows(
 	preview: Preview | null,
 	session: Session | null,
 	w: Words,
+	passthrough: string[] = [],
 ): Row[] {
 	return (tracks?.audio ?? []).map((t, i) => {
 		const d = preview?.audio[t.index];
@@ -124,7 +126,12 @@ export function audioRows(
 		return {
 			id: String(t.index),
 			label: i === 0 ? w.originalLanguage(t.language) : w.language(t.language),
-			sub: out && !asIs ? `${w.audioName(t)} → ${w.audioOut(out)}` : w.audioName(t),
+			sub:
+				out && !asIs
+					? `${w.audioName(t)} → ${w.audioOut(out)}`
+					: asIs && w.passThrough && passthrough.includes(out.audio.codec)
+						? `${w.audioName(t)} · ${w.passThrough}`
+						: w.audioName(t),
 			badge: out ? (asIs ? w.asIs : w.converted) : undefined,
 			tone: asIs ? "ok" : "conv",
 			on: t.index === pick?.index,
@@ -276,6 +283,8 @@ export type StatsInput = {
 	/** What this network last measured, when nothing was measured in this playback. */
 	throughput: number | null;
 	away?: boolean;
+	/** The audio goes to the TV or receiver undecoded. */
+	passAudio?: boolean;
 	host: string;
 	playerName: string;
 	full: boolean;
@@ -319,7 +328,9 @@ export function statsRows(s: StatsInput, w: Words): StatRow[] {
 		...(copy ? [] : why(session.video_reasons)),
 		{
 			label: L.audio,
-			value: audioCopy ? `${audioIn} · ${w.statAsIs}` : `${audioIn} → ${w.audioOut(session)}`,
+			value: audioCopy
+				? `${audioIn} · ${s.passAudio && w.passThrough ? w.passThrough : w.statAsIs}`
+				: `${audioIn} → ${w.audioOut(session)}`,
 			color: "var(--player-ink)",
 		},
 		...(audioCopy ? [] : why(session.audio_reasons)),

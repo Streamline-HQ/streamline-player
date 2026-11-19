@@ -146,6 +146,14 @@ $effect(() => {
 	}
 });
 
+let passthrough = $state<string[]>([]);
+playbackPort
+	.capabilities()
+	.then((c) => {
+		passthrough = (c as { audio?: { passthrough?: string[] } } | null)?.audio?.passthrough ?? [];
+	})
+	.catch(() => {});
+
 $effect(() => {
 	const media = primary?.mediaId;
 	tracks = null;
@@ -386,13 +394,15 @@ const similar = $derived(
 );
 
 const modeShort = (m: TechMode) =>
-	m.kind === "asis"
-		? i18n.detail_phone_mode_as_is()
-		: m.kind === "converted"
-			? i18n.detail_phone_mode_converted()
-			: m.kind === "burn"
-				? i18n.detail_phone_mode_burn()
-				: i18n.detail_phone_mode_shown();
+	m.kind === "pass"
+		? i18n.player_pass_through()
+		: m.kind === "asis"
+			? i18n.detail_phone_mode_as_is()
+			: m.kind === "converted"
+				? i18n.detail_phone_mode_converted()
+				: m.kind === "burn"
+					? i18n.detail_phone_mode_burn()
+					: i18n.detail_phone_mode_shown();
 const modeTone = (m: TechMode) =>
 	m.kind === "converted"
 		? "var(--status-downloading)"
@@ -414,7 +424,11 @@ const facts = $derived.by(() => {
 	return techRows(t, kind, tracks, {
 		video: d ? { copy: d.video.action === "copy", out: codecName(d.video.codec) } : undefined,
 		audio: d
-			? { copy: d.audio.action === "copy", out: audioOutName({ audio: d.audio }) }
+			? {
+					copy: d.audio.action === "copy",
+					out: audioOutName({ audio: d.audio }),
+					pass: passthrough.includes(d.audio.codec),
+				}
 			: undefined,
 		subs: (tracks?.subtitles ?? []).map((s) => {
 			const info = subInfo(s);
