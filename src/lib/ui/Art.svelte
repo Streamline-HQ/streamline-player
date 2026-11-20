@@ -85,11 +85,20 @@ $effect(() => {
 </span>
 
 <style>
+/* One layer for the whole stack: the placeholder and the picture share a grid cell instead of
+   each being positioned, and nothing is overflow: hidden. WebKit walks every layer on each frame
+   it draws, and a screen holds hundreds of these. */
 .art {
 	position: absolute;
 	inset: 0;
-	display: block;
-	overflow: hidden;
+	display: grid;
+	overflow: clip;
+}
+
+.art > :global(*) {
+	grid-area: 1 / 1;
+	min-width: 0;
+	min-height: 0;
 }
 
 .art.sized {
@@ -99,9 +108,8 @@ $effect(() => {
 }
 
 .frame {
-	position: absolute;
-	inset: 0;
-	overflow: hidden;
+	position: relative;
+	overflow: clip;
 	background: var(--bg-stage);
 }
 
@@ -124,8 +132,6 @@ $effect(() => {
 }
 
 .ph {
-	position: absolute;
-	inset: 0;
 	display: grid;
 	place-items: center;
 	font-size: 40px;
@@ -133,20 +139,20 @@ $effect(() => {
 }
 
 img {
-	position: absolute;
-	inset: 0;
 	width: 100%;
 	height: 100%;
 	object-fit: cover;
 	display: block;
-	opacity: 0;
+	/* Not opacity: 0, which gives the image a layer until it loads. Each picture arriving then
+	   changed the layer tree, and WebKit recomputed it for the whole page. */
+	visibility: hidden;
 	/* Android WebView turns a held image into its own drag or save menu and cancels the pointer. */
 	pointer-events: none;
 	-webkit-touch-callout: none;
 }
 
 img.loaded {
-	opacity: 1;
+	visibility: visible;
 }
 
 img.soft {

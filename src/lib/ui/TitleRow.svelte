@@ -283,7 +283,7 @@ const line = $derived(
 	font-size: 14px;
 	font-weight: 500;
 	white-space: nowrap;
-	overflow: hidden;
+	overflow: clip;
 	text-overflow: ellipsis;
 }
 
@@ -323,7 +323,7 @@ const line = $derived(
 }
 
 .clip {
-	overflow: hidden;
+	overflow: clip;
 	text-overflow: ellipsis;
 }
 

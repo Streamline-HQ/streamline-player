@@ -91,6 +91,12 @@ const open = (e: KeyboardEvent) => {
 };
 
 const has = $derived(!!(onplay || reset || mark || lang));
+// Desktop draws the hover actions once the pointer or the focus first reaches the card: they are
+// a third of a card's elements, and a grid holds hundreds of cards never hovered.
+let woken = $state(false);
+const wake = () => {
+	woken = true;
+};
 let box = $state<HTMLElement>();
 const h = hold(
 	() => box,
@@ -101,7 +107,7 @@ const h = hold(
 <!-- A card's stand-in while a long list mounts: its size, from the same rules, and its title as text the browser's find can match. -->
 {#snippet skeleton(title: string)}
 	<div class="card skeleton">
-		<span class="slp-art"></span>
+		<span class="slp-art flat"></span>
 		<span class="text">
 			<span class="lines">
 				<span class="title">{title}</span>
@@ -267,10 +273,14 @@ const h = hold(
 		style:width={width ? `${width}px` : undefined}
 		{onclick}
 		onkeydown={open}
+		onpointerenter={wake}
+		onfocusin={wake}
 	>
 		<span class="slp-art desk-art">
 			<Art {src} {small} kind="poster" />
-			{@render controls(false, 20)}
+			{#if woken}
+				{@render controls(false, 20)}
+			{/if}
 			{@render markers()}
 		</span>
 		<span class="text">
@@ -361,7 +371,9 @@ const h = hold(
 .note,
 .sub {
 	white-space: nowrap;
-	overflow: hidden;
+	/* clip, not hidden: WebKit gives every overflow: hidden box a layer, and walks them all on
+	   each frame it draws. A grid holds hundreds of these lines. */
+	overflow: clip;
 	text-overflow: ellipsis;
 }
 
@@ -421,7 +433,7 @@ const h = hold(
 .tv-note,
 .tv-sub {
 	white-space: nowrap;
-	overflow: hidden;
+	overflow: clip;
 	text-overflow: ellipsis;
 }
 
@@ -486,7 +498,7 @@ const h = hold(
 .phone-note,
 .phone-sub {
 	white-space: nowrap;
-	overflow: hidden;
+	overflow: clip;
 	text-overflow: ellipsis;
 }
 
@@ -507,8 +519,16 @@ const h = hold(
 	color: var(--fg-subtle);
 }
 
+/* No layer at all in a skeleton: a long list is mostly skeletons, and WebKit walks every layer
+   on each frame it draws. */
 .skeleton {
+	position: static;
 	cursor: default;
+}
+
+.flat {
+	position: static;
+	overflow: visible;
 }
 
 /* Transparent, not hidden: find-in-page skips text under visibility: hidden or display: none. */
