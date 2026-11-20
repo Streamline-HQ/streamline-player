@@ -656,7 +656,20 @@ impl Jobs {
                 error: e.error.clone(),
             });
         }
-        self.0.read_record(id).ok_or_else(not_found)
+        if let Some(record) = self.0.read_record(id) {
+            return Ok(record);
+        }
+        // Until `restore_backlog` has queued it again after a restart, a job owed in the backlog is
+        // only a file. Answering not_found would tell the caller it is lost, and it would drop it.
+        if self.0.backlog_file(id).exists() {
+            return Ok(JobStatus {
+                state: JobState::Queued,
+                progress: None,
+                result: None,
+                error: None,
+            });
+        }
+        Err(not_found())
     }
 
     pub fn file(&self, id: &str, name: &str) -> Result<PathBuf, ApiError> {
@@ -1155,6 +1168,8 @@ mod tests {
 
         let fresh = f.jobs();
         assert_eq!(fresh.owed(), None);
+        assert_eq!(fresh.status(&id(2)).unwrap().state, JobState::Queued);
+        assert_eq!(fresh.status(&id(3)).unwrap_err().code, "not_found");
         fresh.sweep_boot().await.unwrap();
         assert_eq!(fresh.owed(), Some(2));
         f.release();
