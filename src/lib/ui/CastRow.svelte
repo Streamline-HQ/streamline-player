@@ -90,7 +90,7 @@ $effect(() => {
 		style:margin="0 -{padX}px"
 		style:padding="0 {padX - 6}px 4px"
 	>
-		{#each members as c (c.id)}
+		{#each members as c, i (`${c.id}:${i}`)}
 			<button type="button" class="castc" onclick={() => onopen(c.id)}>
 				<span class="img" style:background={c.bg} style:color={c.fg}>
 					{#if !broken[c.id]}
