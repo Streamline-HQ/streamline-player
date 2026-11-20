@@ -22,7 +22,8 @@ import { gridNav } from "#lib/ui/grid-nav.ts";
 import { cardSrcset, orFull } from "#lib/ui/img.ts";
 import Icon from "#lib/ui/Icon.svelte";
 import { goto } from "#lib/ui/nav.ts";
-import PosterCard from "#lib/ui/PosterCard.svelte";
+import PosterCard, { skeleton as posterSkeleton } from "#lib/ui/PosterCard.svelte";
+import { progressive } from "#lib/ui/progressive.svelte.ts";
 import SearchField from "#lib/ui/SearchField.svelte";
 import { artwork, home, library, title, watchState } from "#platform";
 import { afterNavigate } from "$app/navigation";
@@ -87,10 +88,19 @@ const hits = $derived(searchTitles(all, q));
 const top = $derived(hits[0]);
 const movies = $derived(hits.filter((t) => t.kind === "movies"));
 const shows = $derived(hits.filter((t) => t.kind === "series"));
+// One letter can match most of the library: drawn at once, that froze the page for seconds.
+const movieRows = progressive(
+	() => movies,
+	() => "movies",
+);
+const showRows = progressive(
+	() => shows,
+	() => "series",
+);
 const groups = $derived(
 	[
-		{ label: i18n.nav_movies(), items: movies },
-		{ label: i18n.nav_shows(), items: shows },
+		{ label: i18n.nav_movies(), items: movies, rows: movieRows },
+		{ label: i18n.nav_shows(), items: shows, rows: showRows },
 	].filter((g) => g.items.length),
 );
 const tiles = $derived(genreTiles(all));
@@ -220,18 +230,22 @@ onMount(() => {
 			{#each groups as g (g.label)}
 				<section>
 					<h2>{g.label} <span class="n">{g.items.length}</span></h2>
-					<div class="grid">
-						{#each g.items as t (`${t.kind}:${t.id}`)}
-							<PosterCard
-								title={t.title}
-								sub={sub(t)}
-								src={artwork(t.kind, t.id, "poster")}
-								small={artwork(t.kind, t.id, "poster-w342")}
-								{...titleCard(t.kind, t, now)}
-								badge={undefined}
-								nav
-								onclick={() => open(t)}
-							/>
+					<div class="grid" style:padding-bottom="{g.rows.after}px" use:g.rows.track>
+						{#each g.items.slice(0, g.rows.drawn) as t (`${t.kind}:${t.id}`)}
+							{#if g.rows.real(t.id)}
+								<PosterCard
+									title={t.title}
+									sub={sub(t)}
+									src={artwork(t.kind, t.id, "poster")}
+									small={artwork(t.kind, t.id, "poster-w342")}
+									{...titleCard(t.kind, t, now)}
+									badge={undefined}
+									nav
+									onclick={() => open(t)}
+								/>
+							{:else}
+								{@render posterSkeleton(t.title)}
+							{/if}
 						{/each}
 					</div>
 				</section>
