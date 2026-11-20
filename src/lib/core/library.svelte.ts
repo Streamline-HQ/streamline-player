@@ -9,15 +9,22 @@ export type LibraryPort = {
 	title(kind: Kind, id: number): Promise<Title>;
 };
 
-/** One store for every screen, so a title marked watched on one is watched on the others. */
-export const lib: {
-	movies: Title[];
-	shows: Title[];
-	watch: Watch[];
-	feed: HomeFeed | null;
-	loaded: boolean;
-	error: string | null;
-} = $state({ movies: [], shows: [], watch: [], feed: null, loaded: false, error: null });
+/**
+ * One store for every screen, so a title marked watched on one is watched on the others.
+ *
+ * The lists are raw state, replaced whole and never changed in place. As deep state every card
+ * read them through proxies, each row a dependency: a card cost tens of milliseconds to draw.
+ */
+class Library {
+	movies = $state.raw<Title[]>([]);
+	shows = $state.raw<Title[]>([]);
+	watch = $state.raw<Watch[]>([]);
+	feed = $state.raw<HomeFeed | null>(null);
+	loaded = $state(false);
+	error = $state<string | null>(null);
+}
+
+export const lib = new Library();
 
 let inflight: Promise<void> | null = null;
 
@@ -96,19 +103,17 @@ export function applyWatch(
 	watched: boolean,
 	ref?: Pick<Watch, "movie_id" | "series_id" | "season" | "episode_id">,
 ) {
-	const row = lib.watch.find((w) => w.media_id === mediaId);
-	if (row) {
-		row.watched = watched;
-		if (!watched) row.position_seconds = 0;
-	} else if (watched) {
-		lib.watch.unshift({
-			media_id: mediaId,
-			position_seconds: 0,
-			duration_seconds: 0,
-			watched,
-			...ref,
-		});
-	}
+	if (lib.watch.some((w) => w.media_id === mediaId))
+		lib.watch = lib.watch.map((w) =>
+			w.media_id === mediaId
+				? { ...w, watched, position_seconds: watched ? w.position_seconds : 0 }
+				: w,
+		);
+	else if (watched)
+		lib.watch = [
+			{ media_id: mediaId, position_seconds: 0, duration_seconds: 0, watched, ...ref },
+			...lib.watch,
+		];
 }
 
 const DETAIL_BATCH = 6;
@@ -126,16 +131,18 @@ let seasonsInflight: Promise<void> | null = null;
 async function fetchSeasons(port: Pick<LibraryPort, "title">) {
 	const missing = lib.shows.filter((s) => !s.seasons).map((s) => s.id);
 	for (let i = 0; i < missing.length; i += DETAIL_BATCH) {
-		await Promise.all(
-			missing.slice(i, i + DETAIL_BATCH).map((id) =>
-				port.title("series", id).then(
-					(d) => {
-						const at = lib.shows.findIndex((s) => s.id === id);
-						if (at >= 0) lib.shows[at] = d;
-					},
-					() => {},
-				),
-			),
+		const got = new Map(
+			(
+				await Promise.all(
+					missing.slice(i, i + DETAIL_BATCH).map((id) =>
+						port.title("series", id).then(
+							(d) => [id, d] as const,
+							() => null,
+						),
+					),
+				)
+			).filter((e) => e !== null),
 		);
+		if (got.size) lib.shows = lib.shows.map((s) => got.get(s.id) ?? s);
 	}
 }
