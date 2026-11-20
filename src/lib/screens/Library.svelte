@@ -1,3 +1,8 @@
+<script lang="ts" module>
+// How tall the rails were when last fully drawn, for the space to hold while they draw again.
+const railsHeight = new Map<string, number>();
+</script>
+
 <script lang="ts">
 import { onMount, untrack } from "svelte";
 import { isNew, years } from "#lib/core/browse.ts";
@@ -71,6 +76,27 @@ const rows = progressive(
 	() => `${kind}:${view.layout}`,
 );
 const shown = $derived(items.slice(0, rows.drawn));
+
+// The rails of the first screen at once, then one a frame: all of them in one go was a frame of
+// a quarter of a second on arrival.
+const FIRST_RAILS = 3;
+let railsDrawn = $state(FIRST_RAILS);
+let railsBox = $state<HTMLElement>();
+const railsDone = $derived(railsDrawn >= rails.length);
+$effect.pre(() => {
+	kind;
+	untrack(() => {
+		railsDrawn = FIRST_RAILS;
+	});
+});
+$effect(() => {
+	if (isAll || railsDrawn >= rails.length) return;
+	const frame = requestAnimationFrame(() => railsDrawn++);
+	return () => cancelAnimationFrame(frame);
+});
+$effect(() => {
+	if (!isAll && railsDone && railsBox) railsHeight.set(kind, railsBox.offsetHeight);
+});
 const track = rows.track;
 
 let genreMenu = $state(false);
@@ -322,8 +348,13 @@ const heads: { label: () => string; sort: Sort; end?: boolean }[] = [
 			</nav>
 
 			{#if !isAll}
-				<div class="rails" style:margin="4px -{PAD_X}px 0">
-					{#each rails as r (`${r.id}:${r.genre ?? ""}`)}
+				<div
+					class="rails"
+					bind:this={railsBox}
+					style:margin="4px -{PAD_X}px 0"
+					style:min-height={railsDone ? undefined : `${railsHeight.get(kind) ?? 0}px`}
+				>
+					{#each rails.slice(0, railsDrawn) as r (`${r.id}:${r.genre ?? ""}`)}
 						<Row
 							title={railTitle(r)}
 							note={railNote(r)}
