@@ -60,7 +60,7 @@ let failed = $state(false);
 		</div>
 		<span class="path">{row.path}</span>
 		<div class="bar">
-			<div class="track"><div style:width="{row.pct}%"></div></div>
+			<div class="track"><div style:transform="translateX({row.pct - 100}%)"></div></div>
 			<span class="time">{row.time}</span>
 			<span class="mbps">{row.mbps}</span>
 			<button
@@ -220,7 +220,8 @@ let failed = $state(false);
 	height: 100%;
 	border-radius: var(--radius-full);
 	background: var(--accent);
-	transition: width 900ms linear;
+	/* Slid in from the left rather than widened: a width relays the page out on every frame. */
+	transition: transform 900ms linear;
 }
 
 .time {
