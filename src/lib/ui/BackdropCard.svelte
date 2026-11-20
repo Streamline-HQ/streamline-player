@@ -45,7 +45,13 @@ let {
 		{onclick}
 	>
 		<span class="slp-art slp-art--wide">
-			<img src={backdrop} alt="" loading="lazy" onerror={orPoster(poster, undefined, posterSmall)}>
+			<img
+				src={backdrop}
+				alt=""
+				loading="lazy"
+				decoding="async"
+				onerror={orPoster(poster, undefined, posterSmall)}
+			>
 			<span class="slp-bd__shade" aria-hidden="true"></span>
 			{#if info?.unread}
 				<span class="slp-unread" aria-hidden="true"></span>

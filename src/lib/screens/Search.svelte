@@ -188,6 +188,7 @@ onMount(() => {
 								)}
 								alt=""
 								loading="lazy"
+								decoding="async"
 								onerror={orFull((e) => (e.currentTarget as HTMLImageElement).remove())}
 							>
 							<span class="label">
@@ -218,6 +219,7 @@ onMount(() => {
 						artwork(top.kind, top.id, "poster"),
 					)}
 					alt=""
+					decoding="async"
 					onerror={orFull((e) => (e.currentTarget as HTMLImageElement).remove())}
 				>
 				<span class="copy">

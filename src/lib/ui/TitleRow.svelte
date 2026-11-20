@@ -79,7 +79,7 @@ const line = $derived(
 <!-- A row's stand-in while a long list mounts: its size, from the same rules, and its title as text the browser's find can match. -->
 {#snippet skeleton(title: string)}
 	<div class="row skeleton">
-		<span class="thumb slp-art slp-mk--thumb"></span>
+		<span class="thumb slp-art slp-mk--thumb flat"></span>
 		<span class="main">
 			<span class="title">{title}</span>
 		</span>
@@ -95,6 +95,7 @@ const line = $derived(
 				srcset={cardSrcset(small, poster)}
 				alt=""
 				loading="lazy"
+				decoding="async"
 				onerror={orFull(() => (broken = true))}
 			>
 		{/if}
@@ -224,7 +225,6 @@ const line = $derived(
 }
 
 .tool {
-	position: relative;
 	flex: none;
 	width: 32px;
 	height: 32px;
@@ -251,7 +251,9 @@ const line = $derived(
 	margin-left: 2px;
 }
 
+/* The watch glyph's ring is placed against its button; the other tools need no layer. */
 .tool.mark {
+	position: relative;
 	transition: color 180ms;
 }
 
@@ -329,6 +331,17 @@ const line = $derived(
 
 .end {
 	text-align: right;
+}
+
+/* No layer at all in a skeleton: a long list is mostly skeletons, and WebKit walks every layer
+   on each frame it draws. */
+.row.skeleton,
+.flat {
+	position: static;
+}
+
+.flat {
+	overflow: visible;
 }
 
 .row.skeleton:hover {

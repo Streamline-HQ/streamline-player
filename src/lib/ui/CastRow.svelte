@@ -94,7 +94,13 @@ $effect(() => {
 			<button type="button" class="castc" onclick={() => onopen(c.id)}>
 				<span class="img" style:background={c.bg} style:color={c.fg}>
 					{#if !broken[c.id]}
-						<img src={c.photo} alt="" loading="lazy" onerror={() => (broken[c.id] = true)}>
+						<img
+							src={c.photo}
+							alt=""
+							loading="lazy"
+							decoding="async"
+							onerror={() => (broken[c.id] = true)}
+						>
 					{:else}
 						{c.initials}
 					{/if}
