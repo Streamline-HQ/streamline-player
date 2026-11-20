@@ -35,17 +35,12 @@ $effect(() => {
 	softReady = false;
 });
 // A cached image can finish before the handlers are attached. `complete` alone is no verdict:
-// WebKit also says it of an image it has not decoded or has put off loading, with no size yet,
-// so a refusal here is left to the handlers.
+// WebKit also says it of an image it has put off loading, with no size yet, which is left to the
+// handlers. Not `decode()`: on a screen of cached posters it decoded them all before the first
+// frame, a second of freeze; shown undecoded, each decodes off the main thread.
 $effect(() => {
-	const shown = src;
-	if (img?.complete)
-		img.decode().then(
-			() => {
-				if (src === shown) loaded = true;
-			},
-			() => {},
-		);
+	src;
+	if (img?.complete && img.naturalWidth > 0) loaded = true;
 });
 </script>
 
@@ -107,28 +102,21 @@ $effect(() => {
 	width: 100%;
 }
 
+/* Two soft glows, as gradients: drawn as blurred shapes (filter: blur) they cost a filter layer
+   each per picture, and a season of episodes froze the page for seconds. */
 .frame {
-	position: relative;
-	overflow: clip;
-	background: var(--bg-stage);
-}
-
-.frame::before {
-	content: "";
-	position: absolute;
-	inset: 18% -10% 30% 40%;
-	border-radius: 50%;
-	background: color-mix(in srgb, var(--accent) 24%, var(--bg-stage));
-	filter: blur(60px);
-}
-
-.frame::after {
-	content: "";
-	position: absolute;
-	inset: 55% 30% -20% -10%;
-	border-radius: 50%;
-	background: color-mix(in srgb, var(--status-wanted) 16%, var(--bg-stage));
-	filter: blur(70px);
+	background:
+		radial-gradient(
+			ellipse 70% 62% at 76% 42%,
+			color-mix(in srgb, var(--accent) 11%, transparent),
+			transparent
+		),
+		radial-gradient(
+			ellipse 75% 66% at 28% 92%,
+			color-mix(in srgb, var(--status-wanted) 8%, transparent),
+			transparent
+		),
+		var(--bg-stage);
 }
 
 .ph {
