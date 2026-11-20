@@ -147,7 +147,9 @@ const frameStyle = (i: number) => {
 							><span
 								class="fill"
 								style:transform="scaleX({i === at ? progress : 0})"
-								style:transition={i === at && progress > 0 ? `transform ${TICK_MS}ms linear` : "none"}
+								style:transition={i === at && progress > 0
+									? `transform ${TICK_MS}ms linear`
+									: "none"}
 							></span></span
 						>
 					</button>
