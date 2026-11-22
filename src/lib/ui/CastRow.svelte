@@ -196,6 +196,7 @@ h2 {
 }
 
 .img {
+	position: relative;
 	display: grid;
 	place-items: center;
 	width: 84px;
@@ -209,10 +210,11 @@ h2 {
 }
 
 .img img {
+	position: absolute;
+	inset: 0;
 	width: 100%;
 	height: 100%;
 	object-fit: cover;
-	display: block;
 }
 
 .who {

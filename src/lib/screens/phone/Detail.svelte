@@ -51,6 +51,8 @@ import Icon from "#lib/ui/Icon.svelte";
 import { goto } from "#lib/ui/nav.ts";
 import NotFound from "#lib/ui/NotFound.svelte";
 import WatchGlyph from "#lib/ui/WatchGlyph.svelte";
+import WatchMarks from "#lib/ui/WatchMarks.svelte";
+import { watchInfo } from "#lib/core/watch-info.ts";
 import {
 	artwork,
 	canDownload,
@@ -701,11 +703,12 @@ function setSeason(n: number) {
 					{#each similar as it (`${it.kind}:${it.id}`)}
 						<button
 							type="button"
-							class="poster"
+							class="poster slp-mk--phone"
 							aria-label={it.title}
 							onclick={() => goto(`/detail/${it.kind}/${it.id}`)}
 						>
 							<Art src={artwork(it.kind, it.id, "poster")} kind="poster" />
+							<WatchMarks info={watchInfo(it, it.kind, lib.watch)} />
 						</button>
 					{/each}
 				</div>
@@ -1190,6 +1193,7 @@ h2 {
 }
 
 .photo {
+	position: relative;
 	display: grid;
 	place-items: center;
 	width: 72px;
@@ -1202,10 +1206,11 @@ h2 {
 }
 
 .photo img {
+	position: absolute;
+	inset: 0;
 	width: 100%;
 	height: 100%;
 	object-fit: cover;
-	display: block;
 }
 
 .who {

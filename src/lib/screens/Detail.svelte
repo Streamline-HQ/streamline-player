@@ -85,6 +85,8 @@ import NotFound from "#lib/ui/NotFound.svelte";
 import { presence } from "#lib/ui/presence.svelte.ts";
 import { useScroll } from "#lib/ui/scroll.ts";
 import TechDetails, { type Row } from "#lib/ui/TechDetails.svelte";
+import WatchMarks from "#lib/ui/WatchMarks.svelte";
+import { watchInfo } from "#lib/core/watch-info.ts";
 import {
 	artwork,
 	canDownload,
@@ -1001,7 +1003,7 @@ const heroHeight = $derived(
 										small={artwork(it.kind, it.id, "poster-w342")}
 										kind="poster"
 										ratio="2 / 3"
-									/></span
+									/><WatchMarks info={watchInfo(it, it.kind, lib.watch)} /></span
 								>
 								<span class="name">{it.title}</span>
 							</button>

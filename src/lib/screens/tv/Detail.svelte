@@ -34,6 +34,8 @@ import {
 } from "#platform";
 import { applyWatch, lib, loadLibrary } from "#lib/core/library.svelte.ts";
 import WatchGlyph from "#lib/ui/WatchGlyph.svelte";
+import WatchMarks from "#lib/ui/WatchMarks.svelte";
+import { watchInfo } from "#lib/core/watch-info.ts";
 import { hideBroken, orPoster } from "#lib/ui/img.ts";
 import { toast } from "#lib/core/toast.svelte.ts";
 import { canScan, scanTitle } from "#lib/screens/scan.ts";
@@ -415,7 +417,7 @@ const arrived = $derived(newEpisodes(lib.feed, id, new Date()));
 							<button
 								type="button"
 								data-tv="1"
-								class="sim"
+								class="sim slp-mk--tv"
 								aria-label={it.title}
 								onclick={() => goto(`/detail/${it.kind}/${it.id}`)}
 							>
@@ -425,6 +427,7 @@ const arrived = $derived(newEpisodes(lib.feed, id, new Date()));
 									loading="lazy"
 									onerror={hideBroken}
 								>
+								<WatchMarks info={watchInfo(it, it.kind, watch)} />
 							</button>
 						{/each}
 					</div>
@@ -851,6 +854,8 @@ p {
 }
 
 .sim {
+	position: relative;
+	overflow: clip;
 	flex: none;
 	width: 220px;
 	padding: 0;
