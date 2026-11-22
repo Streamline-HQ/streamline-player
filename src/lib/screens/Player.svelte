@@ -561,7 +561,7 @@ $effect(() => {
 
 // The player reports every 500 ms; between reports the bar moves on each frame at the playback speed.
 $effect(() => {
-	if (!pb?.playing || !controlsOn) return;
+	if (!pb?.playing || !(controlsOn || pb.upNextOn)) return;
 	let raf = requestAnimationFrame(function tick(t) {
 		frameAt = t;
 		raf = requestAnimationFrame(tick);
@@ -586,7 +586,7 @@ const paused = $derived(
 const upNextFrac = $derived(
 	!pb || pb.creditsAt === null
 		? 0
-		: Math.min(1, Math.max(0, (pb.position - pb.creditsAt) / UP_NEXT_SECS)),
+		: Math.min(1, Math.max(0, (shown - pb.creditsAt) / UP_NEXT_SECS)),
 );
 const skipOn = $derived(
 	!!pb && ((pb.introOn && !prefs.autoSkip) || pb.creditsOn) && !pb.ended && !pb.halt,

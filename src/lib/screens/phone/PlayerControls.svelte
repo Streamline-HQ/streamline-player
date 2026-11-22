@@ -126,7 +126,7 @@ const at = $derived(drag !== null ? drag * duration : shown);
 const pct = $derived(duration > 0 ? Math.min(100, (at / duration) * 100) : 0);
 const segs = $derived(segments(duration, pb.tracks?.chapters ?? []));
 const upNextFrac = $derived(
-	pb.creditsAt === null ? 0 : Math.min(1, Math.max(0, (pb.position - pb.creditsAt) / UP_NEXT_SECS)),
+	pb.creditsAt === null ? 0 : Math.min(1, Math.max(0, (shown - pb.creditsAt) / UP_NEXT_SECS)),
 );
 const skipOn = $derived(((pb.introOn && !prefs.autoSkip) || pb.creditsOn) && !pb.ended && !pb.halt);
 const cardBottom = $derived(showBar ? CARD_BOTTOM.shown : CARD_BOTTOM.hidden);
@@ -156,7 +156,7 @@ onMount(() => {
 });
 
 $effect(() => {
-	if (!pb.playing || !controlsOn) return;
+	if (!pb.playing || !(controlsOn || pb.upNextOn)) return;
 	let raf = requestAnimationFrame(function tick(t) {
 		frameAt = t;
 		raf = requestAnimationFrame(tick);

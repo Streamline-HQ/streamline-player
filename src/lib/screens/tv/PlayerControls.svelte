@@ -176,9 +176,6 @@ const pb = new Playback(
 
 const halted = $derived(!!pb.halt && !pb.haltLeaving);
 const skipOn = $derived(((pb.introOn && !prefs.autoSkip) || pb.creditsOn) && !pb.ended && !pb.halt);
-const upNextFrac = $derived(
-	pb.creditsAt === null ? 0 : Math.min(1, Math.max(0, (pb.position - pb.creditsAt) / UP_NEXT_SECS)),
-);
 // The player reports every 500 ms; between reports the bar moves on each frame at the playback speed.
 let frameAt = $state(0);
 const shownPosition = $derived(
@@ -189,6 +186,11 @@ const shownPosition = $derived(
 					Math.min(MAX_EXTRAPOLATION, Math.max(0, ((frameAt - pb.positionAt) / 1000) * pb.speed)),
 			)
 		: pb.position,
+);
+const upNextFrac = $derived(
+	pb.creditsAt === null
+		? 0
+		: Math.min(1, Math.max(0, (shownPosition - pb.creditsAt) / UP_NEXT_SECS)),
 );
 const segs = $derived.by(() => {
 	const list = pb.tracks?.chapters ?? [];
@@ -230,7 +232,7 @@ const peekLeft = $derived(
 	Math.max(peekWidth / 2, Math.min(scrubWidth - peekWidth / 2, (pct / 100) * scrubWidth)),
 );
 $effect(() => {
-	if (!pb.playing || !controlsOn) return;
+	if (!pb.playing || !(controlsOn || pb.upNextOn)) return;
 	let raf = requestAnimationFrame(function tick(t) {
 		frameAt = t;
 		raf = requestAnimationFrame(tick);
@@ -2410,7 +2412,6 @@ onMount(() => {
 	height: 100%;
 	background: var(--player-accent);
 	transform-origin: 0 50%;
-	transition: transform 250ms linear;
 	will-change: transform;
 }
 
