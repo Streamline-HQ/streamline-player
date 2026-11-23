@@ -30,6 +30,8 @@ export type MetaFormat = {
 };
 
 const unfinished = (w: Watch) => !w.watched && w.position_seconds > 0;
+const stale = (w: Watch, now: Date) =>
+	w.updated_at !== undefined && now.getTime() - Date.parse(w.updated_at) > MONTH_DAYS * DAY_MS;
 const addedMs = (t: Title) => Date.parse(t.added_at);
 const ageDays = (t: Title, now: Date) => (now.getTime() - addedMs(t)) / DAY_MS;
 const day = (d: Date) => d.toISOString().slice(0, 10);
@@ -37,12 +39,18 @@ const day = (d: Date) => d.toISOString().slice(0, 10);
 /**
  * One entry per title, in the order of `watch` (newest first); a series whose episode is not loaded is skipped.
  * A series is decided by its newest play: unfinished, it resumes; finished, the next episode with a file not
- * watched yet is up next.
+ * watched yet is up next. A title last played over 30 days ago is left out.
  */
-export function continueWatching(movies: Title[], shows: Title[], watch: Watch[]): ResumeItem[] {
+export function continueWatching(
+	movies: Title[],
+	shows: Title[],
+	watch: Watch[],
+	now = new Date(),
+): ResumeItem[] {
 	const out: ResumeItem[] = [];
 	const seen = new Set<string>();
 	for (const w of watch) {
+		if (stale(w, now)) continue;
 		const base = {
 			left: Math.max(0, w.duration_seconds - w.position_seconds),
 			pct: w.duration_seconds > 0 ? Math.round((w.position_seconds / w.duration_seconds) * 100) : 0,

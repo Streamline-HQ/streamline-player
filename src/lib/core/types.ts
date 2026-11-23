@@ -69,6 +69,8 @@ export type Watch = {
 	position_seconds: number;
 	duration_seconds: number;
 	watched: boolean;
+	/** Absent on a row the app made itself before the server answered. */
+	updated_at?: string;
 };
 
 export type Reason = { code: string; text: string };

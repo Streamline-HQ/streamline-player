@@ -97,6 +97,19 @@ eq(next[0]?.pct, 0);
 eq(next[0]?.left, 3000);
 eq(continueWatching([], shows, [done(11, 1), done(12, 1)])[0]?.episodeId, 21);
 eq(continueWatching([], shows, [done(24, 2)]), []);
+const at = (days: number) => new Date(now.getTime() - days * 86_400_000).toISOString();
+eq(
+	continueWatching(
+		movies,
+		[],
+		[
+			row("m2", { movie_id: 2, updated_at: at(31) }),
+			row("m1", { movie_id: 1, updated_at: at(29) }),
+		],
+		now,
+	).map((r) => r.id),
+	[1],
+);
 eq(
 	recentlyAdded(movies, 1).map((t) => t.id),
 	[2],
