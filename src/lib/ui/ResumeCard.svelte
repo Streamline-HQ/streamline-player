@@ -4,9 +4,11 @@ import { m as i18n } from "#lib/paraglide/messages.js";
 import Art from "#lib/ui/Art.svelte";
 import { hold } from "#lib/ui/hold.svelte.ts";
 import Icon from "#lib/ui/Icon.svelte";
+import Tip from "#lib/ui/Tip.svelte";
 import WatchGlyph from "#lib/ui/WatchGlyph.svelte";
 
 type Action = { label: string; onclick: () => void };
+type Lang = { own: boolean; label: string; onclick: (trigger: HTMLElement) => void };
 
 let {
 	title,
@@ -20,6 +22,8 @@ let {
 	reset,
 	mark,
 	oninfo,
+	beside,
+	lang,
 	onclick,
 }: {
 	title: string;
@@ -34,6 +38,9 @@ let {
 	reset?: Action;
 	mark?: Action & { on: boolean };
 	oninfo?: () => void;
+	/** Desktop: shown beside the play button while the card is hovered. */
+	beside?: Action;
+	lang?: Lang;
 	onclick: () => void;
 } = $props();
 
@@ -113,6 +120,31 @@ const h = hold(
 			{/if}
 		</span>
 	</div>
+{:else if beside || lang}
+	<div class="beside-box">
+		{@render card(onclick)}
+		<span class="beside" style:width="{width}px">
+			{#if beside}
+				<button type="button" class="slp-glass" aria-label={beside.label} onclick={beside.onclick}>
+					<Tip text={beside.label} />
+					<WatchGlyph on={false} size={15} stroke={1.9} />
+				</button>
+			{/if}
+			{#if lang}
+				<button
+					type="button"
+					class="slp-glass"
+					class:own={lang.own}
+					data-lang-trigger="card"
+					aria-label={lang.label}
+					onclick={(e) => lang.onclick(e.currentTarget)}
+				>
+					<Tip text={lang.label} />
+					<Icon name="languages" />
+				</button>
+			{/if}
+		</span>
+	</div>
 {:else}
 	{@render card(onclick)}
 {/if}
@@ -124,6 +156,37 @@ const h = hold(
 	user-select: none;
 	-webkit-user-select: none;
 	-webkit-touch-callout: none;
+}
+
+.beside-box {
+	position: relative;
+	flex: none;
+	scroll-snap-align: start;
+}
+
+/* Laid over the art, which the sibling button draws: buttons cannot nest. */
+.beside {
+	position: absolute;
+	top: 0;
+	left: 0;
+	aspect-ratio: var(--card-aspect-backdrop);
+	display: flex;
+	align-items: flex-end;
+	gap: 6px;
+	padding: 0 0 13px 54px;
+	box-sizing: border-box;
+	pointer-events: none;
+	opacity: 0;
+	transition: opacity 180ms var(--ease);
+}
+
+.beside > button {
+	pointer-events: auto;
+}
+
+.beside-box:hover .beside,
+.beside-box:focus-within .beside {
+	opacity: 1;
 }
 
 .resume {
@@ -153,7 +216,8 @@ const h = hold(
 		transform var(--dur-fast);
 }
 
-.resume:hover .art {
+.resume:hover .art,
+.beside-box:hover .art {
 	box-shadow: var(--shadow-card-hover);
 	transform: scale(1.02);
 }

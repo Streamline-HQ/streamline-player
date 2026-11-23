@@ -1,8 +1,8 @@
-import { isNew } from "#lib/core/browse.ts";
+import { isNew, type ResumeItem } from "#lib/core/browse.ts";
 import { clickGroup, clickOne } from "#lib/core/download-ask.svelte.ts";
 import { episodeItem, episodeKey, movieItem, movieKey } from "#lib/core/download-items.ts";
-import { bulkState, buttonState } from "#lib/core/downloads-view.ts";
 import { entry } from "#lib/core/downloads.svelte.ts";
+import { bulkState, buttonState } from "#lib/core/downloads-view.ts";
 import { applyWatch, lib } from "#lib/core/library.svelte.ts";
 import { episodeFor, playHref } from "#lib/core/library-view.ts";
 import {
@@ -22,7 +22,7 @@ import { m as i18n } from "#lib/paraglide/messages.js";
 import { askPort } from "#lib/screens/downloads-port.ts";
 import { downloadWords } from "#lib/ui/download-words.ts";
 import { goto } from "#lib/ui/nav.ts";
-import { canDownload, playbackPort, setWatched, title as fetchTitle } from "#platform";
+import { canDownload, title as fetchTitle, playbackPort, setWatched } from "#platform";
 
 export type LangOpen = {
 	kind: Kind;
@@ -122,6 +122,29 @@ export async function toggleWatched(kind: Kind, t: Title) {
 		);
 	} catch {}
 }
+
+/** Marks only the episode a resume card names, so Continue watching moves on to the next one. */
+export async function markResumeWatched(r: ResumeItem) {
+	try {
+		await setWatched(r.mediaId, true);
+		applyWatch(
+			r.mediaId,
+			true,
+			r.kind === "movies"
+				? { movie_id: r.id }
+				: { series_id: r.id, season: r.season, episode_id: r.episodeId },
+		);
+		toast(i18n.detail_marked_watched());
+	} catch {}
+}
+
+export const resumeMark = (r: ResumeItem) => ({
+	on: false,
+	label: i18n.library_mark_watched({
+		title: r.kind === "series" ? `${r.title} ${r.code}` : r.title,
+	}),
+	onclick: () => markResumeWatched(r),
+});
 
 /** Marking the play under way unwatched puts its position back to 0. */
 export async function resetProgress(kind: Kind, t: Title, label = t.title) {

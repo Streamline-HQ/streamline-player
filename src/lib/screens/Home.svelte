@@ -19,7 +19,7 @@ import { m as i18n } from "#lib/paraglide/messages.js";
 import { getLocale } from "#lib/paraglide/runtime.js";
 import { isTablet } from "#lib/platform/form-factor.svelte.ts";
 import LoadFailed from "#lib/screens/LoadFailed.svelte";
-import { titleCard } from "#lib/screens/title-card.svelte.ts";
+import { langButton, resumeMark, titleCard } from "#lib/screens/title-card.svelte.ts";
 import Billboard, { type Slide } from "#lib/ui/Billboard.svelte";
 import EmptyState from "#lib/ui/EmptyState.svelte";
 import { goto } from "#lib/ui/nav.ts";
@@ -227,6 +227,8 @@ onMount(() => {
 								: "50% 35%"}
 							progress={r.pct}
 							left={left(r.left)}
+							beside={resumeMark(r)}
+							lang={t && langButton(r.kind, t)}
 							onclick={() => playResume(r)}
 						/>
 					{/each}
