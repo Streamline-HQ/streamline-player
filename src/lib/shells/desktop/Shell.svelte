@@ -98,7 +98,9 @@ let hole = $state<{ x: number; y: number; width: number; height: number } | null
 provideScroll(() => content);
 
 // Cards sliding under a still pointer each start their hover (a layer, a transition, their
-// controls): on WebKitGTK that cost frames all through a scroll. Hover waits for the scroll to end.
+// controls): on WebKitGTK that cost frames all through a scroll. Hover waits for the scroll to end,
+// behind `.shield`. Not `pointer-events: none` on the content: it is inherited, so turning it on
+// and off restyled every element of the page, 70 ms and more each way on a long list.
 let hoverBack: ReturnType<typeof setTimeout>;
 function quietHover(el: HTMLElement) {
 	el.classList.add("scrolling");
@@ -607,6 +609,7 @@ if (import.meta.env.DEV)
 					quietHover(e.currentTarget);
 				}}
 			>
+				<div class="shield" aria-hidden="true"></div>
 				{@render children()}
 			</div>
 
@@ -896,8 +899,23 @@ if (import.meta.env.DEV)
 	scrollbar-width: none;
 }
 
-.content:global(.scrolling) > :global(*) {
-	pointer-events: none;
+.shield {
+	position: sticky;
+	top: 0;
+	z-index: 50;
+	height: 0;
+	visibility: hidden;
+}
+
+.shield::after {
+	content: "";
+	position: absolute;
+	inset: 0 0 auto;
+	height: 100vh;
+}
+
+.content:global(.scrolling) > .shield {
+	visibility: visible;
 }
 
 .pip {
