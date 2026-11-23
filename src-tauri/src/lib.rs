@@ -62,27 +62,24 @@ async fn artwork(app: AppHandle, path: String) -> tauri::http::Response<Vec<u8>>
         return jpeg(Ok(bytes));
     }
     // The account's own photo changes under one path, told apart by a query only.
-    #[cfg(target_os = "android")]
     if !path.starts_with("/users/") {
         return jpeg(kept_picture(&app, &path).await);
     }
     jpeg(app.state::<Api>().picture(&path).await)
 }
 
-/// Android's WebView asks for pictures one at a time, waits for each, keeps none, and holds the
-/// app's own pages in the same queue. The page names the pictures it is about to draw
+/// No webview keeps a picture of the `artwork` scheme, so each one drawn again would be fetched
+/// again. Android's WebView also asks for them one at a time, waits for each, and holds the
+/// app's own pages in the same queue: there the page names the pictures it is about to draw
 /// (`warm_artwork`), so they are fetched together and answered from here.
-#[cfg(target_os = "android")]
 #[derive(Default)]
 struct Pictures(
     Mutex<std::collections::HashMap<String, std::sync::Arc<tokio::sync::OnceCell<Vec<u8>>>>>,
 );
 
 // ponytail: everything is dropped at once when full; an LRU if the reload shows.
-#[cfg(target_os = "android")]
 const PICTURES_KEPT: usize = 300;
 
-#[cfg(target_os = "android")]
 async fn kept_picture(app: &AppHandle, path: &str) -> Result<Vec<u8>, String> {
     let pictures = app.state::<Pictures>();
     let cell = {
@@ -100,7 +97,6 @@ async fn kept_picture(app: &AppHandle, path: &str) -> Result<Vec<u8>, String> {
 /// Pictures outlive the app on disk. The server is asked whether the kept one is still current,
 /// which costs no transfer when it is, and a kept one still serves when the server cannot be
 /// reached.
-#[cfg(target_os = "android")]
 async fn stored_picture(app: &AppHandle, path: &str) -> Result<Vec<u8>, String> {
     let file = app.path().app_cache_dir().map(|dir| {
         dir.join("pictures")
@@ -924,7 +920,6 @@ pub fn run() {
                 .connect_timeout(std::time::Duration::from_secs(10))
                 .read_timeout(std::time::Duration::from_secs(30));
             let http = with_roots(http);
-            #[cfg(target_os = "android")]
             app.manage(Pictures::default());
             app.manage(Api {
                 http: http.build().expect("the default TLS backend builds"),
