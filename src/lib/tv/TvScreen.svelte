@@ -9,6 +9,7 @@ import { Film, House, Search, Settings, TvMinimal } from "@lucide/svelte";
 import { onMount, type Snippet, untrack } from "svelte";
 import { tvNav } from "#lib/ui/Toast.svelte";
 import { focus, focusDefault, forgetFocus, move } from "./focus";
+import { tvKey } from "./keys.ts";
 
 type Tab = "search" | "home" | "movies" | "series" | "settings";
 let {
@@ -66,13 +67,14 @@ function back() {
 }
 
 function onKey(e: KeyboardEvent) {
-	if (e.key === "Escape" || e.key === "Backspace" || e.key === "GoBack") {
+	const k = tvKey(e);
+	if (k === "Back") {
 		e.preventDefault();
 		back();
-	} else if (e.key.startsWith("Arrow")) {
+	} else if (k?.startsWith("Arrow")) {
 		e.preventDefault();
-		move(e.key, stage);
-	} else if (e.key === "Enter" && !document.activeElement?.hasAttribute("data-tv")) {
+		move(k, stage);
+	} else if (k === "Enter" && !document.activeElement?.hasAttribute("data-tv")) {
 		e.preventDefault();
 		focusDefault(stage);
 	}

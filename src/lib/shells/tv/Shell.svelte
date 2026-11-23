@@ -1,4 +1,5 @@
 <script lang="ts">
+import { registerTizenKeys } from "#lib/tv/keys.ts";
 import Toast from "#lib/ui/Toast.svelte";
 import type { Snippet } from "svelte";
 import { onMount } from "svelte";
@@ -7,6 +8,7 @@ const STAGE_WIDTH = 1920;
 let { children }: { children: Snippet } = $props();
 
 onMount(() => {
+	registerTizenKeys();
 	const resize = () =>
 		document.documentElement.style.setProperty(
 			"--tv-zoom",

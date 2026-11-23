@@ -26,6 +26,7 @@ import { tileAt } from "#lib/core/trickplay.ts";
 import type { Decision } from "#lib/core/types.ts";
 import { onPlayer, PLAYER_NAME, playbackPort } from "#platform";
 import { focusDefault as focusStageDefault, move } from "#lib/tv/focus.ts";
+import { tvKey } from "#lib/tv/keys.ts";
 import HaltScreen from "#lib/tv/HaltScreen.svelte";
 import { hideBroken, orPoster } from "#lib/ui/img.ts";
 import "#lib/tv/screen.css";
@@ -683,18 +684,27 @@ function back() {
 }
 
 function onKey(e: KeyboardEvent) {
-	const k = e.key;
-	if (k === "Escape" || k === "Backspace" || k === "GoBack") {
+	const k = tvKey(e);
+	if (k === "Back") {
 		e.preventDefault();
 		back();
 		return;
 	}
-	// A keyboard's Space, as in every desktop player; a remote has none.
-	if (k === " " && !halted && !pb.ended) {
+	if (k === "Stop") {
 		e.preventDefault();
-		togglePlay();
+		void exit();
 		return;
 	}
+	// A keyboard's Space, as in every desktop player, or a remote's media keys.
+	const media = e.key === " " || k === "PlayPause" || k === "Play" || k === "Pause";
+	if ((media || k === "FastForward" || k === "Rewind") && !halted && !pb.ended) {
+		e.preventDefault();
+		if (k === "FastForward") seek(SEEK_STEP);
+		else if (k === "Rewind") seek(-SEEK_STEP);
+		else if (k === "Play" ? !pb.playing : k === "Pause" ? pb.playing : true) togglePlay();
+		return;
+	}
+	if (k === null) return;
 	const arrow = k.startsWith("Arrow");
 	if (!arrow && k !== "Enter") return;
 	if (halted || menu || pb.ended) {
