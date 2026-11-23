@@ -237,7 +237,7 @@ const h = hold(
 	width: 34px;
 	height: 34px;
 	border-radius: 50%;
-	background: color-mix(in srgb, var(--player-ink) 92%, transparent);
+	background: rgb(var(--player-ink-rgb) / 92%);
 	color: var(--fg-on-accent);
 	font-size: 14px;
 }

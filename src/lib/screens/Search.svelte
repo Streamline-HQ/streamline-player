@@ -350,7 +350,7 @@ onMount(() => {
 }
 
 .genre-tile:hover {
-	box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--accent) 50%, transparent);
+	box-shadow: inset 0 0 0 1px rgb(var(--accent-rgb) / 50%);
 }
 
 .genre-tile img {
@@ -409,7 +409,7 @@ onMount(() => {
 }
 
 .top:hover {
-	border-color: color-mix(in srgb, var(--accent) 45%, transparent);
+	border-color: rgb(var(--accent-rgb) / 45%);
 }
 
 .top img {

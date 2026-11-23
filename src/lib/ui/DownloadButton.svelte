@@ -140,10 +140,7 @@ const size = $derived(SIZES[variant]);
 	display: grid;
 	place-items: center;
 	border-radius: 50%;
-	background: conic-gradient(
-		var(--accent) var(--p),
-		color-mix(in srgb, var(--fg) 14%, transparent) 0
-	);
+	background: conic-gradient(var(--accent) var(--p), rgb(var(--fg-rgb) / 14%) 0);
 }
 
 .hole {

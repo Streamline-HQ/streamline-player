@@ -226,7 +226,7 @@ function setHover(v: number | null) {
 	border-radius: 8px;
 	overflow: hidden;
 	box-shadow: 0 12px 32px rgba(0, 0, 0, 0.6);
-	border: 2px solid color-mix(in srgb, var(--player-ink) 90%, transparent);
+	border: 2px solid rgb(var(--player-ink-rgb) / 90%);
 }
 
 .tile {

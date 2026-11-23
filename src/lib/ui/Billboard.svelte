@@ -177,8 +177,8 @@ const frameStyle = (i: number) => {
 	background: linear-gradient(
 		90deg,
 		var(--hero-scrim) 0%,
-		color-mix(in srgb, var(--bg-deep) 62%, transparent) 34%,
-		color-mix(in srgb, var(--bg-deep) 5%, transparent) 68%
+		rgb(var(--bg-deep-rgb) / 62%) 34%,
+		rgb(var(--bg-deep-rgb) / 5%) 68%
 	);
 }
 
@@ -187,16 +187,11 @@ const frameStyle = (i: number) => {
 	inset: 0;
 	/* The second layer darkens the side the text sits on: a bright backdrop drowned the meta line and the overview. */
 	background:
-		linear-gradient(
-			0deg,
-			var(--bg-deep) 0%,
-			color-mix(in srgb, var(--bg-deep) 60%, transparent) 22%,
-			transparent 48%
-		),
+		linear-gradient(0deg, var(--bg-deep) 0%, rgb(var(--bg-deep-rgb) / 60%) 22%, transparent 48%),
 		linear-gradient(
 			90deg,
-			color-mix(in srgb, var(--bg-deep) 82%, transparent) 0%,
-			color-mix(in srgb, var(--bg-deep) 58%, transparent) 34%,
+			rgb(var(--bg-deep-rgb) / 82%) 0%,
+			rgb(var(--bg-deep-rgb) / 58%) 34%,
 			transparent 64%
 		);
 }
@@ -298,7 +293,7 @@ p {
 
 .cta:hover {
 	background: var(--accent-hover);
-	box-shadow: 0 0 24px color-mix(in srgb, var(--accent) 35%, transparent);
+	box-shadow: 0 0 24px rgb(var(--accent-rgb) / 35%);
 }
 
 .cta:active {
@@ -391,7 +386,7 @@ p {
 	width: 100%;
 	height: 4px;
 	border-radius: 2px;
-	background: color-mix(in srgb, var(--fg) 30%, transparent);
+	background: rgb(var(--fg-rgb) / 30%);
 	overflow: hidden;
 }
 

@@ -88,7 +88,7 @@ const current = $derived(options.find((o) => o.value === value)?.label ?? curren
 	border: 0;
 	border-radius: 10px;
 	box-shadow: inset 0 0 0 1px var(--border);
-	background: color-mix(in srgb, var(--fg) 4%, transparent);
+	background: rgb(var(--fg-rgb) / 4%);
 	color: var(--fg-muted);
 	font-size: 13px;
 	font-weight: 500;
@@ -100,7 +100,7 @@ const current = $derived(options.find((o) => o.value === value)?.label ?? curren
 }
 
 .trigger:hover {
-	background: color-mix(in srgb, var(--fg) 8%, transparent);
+	background: rgb(var(--fg-rgb) / 8%);
 	color: var(--fg);
 }
 

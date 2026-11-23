@@ -40,7 +40,7 @@ let {
 	min-height: calc(58px + env(safe-area-inset-bottom));
 	padding-bottom: env(safe-area-inset-bottom);
 	border-top: 1px solid var(--border);
-	background: color-mix(in srgb, var(--bg-deep) 86%, transparent);
+	background: rgb(var(--bg-deep-rgb) / 86%);
 	-webkit-backdrop-filter: blur(16px) saturate(150%);
 	backdrop-filter: blur(16px) saturate(150%);
 }

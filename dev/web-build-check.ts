@@ -27,3 +27,13 @@ const tauri = files("build").filter(
 	(f) => /\.(html|js|css|json|map)$/.test(f) && readFileSync(f, "utf8").includes("__TAURI"),
 );
 eq(tauri.length, 0, `__TAURI found in ${tauri.join(", ")}`);
+
+// webOS 22 runs Chromium 87: none of these parse there, and a rule holding one is dropped whole.
+const tooNew = [/color-mix\(/, /oklch\(/, /:has\(/, /&/];
+for (const f of files("build").filter((f) => f.endsWith(".css"))) {
+	const css = readFileSync(f, "utf8");
+	for (const re of tooNew) ok(!re.test(css), `${f} uses ${re.source}, which Chromium 87 lacks`);
+}
+const legacy = html.indexOf("legacy.js");
+const firstModule = html.search(/<link[^>]*rel="modulepreload"|<script(?![^>]*legacy\.js)/);
+ok(legacy !== -1 && legacy < firstModule, "legacy.js must load before the app's modules");

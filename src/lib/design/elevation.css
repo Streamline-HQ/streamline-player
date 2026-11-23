@@ -7,7 +7,7 @@
   --shadow-3: 0 16px 32px rgba(0, 0, 0, 0.45);
   --shadow-4: 0 24px 64px rgba(0, 0, 0, 0.55);
   --shadow-glow: 0 0 24px var(--accent-glow);
-  --shadow-card-hover: 0 0 0 2px color-mix(in srgb, var(--accent) 55%, transparent), 0 24px 48px rgba(0, 0, 0, 0.5);
+  --shadow-card-hover: 0 0 0 2px rgb(var(--accent-rgb) / 55%), 0 24px 48px rgba(0, 0, 0, 0.5);
   --shadow-tv-focus: 0 0 0 4px #7c8cff, 0 0 40px rgba(124, 140, 255, 0.45), 0 24px 48px rgba(0, 0, 0, 0.6);
 }
 [data-theme="dark"] {
@@ -16,7 +16,7 @@
   --shadow-3: 0 16px 32px rgba(0, 0, 0, 0.45);
   --shadow-4: 0 24px 64px rgba(0, 0, 0, 0.55);
   --shadow-glow: 0 0 24px var(--accent-glow);
-  --shadow-card-hover: 0 0 0 2px color-mix(in srgb, var(--accent) 55%, transparent), 0 24px 48px rgba(0, 0, 0, 0.5);
+  --shadow-card-hover: 0 0 0 2px rgb(var(--accent-rgb) / 55%), 0 24px 48px rgba(0, 0, 0, 0.5);
   --shadow-tv-focus: 0 0 0 4px #7c8cff, 0 0 40px rgba(124, 140, 255, 0.45), 0 24px 48px rgba(0, 0, 0, 0.6);
 }
 [data-theme="light"] {

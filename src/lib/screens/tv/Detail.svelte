@@ -324,9 +324,9 @@ const arrived = $derived(newEpisodes(lib.feed, id, new Date()));
 						<span
 							class="status-dot"
 							style:background={full ? "var(--status-available)" : "var(--status-downloading)"}
-							style:box-shadow="0 0 0 5px color-mix(in srgb, {full
-								? "var(--status-available) 18%"
-								: "var(--status-downloading) 20%"}, transparent)"
+							style:box-shadow="0 0 0 5px {full
+								? "rgb(var(--status-available-rgb) / 18%)"
+								: "rgb(var(--status-downloading-rgb) / 20%)"}"
 						></span>
 						<span>{prefs.techDetails ? modeName(playback.mode) : PLAIN[playback.mode]}</span>
 					</div>
@@ -469,9 +469,9 @@ const arrived = $derived(newEpisodes(lib.feed, id, new Date()));
 .side {
 	background: linear-gradient(
 		90deg,
-		color-mix(in srgb, var(--bg-deep) 97%, transparent) 0%,
-		color-mix(in srgb, var(--bg-deep) 82%, transparent) 34%,
-		color-mix(in srgb, var(--bg-deep) 15%, transparent) 70%
+		rgb(var(--bg-deep-rgb) / 97%) 0%,
+		rgb(var(--bg-deep-rgb) / 82%) 34%,
+		rgb(var(--bg-deep-rgb) / 15%) 70%
 	);
 }
 
@@ -479,7 +479,7 @@ const arrived = $derived(newEpisodes(lib.feed, id, new Date()));
 	background: linear-gradient(
 		0deg,
 		var(--bg-deep) 0%,
-		color-mix(in srgb, var(--bg-deep) 75%, transparent) 30%,
+		rgb(var(--bg-deep-rgb) / 75%) 30%,
 		transparent 60%
 	);
 }
@@ -703,7 +703,7 @@ p {
 	top: 14px;
 	padding: 4px 10px;
 	border-radius: 8px;
-	background: color-mix(in srgb, var(--bg-deep) 85%, transparent);
+	background: rgb(var(--bg-deep-rgb) / 85%);
 	font: 500 17px var(--font-mono);
 	letter-spacing: 0.08em;
 	text-transform: uppercase;

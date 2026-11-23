@@ -1,3 +1,8 @@
+<script lang="ts" module>
+// How many TV screens show their top nav: a toast sits below it (Chromium 87 has no :has()).
+export const tvNav = $state({ shown: 0 });
+</script>
+
 <script lang="ts">
 import { CircleCheck, Cpu, Gauge, Wifi, WifiOff } from "@lucide/svelte";
 import { activeToast } from "#lib/core/toast.svelte.ts";
@@ -8,7 +13,7 @@ const Icon = $derived(t ? ICONS[t.icon] : null);
 </script>
 
 {#if t}
-	<div class="stage">
+	<div class="stage" class:under-nav={tvNav.shown > 0}>
 		<div class="scale">
 			{#key t.title}
 				<div
@@ -45,7 +50,7 @@ const Icon = $derived(t ? ICONS[t.icon] : null);
 	pointer-events: none;
 }
 
-:global(body:has([data-tv-nav])) .stage {
+.stage.under-nav {
 	padding-top: 124px;
 }
 

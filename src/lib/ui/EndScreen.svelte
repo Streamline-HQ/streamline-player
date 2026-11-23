@@ -133,8 +133,8 @@ onMount(() => primary?.focus());
 	background: linear-gradient(
 		90deg,
 		var(--hero-scrim) 0%,
-		color-mix(in srgb, var(--bg-deep) 72%, transparent) 50%,
-		color-mix(in srgb, var(--bg-deep) 40%, transparent) 100%
+		rgb(var(--bg-deep-rgb) / 72%) 50%,
+		rgb(var(--bg-deep-rgb) / 40%) 100%
 	);
 }
 

@@ -62,6 +62,8 @@ export default defineConfig({
 		}),
 	],
 	resolve: { conditions: native ? ["native", ...defaultClientConditions] : undefined },
+	// The oldest engine shipped to: webOS 22 TVs run Chromium 87.
+	build: { target: "chrome87", cssTarget: "chrome87" },
 	clearScreen: false,
 	server: {
 		port: 1420,

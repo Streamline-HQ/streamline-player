@@ -6,31 +6,31 @@
 
 /* "Not started" bookmark hanging from the top edge. The drop shadow sits on the outer box: a filter on the clipped box itself is clipped away. */
 .slp-unread{position:absolute;left:calc(11px * var(--mk,1));top:0;z-index:2;width:calc(13px * var(--mk,1));height:calc(20px * var(--mk,1));pointer-events:none;filter:drop-shadow(0 1px 2px rgba(0,0,0,.55))}
-.slp-unread::before{content:"";position:absolute;inset:0;clip-path:polygon(0 0,100% 0,100% 100%,50% 76%,0 100%);background:linear-gradient(180deg,color-mix(in srgb,var(--accent) 80%,#fff),var(--accent))}
+.slp-unread::before{content:"";position:absolute;inset:0;clip-path:polygon(0 0,100% 0,100% 100%,50% 76%,0 100%);background:linear-gradient(180deg,var(--accent-tint),var(--accent))}
 
 /* Unwatched-episode count */
 .slp-count{position:absolute;right:calc(8px * var(--mk,1));top:calc(8px * var(--mk,1));z-index:2;min-width:1.9em;box-sizing:border-box;padding:calc(2px * var(--mk,1)) calc(7px * var(--mk,1));border-radius:calc(6px * var(--mk,1));background:var(--accent);box-shadow:0 1px 2px rgba(0,0,0,.5),0 2px 8px rgba(0,0,0,.35);text-align:center;font:700 calc(11px * var(--mk,1))/1.3 var(--font-mono);color:var(--bg-deep);pointer-events:none}
 .slp-count--inline{position:static;display:inline-grid;place-items:center;min-width:18px;height:16px;padding:0 5px;border-radius:8px;box-shadow:none;font:700 11px/1 var(--font-mono);vertical-align:1px}
 
 /* "New" badge; the template sets left (it moves right of the bookmark) */
-.slp-new{position:absolute;top:calc(8px * var(--mk,1));z-index:2;padding:calc(2px * var(--mk,1)) calc(7px * var(--mk,1));border-radius:calc(6px * var(--mk,1));background:color-mix(in srgb,var(--bg-deep) 80%,transparent);font:500 calc(10px * var(--mk,1)) var(--font-mono);letter-spacing:.08em;text-transform:uppercase;color:var(--accent-text);pointer-events:none}
+.slp-new{position:absolute;top:calc(8px * var(--mk,1));z-index:2;padding:calc(2px * var(--mk,1)) calc(7px * var(--mk,1));border-radius:calc(6px * var(--mk,1));background:rgb(var(--bg-deep-rgb) / 80%);font:500 calc(10px * var(--mk,1)) var(--font-mono);letter-spacing:.08em;text-transform:uppercase;color:var(--accent-text);pointer-events:none}
 
 /* Resume progress over the art: a scrim, then the track; the fill width comes from the template */
 .slp-prog{position:absolute;left:0;right:0;bottom:0;z-index:2;height:calc(34px * var(--mk,1));background:linear-gradient(180deg,transparent,rgba(0,0,0,.6));pointer-events:none}
 .slp-prog>i{position:absolute;left:calc(7px * var(--mk,1));right:calc(7px * var(--mk,1));bottom:calc(7px * var(--mk,1));height:max(3px,calc(4px * var(--mk,1)));border-radius:4px;background:rgba(0,0,0,.55);box-shadow:0 0 0 1px rgba(255,255,255,.14),0 1px 6px rgba(0,0,0,.6);overflow:hidden}
-.slp-prog>i>b{display:block;height:100%;border-radius:inherit;background:var(--accent);box-shadow:0 0 8px color-mix(in srgb,var(--accent) 70%,transparent)}
+.slp-prog>i>b{display:block;height:100%;border-radius:inherit;background:var(--accent);box-shadow:0 0 8px rgb(var(--accent-rgb) / 70%)}
 /* The same track inline in a list row */
 .slp-track{display:block;width:84px;height:3px;border-radius:2px;background:rgba(255,255,255,.12);overflow:clip}
 .slp-track>b{display:block;height:100%;background:var(--accent)}
 
 /* Hover controls over the art (desktop) */
-.slp-hover{position:absolute;inset:0;z-index:1;display:grid;place-items:center;background:linear-gradient(180deg,transparent 30%,color-mix(in srgb,var(--bg-deep) 55%,transparent) 100%);opacity:0;transition:opacity 180ms var(--ease)}
+.slp-hover{position:absolute;inset:0;z-index:1;display:grid;place-items:center;background:linear-gradient(180deg,transparent 30%,rgb(var(--bg-deep-rgb) / 55%) 100%);opacity:0;transition:opacity 180ms var(--ease)}
 .slp-art:hover .slp-hover,.slp-art:focus-within .slp-hover{opacity:1}
 /* Drawn on the first hover, already hovered: without this it would appear at once instead of fading in. */
 @starting-style{.slp-art:hover .slp-hover{opacity:0}}
 /* Phone: no hover. A long press on the card turns the controls on, sized for the smaller poster. */
 .slp-mk--phone .slp-hover{opacity:0!important;pointer-events:none}
-.slp-mk--phone .slp-hover.slp-hover--on{opacity:1!important;pointer-events:auto;transition-delay:160ms;background:color-mix(in srgb,var(--bg-deep) 55%,transparent)}
+.slp-mk--phone .slp-hover.slp-hover--on{opacity:1!important;pointer-events:auto;transition-delay:160ms;background:rgb(var(--bg-deep-rgb) / 55%)}
 .slp-mk--phone .slp-play{width:40px;height:40px;margin-bottom:28px}
 .slp-mk--phone .slp-play svg{margin-left:2px}
 .slp-mk--phone .slp-acts{bottom:8px;gap:4px}
@@ -42,7 +42,7 @@
 .slp-resume .slp-hover{inset:0 0 auto 0;height:140px;border-radius:var(--radius-md);display:flex;align-items:center;justify-content:center;gap:12px}
 .slp-resume .slp-glass{width:40px;height:40px}
 .slp-resume .slp-glass>svg{width:18px;height:18px}
-.slp-play{width:52px;height:52px;display:grid;place-items:center;padding:0;border:0;border-radius:50%;background:color-mix(in srgb,var(--fg) 94%,transparent);color:var(--fg-on-accent);cursor:pointer;box-shadow:0 8px 24px rgba(0,0,0,.45);transition:transform var(--dur-fast) var(--ease)}
+.slp-play{width:52px;height:52px;display:grid;place-items:center;padding:0;border:0;border-radius:50%;background:rgb(var(--fg-rgb) / 94%);color:var(--fg-on-accent);cursor:pointer;box-shadow:0 8px 24px rgba(0,0,0,.45);transition:transform var(--dur-fast) var(--ease)}
 .slp-play:hover{transform:scale(1.08)}
 .slp-play svg{margin-left:3px}
 .slp-acts{position:absolute;left:0;right:0;bottom:20px;display:flex;justify-content:center;gap:6px}
@@ -76,8 +76,8 @@
 .wtog[data-on="false"] .chk{opacity:0;transform:scale(0.4) rotate(25deg);stroke-dashoffset:30}
 .wtog[data-on="true"] .eye{opacity:0;transform:scale(0.4) rotate(-25deg)}
 .wpop{position:absolute;inset:-1px;border-radius:inherit;pointer-events:none}
-@keyframes slp-wpop-on-0{from{box-shadow:0 0 0 0 color-mix(in srgb,var(--status-available) 60%,transparent)}to{box-shadow:0 0 0 14px transparent}}
-@keyframes slp-wpop-on-1{from{box-shadow:0 0 0 0 color-mix(in srgb,var(--status-available) 60%,transparent)}to{box-shadow:0 0 0 14px transparent}}
+@keyframes slp-wpop-on-0{from{box-shadow:0 0 0 0 rgb(var(--status-available-rgb) / 60%)}to{box-shadow:0 0 0 14px transparent}}
+@keyframes slp-wpop-on-1{from{box-shadow:0 0 0 0 rgb(var(--status-available-rgb) / 60%)}to{box-shadow:0 0 0 14px transparent}}
 @keyframes slp-wpop-off-0{from{box-shadow:0 0 0 0 rgba(255,255,255,0.35)}to{box-shadow:0 0 0 10px transparent}}
 @keyframes slp-wpop-off-1{from{box-shadow:0 0 0 0 rgba(255,255,255,0.35)}to{box-shadow:0 0 0 10px transparent}}
 @media (prefers-reduced-motion:reduce){.wtog svg{transition:opacity 150ms}.wpop{animation:none!important}}

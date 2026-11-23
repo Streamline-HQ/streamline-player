@@ -317,7 +317,7 @@ section {
 
 .ep:not(.wanted):hover .still {
 	box-shadow:
-		0 0 0 2px color-mix(in srgb, var(--accent) 55%, transparent),
+		0 0 0 2px rgb(var(--accent-rgb) / 55%),
 		0 16px 32px rgba(0, 0, 0, 0.45);
 	transform: scale(1.02);
 }
@@ -349,7 +349,7 @@ section {
 	padding-left: 2px;
 	box-sizing: border-box;
 	border-radius: 50%;
-	background: color-mix(in srgb, var(--fg) 92%, transparent);
+	background: rgb(var(--fg-rgb) / 92%);
 	color: var(--fg-on-accent);
 	pointer-events: none;
 }
@@ -360,7 +360,7 @@ section {
 	top: 8px;
 	padding: 2px 7px;
 	border-radius: var(--radius-sm);
-	background: color-mix(in srgb, var(--bg-deep) 80%, transparent);
+	background: rgb(var(--bg-deep-rgb) / 80%);
 	font: 500 10px var(--font-mono);
 	letter-spacing: 0.08em;
 	text-transform: uppercase;
@@ -436,14 +436,14 @@ section {
 
 .pill.warn {
 	color: var(--status-warning);
-	background: color-mix(in srgb, var(--status-warning) 12%, transparent);
-	border-color: color-mix(in srgb, var(--status-warning) 25%, transparent);
+	background: rgb(var(--status-warning-rgb) / 12%);
+	border-color: rgb(var(--status-warning-rgb) / 25%);
 }
 
 .pill.accent {
 	color: var(--accent-text);
-	background: color-mix(in srgb, var(--accent) 12%, transparent);
-	border-color: color-mix(in srgb, var(--accent) 30%, transparent);
+	background: rgb(var(--accent-rgb) / 12%);
+	border-color: rgb(var(--accent-rgb) / 30%);
 }
 
 .pd {

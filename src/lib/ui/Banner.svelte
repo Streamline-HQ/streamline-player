@@ -10,7 +10,7 @@ let {
 	$props();
 </script>
 
-<div class="banner" style:--c="var(--status-{status})">
+<div class="banner" style:--c="var(--status-{status})" style:--c-rgb="var(--status-{status}-rgb)">
 	<Icon name={icon} />
 	<div>
 		<div class="t">{title}</div>
@@ -26,9 +26,9 @@ let {
 	align-items: flex-start;
 	gap: 10px;
 	padding: 12px 16px;
-	border: 1px solid color-mix(in srgb, var(--c) 30%, transparent);
+	border: 1px solid rgb(var(--c-rgb) / 30%);
 	border-radius: var(--radius-lg);
-	background: color-mix(in srgb, var(--c) 10%, transparent);
+	background: rgb(var(--c-rgb) / 10%);
 	font-size: 14px;
 	color: var(--c);
 }

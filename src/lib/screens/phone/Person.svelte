@@ -262,8 +262,8 @@ const subOf = (c: Credit) =>
 	inset: 0;
 	background: linear-gradient(
 		180deg,
-		color-mix(in srgb, var(--bg-deep) 35%, transparent) 0%,
-		color-mix(in srgb, var(--bg-deep) 78%, transparent) 55%,
+		rgb(var(--bg-deep-rgb) / 35%) 0%,
+		rgb(var(--bg-deep-rgb) / 78%) 55%,
 		var(--bg-deep) 100%
 	);
 }

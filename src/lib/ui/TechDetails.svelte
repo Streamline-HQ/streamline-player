@@ -218,12 +218,12 @@ section {
 	height: 7px;
 	border-radius: 50%;
 	background: var(--status-downloading);
-	box-shadow: 0 0 0 3px color-mix(in srgb, var(--status-downloading) 20%, transparent);
+	box-shadow: 0 0 0 3px rgb(var(--status-downloading-rgb) / 20%);
 }
 
 .dot.copy {
 	background: var(--status-available);
-	box-shadow: 0 0 0 3px color-mix(in srgb, var(--status-available) 18%, transparent);
+	box-shadow: 0 0 0 3px rgb(var(--status-available-rgb) / 18%);
 }
 
 .what {

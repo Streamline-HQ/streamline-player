@@ -54,6 +54,14 @@ let {
 	oncancel: () => void;
 	onconfirm: () => void;
 } = $props();
+// The label draws the hidden input's keyboard ring; Chromium 87 has no :has().
+let ring = $state<string | null>(null);
+const ringOn = (key: string) => (e: FocusEvent) => {
+	ring = (e.currentTarget as HTMLElement).matches(":focus-visible") ? key : null;
+};
+const ringOff = () => {
+	ring = null;
+};
 </script>
 
 {#snippet box(on: boolean)}
@@ -77,8 +85,14 @@ let {
 		<div class="list">
 			<span class="eyebrow">{words.audio}</span>
 			{#each audio as a (a.index)}
-				<label class="row">
-					<input type="checkbox" checked={a.on} onchange={() => onaudio(a.index)}>
+				<label class={["row", ring === `a${a.index}` && "ring"]}>
+					<input
+						type="checkbox"
+						checked={a.on}
+						onchange={() => onaudio(a.index)}
+						onfocus={ringOn(`a${a.index}`)}
+						onblur={ringOff}
+					>
 					{@render box(a.on)}
 					<span class="text">
 						<span class="name">{a.label}</span>
@@ -93,9 +107,11 @@ let {
 				<span class="eyebrow">{words.subtitles}</span>
 				<div class="subs">
 					{#each subs as s (s.index)}
-						<label class="row" class:off={s.disabled}>
+						<label class={["row", s.disabled && "off", ring === `s${s.index}` && "ring"]}>
 							<input
 								type="checkbox"
+								onfocus={ringOn(`s${s.index}`)}
+								onblur={ringOff}
 								checked={s.on}
 								disabled={s.disabled}
 								onchange={() => onsub(s.index)}
@@ -111,8 +127,14 @@ let {
 			</div>
 		{/if}
 		<div class="remember">
-			<label class="row muted">
-				<input type="checkbox" checked={remember} onchange={onremember}>
+			<label class={["row", "muted", ring === "remember" && "ring"]}>
+				<input
+					type="checkbox"
+					checked={remember}
+					onchange={onremember}
+					onfocus={ringOn("remember")}
+					onblur={ringOff}
+				>
 				{@render box(remember)}
 				<span>{words.remember}</span>
 			</label>
@@ -208,7 +230,7 @@ let {
 	opacity: 0.5;
 }
 
-.row:has(input:focus-visible) {
+.row.ring {
 	outline: 2px solid var(--accent-ring);
 	outline-offset: -2px;
 }
@@ -226,7 +248,7 @@ let {
 	display: grid;
 	place-items: center;
 	border-radius: 5px;
-	border: 1.5px solid color-mix(in srgb, var(--fg) 28%, transparent);
+	border: 1.5px solid rgb(var(--fg-rgb) / 28%);
 	background: transparent;
 	color: var(--fg-on-accent);
 	transition:

@@ -1736,7 +1736,7 @@ onMount(() => {
 	margin: -14px 0 0 -14px;
 	border-radius: 50%;
 	background: var(--player-ink);
-	box-shadow: 0 0 0 8px color-mix(in srgb, var(--player-accent) 45%, transparent);
+	box-shadow: 0 0 0 8px rgb(var(--player-accent-rgb) / 45%);
 }
 
 .scrub-peek {
@@ -1757,7 +1757,7 @@ onMount(() => {
 	border-radius: 16px;
 	overflow: hidden;
 	box-shadow: 0 24px 64px rgba(0, 0, 0, 0.6);
-	border: 4px solid color-mix(in srgb, var(--player-ink) 90%, transparent);
+	border: 4px solid rgb(var(--player-ink-rgb) / 90%);
 }
 
 .scrub-tile {
@@ -1964,7 +1964,7 @@ onMount(() => {
 }
 
 .opt.sel {
-	background: color-mix(in srgb, var(--player-accent) 10%, transparent);
+	background: rgb(var(--player-accent-rgb) / 10%);
 }
 
 .opt-text {
@@ -2004,20 +2004,20 @@ onMount(() => {
 
 .badge.ok {
 	color: var(--status-available);
-	background: color-mix(in srgb, var(--status-available) 12%, transparent);
-	border-color: color-mix(in srgb, var(--status-available) 25%, transparent);
+	background: rgb(var(--status-available-rgb) / 12%);
+	border-color: rgb(var(--status-available-rgb) / 25%);
 }
 
 .badge.conv {
 	color: var(--status-downloading);
-	background: color-mix(in srgb, var(--status-downloading) 14%, transparent);
-	border-color: color-mix(in srgb, var(--status-downloading) 30%, transparent);
+	background: rgb(var(--status-downloading-rgb) / 14%);
+	border-color: rgb(var(--status-downloading-rgb) / 30%);
 }
 
 .badge.warn {
 	color: var(--status-warning);
-	background: color-mix(in srgb, var(--status-warning) 12%, transparent);
-	border-color: color-mix(in srgb, var(--status-warning) 30%, transparent);
+	background: rgb(var(--status-warning-rgb) / 12%);
+	border-color: rgb(var(--status-warning-rgb) / 30%);
 }
 
 .stepper {
@@ -2539,8 +2539,8 @@ onMount(() => {
 	background: linear-gradient(
 		90deg,
 		var(--hero-scrim) 0%,
-		color-mix(in srgb, var(--bg-deep) 72%, transparent) 50%,
-		color-mix(in srgb, var(--bg-deep) 40%, transparent) 100%
+		rgb(var(--bg-deep-rgb) / 72%) 50%,
+		rgb(var(--bg-deep-rgb) / 40%) 100%
 	);
 }
 

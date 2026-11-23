@@ -164,7 +164,7 @@ h2 {
 }
 
 .arrow:hover:not(:disabled) {
-	background: color-mix(in srgb, var(--fg) 8%, transparent);
+	background: rgb(var(--fg-rgb) / 8%);
 	color: var(--fg);
 }
 

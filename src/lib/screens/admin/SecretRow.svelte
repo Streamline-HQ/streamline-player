@@ -32,8 +32,8 @@ let { row, onact }: { row: Extract<Row, { t: "secret" }>; onact?: (a: Act) => vo
 	gap: 12px;
 	padding: 14px;
 	border-radius: var(--radius-md);
-	background: color-mix(in srgb, var(--status-warning) 8%, transparent);
-	border: 1px solid color-mix(in srgb, var(--status-warning) 32%, transparent);
+	background: rgb(var(--status-warning-rgb) / 8%);
+	border: 1px solid rgb(var(--status-warning-rgb) / 32%);
 }
 
 .title {

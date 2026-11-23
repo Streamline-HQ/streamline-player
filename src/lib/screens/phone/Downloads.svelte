@@ -87,7 +87,7 @@ const toggleAll = (keys: string[]) => {
 const keysOf = (cards: Card[]) => cards.map((c) => c.key);
 </script>
 
-<div class="page" style:--pick-line="color-mix(in srgb, var(--fg) 28%, transparent)">
+<div class="page" style:--pick-line="rgb(var(--fg-rgb) / 28%)">
 	<div class="top">
 		<div class="titles">
 			<h1>{i18n.shell_downloads()}</h1>
@@ -347,7 +347,7 @@ h1 {
 	gap: 8px;
 	padding: 8px 8px 8px 16px;
 	border-radius: var(--radius-lg);
-	background: color-mix(in srgb, var(--bg-elevated) 94%, transparent);
+	background: rgb(var(--bg-elevated-rgb) / 94%);
 	backdrop-filter: blur(16px) saturate(150%);
 	box-shadow:
 		inset 0 0 0 1px var(--border-strong),
@@ -495,7 +495,7 @@ h2 {
 	display: block;
 	height: 3px;
 	border-radius: 2px;
-	background: color-mix(in srgb, var(--fg) 10%, transparent);
+	background: rgb(var(--fg-rgb) / 10%);
 	overflow: hidden;
 }
 
@@ -642,7 +642,7 @@ h2 {
 	display: grid;
 	place-items: center;
 	border-radius: 50%;
-	background: color-mix(in srgb, var(--fg) 92%, transparent);
+	background: rgb(var(--fg-rgb) / 92%);
 	color: var(--fg-on-accent);
 }
 
@@ -715,7 +715,7 @@ h2 {
 	place-items: center;
 	box-sizing: border-box;
 	border-radius: 50%;
-	border: 2px solid color-mix(in srgb, var(--fg) 28%, transparent);
+	border: 2px solid rgb(var(--fg-rgb) / 28%);
 	background: transparent;
 	color: var(--fg-on-accent);
 	transition:

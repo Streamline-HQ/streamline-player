@@ -6,7 +6,8 @@ import { getLocale } from "#lib/paraglide/runtime.js";
 import { search } from "#lib/core/search.svelte.ts";
 import { onPlayer, voice as hear } from "#platform";
 import { Film, House, Search, Settings, TvMinimal } from "@lucide/svelte";
-import { onMount, type Snippet } from "svelte";
+import { onMount, type Snippet, untrack } from "svelte";
+import { tvNav } from "#lib/ui/Toast.svelte";
 import { focus, focusDefault, forgetFocus, move } from "./focus";
 
 type Tab = "search" | "home" | "movies" | "series" | "settings";
@@ -36,6 +37,14 @@ const TABS = [
 	},
 	{ id: "settings", label: "", name: i18n.nav_settings(), href: "/settings", icon: Settings },
 ] as const;
+
+$effect(() => {
+	if (!tab) return;
+	untrack(() => tvNav.shown++);
+	return () => {
+		tvNav.shown--;
+	};
+});
 
 const FOCUS_DELAY_MS = 120;
 let stage: HTMLElement;
@@ -175,8 +184,8 @@ onMount(() => {
 	padding: 0 96px;
 	background: linear-gradient(
 		180deg,
-		color-mix(in srgb, var(--bg-deep) 90%, transparent) 0%,
-		color-mix(in srgb, var(--bg-deep) 55%, transparent) 55%,
+		rgb(var(--bg-deep-rgb) / 90%) 0%,
+		rgb(var(--bg-deep-rgb) / 55%) 55%,
 		transparent 100%
 	);
 }

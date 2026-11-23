@@ -758,9 +758,9 @@ function setSeason(n: number) {
 	background: linear-gradient(
 		0deg,
 		var(--bg-deep) 0%,
-		color-mix(in srgb, var(--bg-deep) 55%, transparent) 30%,
+		rgb(var(--bg-deep-rgb) / 55%) 30%,
 		transparent 60%,
-		color-mix(in srgb, var(--bg-deep) 45%, transparent) 100%
+		rgb(var(--bg-deep-rgb) / 45%) 100%
 	);
 }
 
@@ -942,12 +942,12 @@ h1 {
 	height: 7px;
 	border-radius: 50%;
 	background: var(--status-downloading);
-	box-shadow: 0 0 0 3px color-mix(in srgb, var(--status-downloading) 20%, transparent);
+	box-shadow: 0 0 0 3px rgb(var(--status-downloading-rgb) / 20%);
 }
 
 .dot.copy {
 	background: var(--status-available);
-	box-shadow: 0 0 0 3px color-mix(in srgb, var(--status-available) 18%, transparent);
+	box-shadow: 0 0 0 3px rgb(var(--status-available-rgb) / 18%);
 }
 
 .what {
@@ -1087,7 +1087,7 @@ h1 {
 	top: 5px;
 	padding: 1px 5px;
 	border-radius: 4px;
-	background: color-mix(in srgb, var(--bg-deep) 85%, transparent);
+	background: rgb(var(--bg-deep-rgb) / 85%);
 	font: 500 9px var(--font-mono);
 	letter-spacing: 0.08em;
 	text-transform: uppercase;

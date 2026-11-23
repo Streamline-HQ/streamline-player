@@ -220,7 +220,7 @@ const phoneHandlers: Handlers = $derived({ ...h, go: open });
 	padding: 0 12px;
 	border-radius: var(--radius-md);
 	border: 0;
-	background: color-mix(in srgb, var(--status-failed) 12%, transparent);
+	background: rgb(var(--status-failed-rgb) / 12%);
 	color: var(--status-failed);
 	font-size: 14px;
 	font-weight: 600;
@@ -309,11 +309,11 @@ h1.small {
 	padding: 13px 16px;
 }
 
-.blocks :global(.row:has(.tiles)) {
+.blocks :global(.row.flush) {
 	padding: 0;
 }
 
-.blocks :global(.tiles:not(:has(.value.mono))) {
+.blocks :global(.tiles:not(.mono)) {
 	--tile-min: 150px;
 }
 
@@ -337,7 +337,7 @@ h1.small {
 	height: 44px;
 }
 
-.blocks :global(.tiles:has(.value.mono)) {
+.blocks :global(.tiles.mono) {
 	--tile-min: 280px;
 }
 

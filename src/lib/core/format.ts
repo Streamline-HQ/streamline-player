@@ -12,10 +12,30 @@ export function monogram(name: string) {
 	for (const ch of name) h = (h * 31 + (ch.codePointAt(0) ?? 0)) >>> 0;
 	const hue = h % 360;
 	return {
-		initials: (first.charAt(0) + (rest.at(-1) ?? "").charAt(0)).toUpperCase(),
-		bg: `oklch(0.36 0.06 ${hue})`,
-		fg: `oklch(0.92 0.04 ${hue})`,
+		initials: (first.charAt(0) + (rest[rest.length - 1] ?? "").charAt(0)).toUpperCase(),
+		bg: oklch(0.36, 0.06, hue),
+		fg: oklch(0.92, 0.04, hue),
 	};
+}
+
+/** The sRGB colour of an OKLCH one, clamped to the gamut: Chromium 87 has no `oklch()`. */
+export function oklch(l: number, c: number, hue: number) {
+	const a = c * Math.cos((hue * Math.PI) / 180);
+	const b = c * Math.sin((hue * Math.PI) / 180);
+	const x = (l + 0.3963377774 * a + 0.2158037573 * b) ** 3;
+	const y = (l - 0.1055613458 * a - 0.0638541728 * b) ** 3;
+	const z = (l - 0.0894841775 * a - 1.291485548 * b) ** 3;
+	const linear = [
+		4.0767416621 * x - 3.3077115913 * y + 0.2309699292 * z,
+		-1.2684380046 * x + 2.6097574011 * y - 0.3413193965 * z,
+		-0.0041960863 * x - 0.7034186147 * y + 1.707614701 * z,
+	];
+	const srgb = linear.map((v) => {
+		const clamped = Math.min(1, Math.max(0, v));
+		const gamma = clamped <= 0.0031308 ? 12.92 * clamped : 1.055 * clamped ** (1 / 2.4) - 0.055;
+		return Math.round(gamma * 255);
+	});
+	return `rgb(${srgb.join(" ")})`;
 }
 
 /** Which seasons a series credit covers: "Season 2", "Seasons 2–5", "All 4 seasons". */

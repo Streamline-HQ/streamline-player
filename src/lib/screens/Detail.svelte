@@ -1071,9 +1071,9 @@ const heroHeight = $derived(
 	inset: 0;
 	background: linear-gradient(
 		90deg,
-		color-mix(in srgb, var(--bg-deep) 95%, transparent) 0%,
+		rgb(var(--bg-deep-rgb) / 95%) 0%,
 		var(--bg-overlay) 36%,
-		color-mix(in srgb, var(--bg-deep) 10%, transparent) 72%
+		rgb(var(--bg-deep-rgb) / 10%) 72%
 	);
 }
 
@@ -1083,7 +1083,7 @@ const heroHeight = $derived(
 	background: linear-gradient(
 		0deg,
 		var(--bg-deep) 0%,
-		color-mix(in srgb, var(--bg-deep) 50%, transparent) 26%,
+		rgb(var(--bg-deep-rgb) / 50%) 26%,
 		transparent 50%
 	);
 }
@@ -1191,7 +1191,7 @@ p {
 
 .cta:hover {
 	background: var(--accent-hover);
-	box-shadow: 0 0 24px color-mix(in srgb, var(--accent) 35%, transparent);
+	box-shadow: 0 0 24px rgb(var(--accent-rgb) / 35%);
 }
 
 .cta:active {
@@ -1252,12 +1252,12 @@ p {
 	height: 7px;
 	border-radius: 50%;
 	background: var(--status-downloading);
-	box-shadow: 0 0 0 3px color-mix(in srgb, var(--status-downloading) 20%, transparent);
+	box-shadow: 0 0 0 3px rgb(var(--status-downloading-rgb) / 20%);
 }
 
 .dot.copy {
 	background: var(--status-available);
-	box-shadow: 0 0 0 3px color-mix(in srgb, var(--status-available) 18%, transparent);
+	box-shadow: 0 0 0 3px rgb(var(--status-available-rgb) / 18%);
 }
 
 .plain {
@@ -1323,7 +1323,7 @@ h2 {
 
 .similar > button:hover .poster {
 	box-shadow:
-		0 0 0 2px color-mix(in srgb, var(--accent) 55%, transparent),
+		0 0 0 2px rgb(var(--accent-rgb) / 55%),
 		0 16px 32px rgba(0, 0, 0, 0.45);
 	transform: scale(1.03);
 }

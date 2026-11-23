@@ -325,9 +325,9 @@ const onFocus = (it: Item, ri: number) => {
 .side {
 	background: linear-gradient(
 		90deg,
-		color-mix(in srgb, var(--bg-deep) 96%, transparent) 0%,
-		color-mix(in srgb, var(--bg-deep) 86%, transparent) 40%,
-		color-mix(in srgb, var(--bg-deep) 50%, transparent) 60%,
+		rgb(var(--bg-deep-rgb) / 96%) 0%,
+		rgb(var(--bg-deep-rgb) / 86%) 40%,
+		rgb(var(--bg-deep-rgb) / 50%) 60%,
 		transparent 82%
 	);
 }
@@ -337,7 +337,7 @@ const onFocus = (it: Item, ri: number) => {
 		0deg,
 		var(--bg-deep) 0%,
 		var(--hero-scrim) 22%,
-		color-mix(in srgb, var(--bg-deep) 50%, transparent) 38%,
+		rgb(var(--bg-deep-rgb) / 50%) 38%,
 		transparent 58%
 	);
 }
