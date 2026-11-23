@@ -23,7 +23,6 @@ RUN --mount=type=cache,id=pnpm,target=/root/.local/share/pnpm/store \
     pnpm install --frozen-lockfile
 
 COPY vite.config.ts tsconfig.json ./
-COPY src-tauri/tauri.conf.json src-tauri/
 COPY project.inlang/settings.json project.inlang/
 COPY messages/ messages/
 COPY static/ static/

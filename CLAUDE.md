@@ -65,6 +65,10 @@ devshell (direnv), or `nix develop .#android` for the Android ones.
   … (`desktop:appimage` refuses to run on NixOS)
 - `task check` — everything CI runs: `fmt:check`, `lint` (clippy `-D warnings`,
   biome with warnings as errors, ruff, statix and deadnix, svelte-check), `test`; `task fmt` writes the formatting (treefmt, configured in `flake.nix`)
+- `task release LINE=<line> VERSION=x.y.z` — cut a release on one of six
+  independent lines (`engine`, `web`, `desktop`, `android`, `chart-engine`,
+  `chart-web`): version file + git-cliff changelog, commit, tag
+  `<line>-vx.y.z`, push; CI does the rest (`.taskfiles/release.yaml`)
 - `nix flake check` — the same checks plus package builds, the NixOS VM test
   and the home-manager evaluation
 - Add JS deps with `pnpm add`, never by editing `package.json`. TypeScript stays
