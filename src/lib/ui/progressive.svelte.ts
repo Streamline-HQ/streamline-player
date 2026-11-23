@@ -64,10 +64,10 @@ const URGENT_BUDGET_MS = 24;
 const MARGIN_ROWS = 1;
 // Real ahead of the scroll, so that skeletons seldom reach the viewport.
 const NEAR_ROWS = 3;
-// Real items cost the webview on every frame it draws, on screen or not (WebKitGTK walks the
-// layers of the whole page), so those beyond this go back to skeletons. Wider than NEAR_ROWS:
-// a small scroll back and forth swaps nothing.
-const KEEP_ROWS = 8;
+// A real item that goes back to a skeleton loses its picture, and WebKitGTK pays for a picture
+// each time it first paints: recreating the rows behind a scroll halved the frame rate, while
+// 500 real cards cost an idle page nothing. So this only bounds a very long list.
+const KEEP_ROWS = 100;
 // Before their cost is measured: 700 skeletons take ~50 ms, so this many stay well inside a frame.
 const FIRST_DRAW = 240;
 
