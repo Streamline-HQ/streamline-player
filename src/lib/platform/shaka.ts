@@ -7,6 +7,10 @@ type Rect = { full?: boolean; x?: number; y?: number; width?: number; height?: n
 
 const TICK_MS = 500;
 const BANDWIDTH_STEP = 0.1;
+// Shaka reports this until it has sampled 128 KB, and Auto takes it as a reading. Auto uses 80 % of
+// a reading, so 5 Mbit/s lands on the 4 Mbit/s preset: the lowest the engine encodes at 1080p
+// (HEVC/AV1; H.264 gets 720p there).
+const DEFAULT_BANDWIDTH = 5_000_000;
 const HLS = "application/x-mpegurl";
 
 const listeners = new Map<PlayerEvent, Set<Handler>>();
@@ -194,6 +198,7 @@ async function load(url: string, at: number) {
 		const player = new shaka.Player();
 		engine = player;
 		player.configure({
+			abr: { defaultBandwidthEstimate: DEFAULT_BANDWIDTH },
 			streaming: {
 				retryParameters: {
 					maxAttempts: 2,
