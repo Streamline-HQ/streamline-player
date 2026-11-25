@@ -40,6 +40,7 @@ import {
 	library,
 	markActivityRead,
 	myPicture,
+	softwareRendering,
 	title,
 	watchState,
 } from "#platform";
@@ -162,7 +163,7 @@ const slides = $derived.by(() => {
 	return out;
 });
 
-const hero = heroRotation(() => slides.length);
+const hero = heroRotation(() => slides.length, softwareRendering);
 let down: { x: number; y: number } | null = null;
 
 const slide = $derived(slides[hero.at]);
@@ -291,6 +292,7 @@ $effect(() => {
 			<section
 				class="hero"
 				class:reduced={hero.reduced}
+				class:coarse={!hero.smooth}
 				style:--hero-ms="{HERO_MS}ms"
 				style:--zoom-ms="{ZOOM_MS}ms"
 				use:swipe
@@ -763,6 +765,11 @@ h1 {
 
 .fill.run.ticking {
 	animation-play-state: running;
+}
+
+/* Drawn on the CPU, every step of the bar is a whole window composed again: one a second. */
+.coarse .fill.run {
+	animation-timing-function: steps(8, end);
 }
 
 @keyframes fill {

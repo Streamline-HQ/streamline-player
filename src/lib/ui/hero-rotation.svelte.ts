@@ -15,8 +15,12 @@ const ON_SCREEN = 0.5;
  *
  * The hero stands still, where it is, while its window has no focus, the page is hidden or less
  * than half of it is on screen. With `prefers-reduced-motion` it does not rotate or zoom at all.
+ *
+ * `drawnOnCpu` says whether the webview has no GPU to draw with. There any animation that
+ * runs on every frame has the whole window composed again on the CPU, whole cores of it: the
+ * backdrop then stays still and the progress bar moves in steps.
  */
-export function heroRotation(count: () => number) {
+export function heroRotation(count: () => number, drawnOnCpu: () => Promise<boolean>) {
 	let index = $state(0);
 	let phase = $state<"pre" | "in" | "out">("pre");
 	let previous = $state(-1);
@@ -25,6 +29,7 @@ export function heroRotation(count: () => number) {
 	let focused = $state(true);
 	let shown = $state(true);
 	let onScreen = $state(true);
+	let smooth = $state(true);
 	let left = HERO_MS;
 	let swap: ReturnType<typeof setTimeout>;
 
@@ -74,6 +79,7 @@ export function heroRotation(count: () => number) {
 		window.addEventListener("blur", onBlur);
 		document.addEventListener("visibilitychange", onShown);
 		settle();
+		void drawnOnCpu().then((cpu) => (smooth = !cpu));
 		return () => {
 			motion.removeEventListener("change", onMotion);
 			window.removeEventListener("focus", onFocus);
@@ -92,6 +98,10 @@ export function heroRotation(count: () => number) {
 		},
 		get reduced() {
 			return reduced;
+		},
+		/** False when the webview draws on the CPU. */
+		get smooth() {
+			return smooth;
 		},
 		/** False while the hero must stand still: the component pauses its animations on it. */
 		get moving() {
@@ -120,9 +130,9 @@ export function heroRotation(count: () => number) {
 		 * Slide `i` carries the zoom animation: the current one once its text comes in, and the
 		 * one that just left, which keeps the scale it had reached while it fades out.
 		 */
-		zooms: (i: number) => !reduced && (i === at ? phase !== "pre" : i === previous),
+		zooms: (i: number) => !reduced && smooth && (i === at ? phase !== "pre" : i === previous),
 		/** Slide `i` is zooming right now, and only then worth a compositing layer of its own. */
-		zooming: (i: number) => !reduced && i === at && phase !== "pre" && moving && !zoomed,
+		zooming: (i: number) => !reduced && smooth && i === at && phase !== "pre" && moving && !zoomed,
 		/** Call when the current slide's zoom animation ends. */
 		zoomEnded: () => (zoomed = true),
 		/** Slide `i` carries the progress animation. */
