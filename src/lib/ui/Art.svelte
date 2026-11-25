@@ -1,5 +1,4 @@
 <script lang="ts">
-import Icon from "#lib/ui/Icon.svelte";
 import { cardSrcset } from "#lib/ui/img.ts";
 
 let {
@@ -46,7 +45,12 @@ $effect(() => {
 
 <span class="art" class:sized={!!ratio} style:aspect-ratio={ratio}>
 	{#if kind === "poster"}
-		<span class="ph"><Icon name="film" /></span>
+		<span class="ph">
+			<svg viewBox="0 0 24 24" aria-hidden="true">
+				<rect width="18" height="18" x="3" y="3" rx="2" />
+				<path d="M7 3v18M3 7.5h4M3 12h18M3 16.5h4M17 3v18M17 7.5h4M17 16.5h4" />
+			</svg>
+		</span>
 	{:else}
 		<span class="frame" aria-hidden="true"></span>
 	{/if}
@@ -124,6 +128,19 @@ $effect(() => {
 	place-items: center;
 	font-size: 40px;
 	color: var(--fg-faint);
+}
+
+/* Lucide's "film", written out and not an icon component: every poster has this placeholder, and
+   a component per card costs a grid of hundreds 0.7 ms each. Not a CSS mask either: a masked
+   element paints over the picture. */
+.ph svg {
+	width: 1em;
+	height: 1em;
+	fill: none;
+	stroke: currentColor;
+	stroke-width: 1.5;
+	stroke-linecap: round;
+	stroke-linejoin: round;
 }
 
 img {
