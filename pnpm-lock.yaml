@@ -170,8 +170,8 @@ importers:
         specifier: ^1.67.0
         version: 1.67.0(svelte@5.57.3)
       '@tauri-apps/api':
-        specifier: ^2.12.4
-        version: 2.12.4
+        specifier: 3.0.0-alpha.3
+        version: 3.0.0-alpha.3
       jassub:
         specifier: 2.5.23
         version: 2.5.23
@@ -626,8 +626,8 @@ packages:
       svelte: ^5.46.4
       vite: ^8.0.0-beta.7 || ^8.0.0
 
-  '@tauri-apps/api@2.12.4':
-    resolution: {integrity: sha512-pVmfis+4zT8H0Qhp3xPZx9Ju7kpzvA6rr/PSJPyuwfvucTQ8sVt61NYU9KMkK703UFlYadFmjKA4HhybOtN0gg==}
+  '@tauri-apps/api@3.0.0-alpha.3':
+    resolution: {integrity: sha512-lkMIhoFGZP7t23ykG12iNvYklhkf407Zibq0MsAWQAAADVLQbhUdp/vIXvHfodqO8NdovkKPoG493wg/Crn9qg==}
 
   '@tybys/wasm-util@0.10.4':
     resolution: {integrity: sha512-W3c4gRigFS0T/Ma4qIYF3GDAc5AQdHb1yL5znJT1Zv1YaD9Kitx656wBjvr19qbiosmZT8lWDM5BEMynUqX65A==}
@@ -1323,7 +1323,7 @@ snapshots:
       vite: 8.3.5(@types/node@24.19.2)(jiti@2.7.0)(yaml@2.9.1)
       vitefu: 1.1.3(vite@8.3.5(@types/node@24.19.2)(jiti@2.7.0)(yaml@2.9.1))
 
-  '@tauri-apps/api@2.12.4': {}
+  '@tauri-apps/api@3.0.0-alpha.3': {}
 
   '@tybys/wasm-util@0.10.4':
     dependencies:

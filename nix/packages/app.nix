@@ -6,7 +6,7 @@
   pnpmConfigHook,
   sqlite,
   pkg-config,
-  wrapGAppsHook3,
+  qt6,
   nodejs,
   pnpm,
   desktop,
@@ -31,11 +31,11 @@ rustPlatform.buildRustPackage {
     pnpmConfigHook
     sqlite
     pkg-config
-    wrapGAppsHook3
+    qt6.wrapQtAppsHook
   ];
-  # The same lists the devshell derives its environment from; wrapGAppsHook
-  # bakes the GStreamer plugins and GIO modules into the launcher.
-  buildInputs = desktop.libs ++ desktop.gstPlugins;
+  # The same list the devshell derives its environment from; wrapQtAppsHook
+  # bakes Qt's plugin paths into the launcher.
+  buildInputs = desktop.libs;
 
   # The workspace's tests run once, in checks.cargo-test, as `task test:rust` does.
   doCheck = false;

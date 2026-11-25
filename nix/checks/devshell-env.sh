@@ -5,29 +5,19 @@ fail() {
   exit 1
 }
 
-for pc in webkit2gtk-4.1 gtk+-3.0 libsoup-3.0 openssl librsvg-2.0 mpv egl; do
+for pc in Qt6WebEngineWidgets Qt6WebChannel Qt6OpenGLWidgets Qt6PrintSupport Qt6DBus openssl mpv egl; do
   pkg-config --exists "$pc" || fail "pkg-config cannot resolve $pc: $(pkg-config --print-errors --exists "$pc" 2>&1)"
 done
 
-found=""
+wayland=""
 IFS=:
-for dir in $GST_PLUGIN_SYSTEM_PATH_1_0; do
-  [ -d "$dir" ] || fail "GST_PLUGIN_SYSTEM_PATH_1_0 names a missing directory: $dir"
-  found="$found $(ls "$dir")"
-done
-for dir in $GIO_EXTRA_MODULES; do
-  [ -e "$dir/libgiognutls.so" ] && gio=1
-done
-schema=""
-for dir in $XDG_DATA_DIRS; do
-  [ -e "$dir/glib-2.0/schemas/org.gtk.Settings.FileChooser.gschema.xml" ] && schema=1
+for dir in $QT_PLUGIN_PATH; do
+  [ -d "$dir" ] || fail "QT_PLUGIN_PATH names a missing directory: $dir"
+  [ -e "$dir/platforms/libqwayland.so" ] && wayland=1
 done
 unset IFS
 
-case "$found" in *libgstisomp4.so*) ;; *) fail "no isomp4 plugin on GST_PLUGIN_SYSTEM_PATH_1_0" ;; esac
-case "$found" in *libgstlibav.so*) ;; *) fail "no libav plugin on GST_PLUGIN_SYSTEM_PATH_1_0" ;; esac
-[ -n "${gio:-}" ] || fail "GIO_EXTRA_MODULES has no glib-networking TLS module"
-[ -n "$schema" ] || fail "XDG_DATA_DIRS has no GTK file chooser schema"
+[ -n "$wayland" ] || fail "QT_PLUGIN_PATH has no Wayland platform plugin"
 [ -x "$CC" ] || fail "CC is not executable: ${CC:-unset}"
 command -v cc >/dev/null || fail "no cc on PATH for rustc to link with"
 # The player plugin's build script links libmpv and libEGL by bare name, with

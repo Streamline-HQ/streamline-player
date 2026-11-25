@@ -912,7 +912,11 @@ pub(crate) fn with_roots(builder: reqwest::ClientBuilder) -> reqwest::ClientBuil
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
-    tauri::Builder::default()
+    #[cfg(target_os = "linux")]
+    let builder = tauri::Builder::default().runtime(tauri_runtime_qt::Qt::default());
+    #[cfg(not(target_os = "linux"))]
+    let builder = tauri::Builder::default().runtime(tauri_runtime_wry::Wry::default());
+    builder
         .plugin(tauri_plugin_player::init())
         .plugin(tauri_plugin_opener::init())
         .setup(|app| {
@@ -953,17 +957,6 @@ pub fn run() {
                         ..Default::default()
                     },
                 )));
-            }
-            #[cfg(target_os = "linux")]
-            // WebKitGTK (seen on 2.54.1) zooms pages by gtk-xft-dpi / 96, and GTK reports -1
-            // when no XSETTINGS daemon runs (Hyprland, sway): pages get a zoom of -1/96, a
-            // negative innerWidth and devicePixelRatio, a collapsed layout and clicks that
-            // miss. Drop this once WebKitGTK ignores an unset DPI.
-            if let Some(settings) = gtk::Settings::default() {
-                use gtk::prelude::GtkSettingsExt;
-                if settings.gtk_xft_dpi() <= 0 {
-                    settings.set_gtk_xft_dpi(96 * 1024);
-                }
             }
             Ok(())
         })

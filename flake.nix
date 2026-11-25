@@ -145,7 +145,9 @@
                 pkgs.ffmpeg-full
                 pkgs.dovi-tool
               ];
-              buildInputs = desktop.libs ++ desktop.gstPlugins;
+              buildInputs = desktop.libs;
+              # Nothing is installed to wrap; qtbase refuses to build without a decision.
+              dontWrapQtApps = true;
               buildPhase = ''
                 runHook preBuild
                 mkdir -p build
@@ -204,6 +206,8 @@
           # version.
           treefmt = {
             projectRootFile = "flake.nix";
+            # Someone else's crates, kept as they came (vendor/tauri-runtime-qt/README.md).
+            settings.global.excludes = [ "vendor/**" ];
             programs.nixfmt = {
               enable = true;
               package = nixfmt;
@@ -243,11 +247,10 @@
             build-streamline-player = self'.packages.streamline-player;
 
             # The launcher must carry what the devshell computes by hand: without
-            # these the webview finds no codecs and no TLS.
+            # it Qt finds no Wayland platform plugin and the app opens no window.
             app-wrapped = pkgs.runCommandLocal "check-app-wrapped" { } ''
               launcher=${lib.getExe self'.packages.streamline-player}
-              grep -q 'GST_PLUGIN_SYSTEM_PATH_1_0.*gst-libav' "$launcher" || { echo "launcher has no gst-libav on GST_PLUGIN_SYSTEM_PATH_1_0"; exit 1; }
-              grep -q 'GIO_EXTRA_MODULES.*glib-networking' "$launcher" || { echo "launcher sets no glib-networking GIO_EXTRA_MODULES"; exit 1; }
+              grep -q 'QT_PLUGIN_PATH.*qtwayland' "$launcher" || { echo "launcher has no qtwayland on QT_PLUGIN_PATH"; exit 1; }
               touch $out
             '';
 
