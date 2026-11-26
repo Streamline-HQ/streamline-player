@@ -8,7 +8,7 @@ import { onPlayer, voice as hear } from "#platform";
 import { Film, House, Search, Settings, TvMinimal } from "@lucide/svelte";
 import { onMount, type Snippet, untrack } from "svelte";
 import { tvNav } from "#lib/ui/Toast.svelte";
-import { focus, focusDefault, forgetFocus, move } from "./focus";
+import { focus, focusDefault, forgetFocus, move, point } from "./focus";
 import { tvKey } from "./keys.ts";
 
 type Tab = "search" | "home" | "movies" | "series" | "settings";
@@ -80,6 +80,16 @@ function onKey(e: KeyboardEvent) {
 	}
 }
 
+// A screen that doesn't scroll moves its focus with the wheel instead, one step per notch.
+// ponytail: a trackpad's stream of small deltas is cut to one step per WHEEL_STEP_MS.
+const WHEEL_STEP_MS = 250;
+let wheelAt = -Infinity;
+function onWheel(e: WheelEvent) {
+	if (scroll || !e.deltaY || e.timeStamp - wheelAt < WHEEL_STEP_MS) return;
+	wheelAt = e.timeStamp;
+	move(e.deltaY > 0 ? "ArrowDown" : "ArrowUp", stage);
+}
+
 afterNavigate(({ type }) => {
 	if (type !== "popstate") forgetFocus();
 	scroller.scrollTop = 0;
@@ -116,7 +126,7 @@ onMount(() => {
 });
 </script>
 
-<svelte:window onkeydown={onKey} />
+<svelte:window onkeydown={onKey} onpointermove={(e) => point(e, stage)} onwheel={onWheel} />
 
 <div class="stage" data-tv-screen="1" bind:this={stage}>
 	<div class="scroller" class:scroll bind:this={scroller}>{@render children()}</div>

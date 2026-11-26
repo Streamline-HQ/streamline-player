@@ -25,7 +25,7 @@ import { prefs, setPref as savePref } from "#lib/core/prefs.svelte.ts";
 import { tileAt } from "#lib/core/trickplay.ts";
 import type { Decision } from "#lib/core/types.ts";
 import { onPlayer, PLAYER_NAME, playbackPort } from "#platform";
-import { focusDefault as focusStageDefault, move } from "#lib/tv/focus.ts";
+import { focusDefault as focusStageDefault, move, point } from "#lib/tv/focus.ts";
 import { tvKey } from "#lib/tv/keys.ts";
 import HaltScreen from "#lib/tv/HaltScreen.svelte";
 import { hideBroken, orPoster } from "#lib/ui/img.ts";
@@ -785,7 +785,13 @@ onMount(() => {
 });
 </script>
 
-<svelte:window onkeydown={onKey} />
+<svelte:window
+	onkeydown={onKey}
+	onpointermove={(e) => {
+		showControls();
+		point(e, stage);
+	}}
+/>
 
 {#snippet flash(f: Flash, side: "left" | "right")}
 	<div class="sk {side}" aria-hidden="true">
@@ -1008,6 +1014,10 @@ onMount(() => {
 					bind:clientWidth={scrubWidth}
 					onfocus={() => (scrubFocus = true)}
 					onblur={() => (scrubFocus = false)}
+					onclick={(e) => {
+						const r = e.currentTarget.getBoundingClientRect();
+						if (pb.duration > 0) pb.seekTo(((e.clientX - r.left) / r.width) * pb.duration);
+					}}
 				>
 					<div class="track">
 						{#each segs as g}
