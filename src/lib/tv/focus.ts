@@ -1,3 +1,5 @@
+import { appPath } from "#lib/ui/nav.ts";
+
 type Dir = "left" | "right" | "up" | "down";
 
 const remembered = new Map<string, string>();
@@ -56,14 +58,14 @@ function reveal(el: HTMLElement, root: HTMLElement) {
 }
 
 /** Only Back returns to the remembered card; arriving any other way starts at the screen's default. */
-export const forgetFocus = () => remembered.delete(location.pathname);
+export const forgetFocus = () => remembered.delete(appPath());
 
 export function focus(el: HTMLElement | null | undefined, root: HTMLElement, scroll = true) {
 	if (!el) return;
 	el.focus({ preventScroll: true });
 	if (scroll) reveal(el, root);
 	const fid = el.getAttribute("data-fid");
-	if (fid) remembered.set(location.pathname, fid);
+	if (fid) remembered.set(appPath(), fid);
 }
 
 /**
@@ -80,7 +82,7 @@ export function point(e: PointerEvent, root: HTMLElement) {
 
 export function focusDefault(root: HTMLElement, attempt = 0) {
 	const scope = scopeOf(root);
-	const back = remembered.get(location.pathname);
+	const back = remembered.get(appPath());
 	const el =
 		(back && !scope.hasAttribute("data-tv-trap")
 			? scope.querySelector<HTMLElement>(`[data-fid="${CSS.escape(back)}"]`)

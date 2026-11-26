@@ -7,9 +7,10 @@ const prefix = () => resolve("/").replace(/\/$/, "");
 export const goto = (path: string, opts?: Parameters<typeof kitGoto>[1]) =>
 	kitGoto(`${prefix()}${path}`, opts);
 
-/** `location.pathname` without the base path, as the routes spell it. */
+/** `location.pathname` without the base path, as the routes spell it; the hash's path under hash routing. */
 export const appPath = () => {
 	const base = prefix();
+	if (base === "#") return location.hash.slice(1).split("?")[0] || "/";
 	const { pathname } = location;
 	return pathname.startsWith(`${base}/`) || pathname === base
 		? pathname.slice(base.length) || "/"

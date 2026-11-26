@@ -11,6 +11,9 @@ const host = process.env.TAURI_DEV_HOST;
 // The target is fixed at build time: Tauri sets TAURI_ENV_PLATFORM, a plain Vite build leaves it unset.
 // package.json's `#platform` import resolves to native.ts under the "native" condition, web.ts otherwise.
 const native = !!process.env.TAURI_ENV_PLATFORM;
+// The webOS and Tizen packages run from file://, where the path is the install folder: the route
+// lives in the hash instead (`task build:webos`, `build:tizen`).
+const tvPackage = process.env.TV_PACKAGE === "1";
 
 const csp: NonNullable<Parameters<typeof sveltekit>[0]>["csp"] = !native
 	? {
@@ -54,10 +57,20 @@ export default defineConfig({
 			strategy: ["localStorage", "preferredLanguage", "baseLocale"],
 			isServer: "false",
 		}),
+		// Kit refuses page options under hash routing, where nothing renders on a server anyway:
+		// the root layout's `ssr = false` goes for the TV packages.
+		tvPackage && {
+			name: "tv-package-page-options",
+			enforce: "pre" as const,
+			resolveId: (source: string) =>
+				source === "./page-options.ts" ? "\0no-page-options" : undefined,
+			load: (id: string) => (id === "\0no-page-options" ? "export {};" : undefined),
+		},
 		sveltekit({
 			// Tauri serves files, not a Node server: an SPA with one fallback page.
 			adapter: adapter({ fallback: "index.html" }),
 			paths: { base: (process.env.BASE_PATH ?? "") as "" | `/${string}` },
+			router: tvPackage ? { type: "hash" } : undefined,
 			csp,
 		}),
 	],

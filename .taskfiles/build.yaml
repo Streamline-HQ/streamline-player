@@ -46,6 +46,44 @@ tasks:
       # Marks build/ as the web target for `task check`; a native build empties build/ and so drops it.
       - touch build/.web-target
 
+  tv-package:
+    internal: true
+    env:
+      TV_PACKAGE: "1"
+    cmds:
+      - pnpm build
+      - node dev/tv-package-paths.ts
+      - node dev/web-build-check.ts
+      - ffmpeg -loglevel error -y -i static/streamline-mark.png -vf scale=80:80:flags=lanczos build/icon.png
+      - ffmpeg -loglevel error -y -i static/streamline-mark.png -vf scale=130:130:flags=lanczos build/largeIcon.png
+
+  webos:
+    desc: Package the web build for LG webOS TVs as target/webos/*.ipk
+    cmds:
+      - task: tv-package
+      - >-
+        node -e 'require("fs").writeFileSync("build/appinfo.json", JSON.stringify({
+        id: "com.datahearth.streamline-player", title: "Streamline Player", vendor: "Streamline",
+        type: "web", main: "index.html", icon: "icon.png", largeIcon: "largeIcon.png",
+        version: require("./package.json").version, resolution: "1920x1080",
+        disableBackHistoryAPI: true, requiredACG: [] }, null, 2))'
+      - pnpm exec ares-package build -o target/webos
+      - ffmpeg -loglevel error -y -i static/streamline-mark.png -vf scale=400:400:flags=lanczos target/webos/store-icon-400.png
+
+  tizen:
+    desc: Package and sign the web build for Samsung Tizen TVs as target/tizen/*.wgt
+    preconditions:
+      - sh: command -v tizen
+        msg: >-
+          Needs Tizen Studio's CLI on PATH and a Samsung TV certificate profile made in its
+          Certificate Manager (TIZEN_PROFILE, default "streamline")
+    cmds:
+      - task: tv-package
+      - >-
+        sed "s/@VERSION@/$(node -p 'require("./package.json").version')/" packaging/tizen/config.xml
+        > build/config.xml
+      - tizen package -t wgt -s {{.TIZEN_PROFILE | default "streamline"}} -o target/tizen -- build
+
   android:
     desc: Build the Android APK and AAB (phones and Android TV)
     platforms: [linux, darwin]
