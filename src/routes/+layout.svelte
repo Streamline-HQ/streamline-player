@@ -10,7 +10,7 @@ import { appPath, goto } from "#lib/ui/nav.ts";
 import { toast } from "#lib/core/toast.svelte.ts";
 import { m as i18n } from "#lib/paraglide/messages.js";
 import { formFactor, isPhone } from "#lib/platform/form-factor.svelte.ts";
-import { FORM_FACTOR, IS_WEB } from "#lib/platform/target.ts";
+import { FORM_FACTOR, IS_WEB, SIGNS_IN } from "#lib/platform/target.ts";
 import DesktopShell from "#lib/shells/desktop/Shell.svelte";
 import Mark from "#lib/ui/Mark.svelte";
 import PhoneShell from "#lib/shells/phone/Shell.svelte";
@@ -40,7 +40,7 @@ const toSignIn = () => {
 onMount(() => {
 	// A revoked key or browser session is dropped on the first 401, and said so here.
 	const signedOut = onSignedOut(() => {
-		if (!IS_WEB) return goto("/welcome", { replace: true });
+		if (!SIGNS_IN) return goto("/welcome", { replace: true });
 		toast(i18n.shell_signed_out());
 		return goto("/signin", { replace: true });
 	});
@@ -48,7 +48,7 @@ onMount(() => {
 		.then(authState)
 		.then(async (s) => {
 			if (s.paired) return;
-			if (IS_WEB) {
+			if (SIGNS_IN) {
 				if (!onSignIn()) await toSignIn();
 			} else if (appPath() !== "/welcome") await goto("/welcome", { replace: true });
 		})

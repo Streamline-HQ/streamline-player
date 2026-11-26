@@ -1530,7 +1530,9 @@ class Handler(BaseHTTPRequestHandler):
             self.send_header("Vary", "Origin")
             self.send_header("Access-Control-Expose-Headers", "Content-Disposition")
             if self.command == "OPTIONS":
-                self.send_header("Access-Control-Allow-Headers", "Authorization, Content-Type")
+                self.send_header(
+                    "Access-Control-Allow-Headers", "Authorization, X-API-Key, Content-Type"
+                )
                 self.send_header("Access-Control-Allow-Methods", "GET, POST, PUT, PATCH, DELETE")
         super().end_headers()
 

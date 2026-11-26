@@ -21,3 +21,6 @@ const askedForTv = () => {
 const webTv = IS_WEB && (isTvAgent(navigator.userAgent) || askedForTv());
 
 export const FORM_FACTOR: FormFactor = (TARGET === "android" && !touch) || webTv ? "tv" : "desktop";
+
+/** A browser signs in on Streamline's own page; a TV, native or in a browser, pairs with a code. */
+export const SIGNS_IN = IS_WEB && FORM_FACTOR !== "tv";

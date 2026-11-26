@@ -1,6 +1,14 @@
 // node dev/auth-check.ts
 import { match, strictEqual as eq } from "node:assert";
-import { browserDeviceName, challengeFor, pkcePair, safeNext } from "../src/lib/core/auth.ts";
+import {
+	browserDeviceName,
+	challengeFor,
+	pkcePair,
+	pollAnswer,
+	safeNext,
+	serverAddress,
+	tvDevice,
+} from "../src/lib/core/auth.ts";
 
 eq(
 	await challengeFor("dBjftJeZ4CVP-mB92K27uhbUJU1p1r_wW1gFWFOEjXk"),
@@ -38,3 +46,28 @@ eq(safeNext("//evil.example"), "/");
 eq(safeNext("https://evil.example"), "/");
 eq(safeNext("/\\evil.example"), "/");
 eq(safeNext(null), "/");
+
+eq(serverAddress(" streamline.home.arpa/ "), "https://streamline.home.arpa");
+eq(serverAddress("http://192.168.1.4:8080//"), "http://192.168.1.4:8080");
+
+const refusal = (code: string) => JSON.stringify({ error: { code, message: code } });
+eq(pollAnswer(refusal("authorization_pending")), "pending");
+eq(pollAnswer(refusal("slow_down")), "slow_down");
+eq(pollAnswer(refusal("access_denied")), "denied");
+eq(pollAnswer(refusal("expired_token")), "expired");
+eq(pollAnswer(refusal("invalid_request")), null);
+eq(pollAnswer("TypeError: Failed to fetch"), null);
+
+eq(
+	tvDevice(
+		"Mozilla/5.0 (Web0S; Linux/SmartTV) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/87.0.4280.88 Safari/537.36 WebAppManager",
+	).platform,
+	"webos-tv",
+);
+eq(
+	tvDevice(
+		"Mozilla/5.0 (SMART-TV; LINUX; Tizen 7.0) AppleWebKit/537.36 (KHTML, like Gecko) 94.0.4606.31/7.0 TV Safari/537.36",
+	).platform,
+	"tizen-tv",
+);
+eq(tvDevice("Mozilla/5.0 (Linux; VIDAA) AppleWebKit/537.36").platform, "web-tv");
