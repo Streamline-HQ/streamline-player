@@ -346,6 +346,7 @@ $effect(() => {
 									><span
 										class="fill"
 										class:run={hero.fills(i)}
+										class:whole={hero.reduced && i === hero.at}
 										class:ticking={hero.rotating}
 									></span></span
 								>
@@ -755,6 +756,11 @@ h1 {
 	transform: scaleX(0);
 	transform-origin: left;
 	background: var(--player-ink);
+}
+
+/* With reduced motion the bar does not advance: the current slide's dot is simply white. */
+.fill.whole {
+	transform: none;
 }
 
 .fill.run {
