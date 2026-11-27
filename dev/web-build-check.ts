@@ -29,7 +29,8 @@ const tauri = files("build").filter(
 eq(tauri.length, 0, `__TAURI found in ${tauri.join(", ")}`);
 
 // webOS 22 runs Chromium 87: none of these parse there, and a rule holding one is dropped whole.
-const tooNew = [/color-mix\(/, /oklch\(/, /:has\(/, /&/];
+// Svelte's own `:where(.svelte-…)` gets a copy without it from dev/chromium87-css.ts.
+const tooNew = [/color-mix\(/, /oklch\(/, /:has\(/, /&/, /:is\(/, /:where\((?!\.svelte-|a\))/];
 for (const f of files("build").filter((f) => f.endsWith(".css"))) {
 	const css = readFileSync(f, "utf8");
 	for (const re of tooNew) ok(!re.test(css), `${f} uses ${re.source}, which Chromium 87 lacks`);

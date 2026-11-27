@@ -3,6 +3,7 @@ import { paraglideVitePlugin } from "@inlang/paraglide-js";
 import adapter from "@sveltejs/adapter-static";
 import { sveltekit } from "@sveltejs/kit/vite";
 import { defaultClientConditions, defineConfig } from "vite";
+import { chromium87 } from "./dev/chromium87-css.ts";
 
 // `cargo tauri android|ios dev` sets this to the host's LAN address: the app on
 // the device loads the dev server over the network, not from localhost.
@@ -77,6 +78,7 @@ export default defineConfig({
 	resolve: { conditions: native ? ["native", ...defaultClientConditions] : undefined },
 	// The oldest engine shipped to: webOS 22 TVs run Chromium 87.
 	build: { target: "chrome87", cssTarget: "chrome87" },
+	css: { postcss: { plugins: [chromium87] } },
 	clearScreen: false,
 	server: {
 		port: 1420,
