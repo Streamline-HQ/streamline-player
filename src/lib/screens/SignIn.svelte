@@ -153,8 +153,8 @@ onMount(() => {
 	border-radius: 50%;
 	background: radial-gradient(
 		closest-side,
-		color-mix(in srgb, var(--accent) 22%, transparent),
-		color-mix(in srgb, var(--accent) 6%, transparent) 55%,
+		rgb(var(--accent-rgb) / 22%),
+		rgb(var(--accent-rgb) / 6%) 55%,
 		transparent 100%
 	);
 	pointer-events: none;
@@ -174,7 +174,7 @@ onMount(() => {
 	flex-direction: column;
 	padding: 34px 34px 30px;
 	border-radius: var(--radius-xl);
-	background: color-mix(in srgb, var(--bg-elevated) 95%, transparent);
+	background: rgb(var(--bg-elevated-rgb) / 95%);
 	border: 1px solid var(--border);
 	box-shadow: var(--shadow-4);
 }
@@ -245,7 +245,7 @@ button {
 	width: 15px;
 	height: 15px;
 	border-radius: 50%;
-	border: 2px solid color-mix(in srgb, var(--bg-deep) 30%, transparent);
+	border: 2px solid rgb(var(--bg-deep-rgb) / 30%);
 	border-top-color: var(--bg-deep);
 	animation: spin 700ms linear infinite;
 }
@@ -286,7 +286,7 @@ button {
 }
 
 .link:hover {
-	background: color-mix(in srgb, var(--accent) 12%, transparent);
+	background: rgb(var(--accent-rgb) / 12%);
 }
 
 .register {

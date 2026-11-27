@@ -138,7 +138,7 @@ const heading = $derived(
 	padding: 0 26px;
 	border-radius: 18px;
 	background: var(--bg-elevated);
-	border: 2px solid color-mix(in srgb, var(--accent) 55%, transparent);
+	border: 2px solid rgb(var(--accent-rgb) / 55%);
 }
 
 .q {

@@ -153,7 +153,7 @@ p {
 }
 
 .rows.danger {
-	border-color: color-mix(in srgb, var(--status-failed) 28%, transparent);
+	border-color: rgb(var(--status-failed-rgb) / 28%);
 }
 
 .row {

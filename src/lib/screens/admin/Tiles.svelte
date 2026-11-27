@@ -11,7 +11,8 @@ let {
 	ongo?: (to: SectionKey) => void;
 } = $props();
 
-const min = $derived(tiles.some((t) => t.mono) ? 300 : 180);
+const mono = $derived(tiles.some((t) => t.mono));
+const min = $derived(mono ? 300 : 180);
 </script>
 
 {#snippet body(t: (typeof tiles)[number])}
@@ -30,7 +31,7 @@ const min = $derived(tiles.some((t) => t.mono) ? 300 : 180);
 {/snippet}
 
 <div
-	class="tiles"
+	class={["tiles", mono && "mono"]}
 	style:grid-template-columns="repeat(auto-fit, minmax(var(--tile-min, {min}px), 1fr))"
 >
 	{#each tiles as t (t.label)}

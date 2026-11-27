@@ -1,5 +1,12 @@
 import { resolve } from "$app/paths";
-import { browserDeviceName, pkcePair, SignInError } from "#lib/core/auth.ts";
+import {
+	browserDeviceName,
+	pkcePair,
+	pollAnswer,
+	serverAddress,
+	SignInError,
+	tvDevice,
+} from "#lib/core/auth.ts";
 import type { PlaybackPort, PlayerEvent, Session, Tracks } from "#lib/core/playback/port.ts";
 import { browserCaps } from "./browser-caps.ts";
 import * as shaka from "./shaka.ts";
@@ -39,6 +46,11 @@ const REFRESH = "auth:refresh";
 const DEVICE = "auth:device";
 const PENDING_SSO = "auth:sso";
 const LOCK = "auth-refresh";
+// A paired TV: the server it connected to, its device key, and the install's id that pairing names.
+const SERVER = "pair:server";
+const KEY = "pair:key";
+const CLIENT = "pair:client";
+const CONNECT_TIMEOUT_MS = 5000;
 
 type Tokens = {
 	access_token: string;
@@ -116,6 +128,11 @@ export const init = () => {
 };
 
 async function load() {
+	const paired = store.get(SERVER);
+	if (paired) {
+		streamline = paired;
+		return;
+	}
 	try {
 		const res = await fetch(`${resolve("/")}config.json`);
 		const config = res.ok ? await res.json() : null;
@@ -129,12 +146,22 @@ async function load() {
 		: location.origin;
 }
 
-const signedOut = () => {
+const forget = async () => {
 	access = null;
+	store.remove(KEY);
 	store.remove(REFRESH);
 	store.remove(DEVICE);
-	void refreshStore.clear();
+	await refreshStore.clear();
+};
+
+const signedOut = () => {
+	void forget();
 	for (const cb of [...signedOutListeners]) cb();
+};
+
+const authHeader = (bearer: string | null): Record<string, string> => {
+	const key = store.get(KEY);
+	return key ? { "X-API-Key": key } : bearer ? { Authorization: `Bearer ${bearer}` } : {};
 };
 
 window.addEventListener("storage", (e) => {
@@ -203,7 +230,7 @@ async function request(method: string, path: string, body?: unknown): Promise<Re
 		return fetch(url(path), {
 			method,
 			headers: {
-				...(sent ? { Authorization: `Bearer ${sent}` } : {}),
+				...authHeader(sent),
 				...(body === undefined
 					? {}
 					: { "Content-Type": body instanceof Blob ? body.type : "application/json" }),
@@ -212,7 +239,9 @@ async function request(method: string, path: string, body?: unknown): Promise<Re
 		}).then((res) => ({ res, sent }));
 	};
 	let { res, sent } = await send().catch((e) => fail(String(e)));
-	if (res.status === 401 && store.get(REFRESH)) {
+	// The key was revoked from the account page, or a password change dropped every key.
+	if (res.status === 401 && store.get(KEY)) signedOut();
+	else if (res.status === 401 && store.get(REFRESH)) {
 		if (await refresh(sent)) ({ res, sent } = await send().catch((e) => fail(String(e))));
 	}
 	return res;
@@ -230,11 +259,12 @@ let beating: string | null = null;
 // A closing tab cannot wait for the refresh lock or a retry: the last beat goes out as it is, with the token in hand.
 // `pagehide` alone is not enough: Firefox drops a preflighted request started that late, and `hidden` comes first.
 const finalBeat = () => {
-	if (!beating || !access) return;
+	const auth = authHeader(access);
+	if (!beating || !Object.keys(auth).length) return;
 	fetch(url(`/playback/sessions/${beating}/progress`), {
 		method: "POST",
 		keepalive: true,
-		headers: { Authorization: `Bearer ${access}`, "Content-Type": "application/json" },
+		headers: { ...auth, "Content-Type": "application/json" },
 		body: JSON.stringify({
 			position: shaka.position(),
 			paused: document.visibilityState === "hidden",
@@ -281,14 +311,99 @@ export const everything = async () => {
 
 export const authState = (): Promise<AuthState> =>
 	Promise.resolve({
-		paired: !!store.get(REFRESH),
-		server: streamline,
+		paired: !!(store.get(KEY) || store.get(REFRESH)),
+		// A packaged app runs from file://, whose origin is "null": no server until one is typed.
+		server: /^https?:\/\//.test(streamline) ? streamline : null,
 		keystore: "browser storage",
 		store_error: null,
 	});
-export const connect = (_url: string): Promise<unknown> => notOnWeb();
-export const pairStart = (): Promise<Pairing> => notOnWeb();
-export const pairPoll = (): Promise<string> => notOnWeb();
+
+/**
+ * Checks the address answers as Streamline's player extension before keeping it, and returns the
+ * round trip in ms, or throws `unreachable` / `not_streamline`. Only the player extension answers
+ * `register_url` on `/auth/methods`: a bare Streamline, or the web player's own host, does not.
+ */
+export async function connect(typed: string): Promise<number> {
+	await init();
+	const to = serverAddress(typed);
+	const started = performance.now();
+	// AbortSignal.timeout is Chromium 103; the TVs run 87.
+	const abort = new AbortController();
+	const timer = setTimeout(() => abort.abort(), CONNECT_TIMEOUT_MS);
+	let res: Response;
+	try {
+		res = await fetch(`${to}/extensions/player/auth/methods`, { signal: abort.signal });
+	} catch {
+		return fail("unreachable");
+	} finally {
+		clearTimeout(timer);
+	}
+	const methods = res.ok ? await res.json().catch(() => null) : null;
+	if (!methods || !("register_url" in methods)) return fail("not_streamline");
+	const ms = Math.round(performance.now() - started);
+	if (to !== streamline) {
+		await forget();
+		store.set(SERVER, to);
+		streamline = to;
+	}
+	return ms;
+}
+
+let deviceCode: string | null = null;
+
+/** Stable per install: approving a pairing with a known `client_id` replaces that device's old key. */
+const clientId = () => {
+	let id = store.get(CLIENT);
+	if (!id) {
+		const bytes = crypto.getRandomValues(new Uint8Array(16));
+		id = Array.from(bytes, (b) => b.toString(16).padStart(2, "0")).join("");
+		store.set(CLIENT, id);
+	}
+	return id;
+};
+
+/** Starts a pairing; the device code stays in this module, the page only gets what it shows. */
+export async function pairStart(): Promise<Pairing> {
+	const { name, platform } = tvDevice(navigator.userAgent);
+	const started = await call<{
+		device_code: string;
+		user_code: string;
+		verification_uri: string;
+		verification_uri_complete: string;
+		expires_in: number;
+		interval: number;
+	}>("POST", "/auth/device/code", { client_id: clientId(), name, platform });
+	deviceCode = started.device_code;
+	const { default: qrcode } = await import("qrcode-generator");
+	const qr = qrcode(0, "M");
+	qr.addData(started.verification_uri_complete);
+	qr.make();
+	return {
+		code: started.user_code,
+		name,
+		uri: started.verification_uri,
+		uri_complete: started.verification_uri_complete,
+		expires_in: started.expires_in,
+		interval: started.interval,
+		qr: qr.createSvgTag({ cellSize: 8, margin: 0 }),
+	};
+}
+
+/** One poll: "pending", "slow_down", "denied", "expired" or "paired". */
+export async function pairPoll(): Promise<string> {
+	if (!deviceCode) return "expired";
+	let answer: { api_key: string };
+	try {
+		answer = await call("POST", "/auth/device/token", { device_code: deviceCode });
+	} catch (e) {
+		const refused = pollAnswer(String(e));
+		if (refused) return refused;
+		throw e;
+	}
+	deviceCode = null;
+	store.set(KEY, answer.api_key);
+	return "paired";
+}
 const pairPath = (code: string) => `/auth/device/${encodeURIComponent(code)}`;
 export const pairRequest = (code: string) => call<PairRequest>("GET", pairPath(code));
 export const approvePairing = (code: string) => call("POST", `${pairPath(code)}/approve`);
@@ -346,11 +461,9 @@ export const playbackStatus = () => call<{ network?: string }>("GET", "/playback
 export const serverHost = () => Promise.resolve(streamline.replace(/^[a-z]+:\/\//, ""));
 
 export async function signOut(): Promise<unknown> {
-	if (store.get(REFRESH)) await call("DELETE", "/devices/current").catch(() => {});
-	access = null;
-	store.remove(REFRESH);
-	store.remove(DEVICE);
-	await refreshStore.clear();
+	if (store.get(KEY) || store.get(REFRESH))
+		await call("DELETE", "/devices/current").catch(() => {});
+	await forget();
 	return undefined;
 }
 

@@ -308,8 +308,8 @@ li button:disabled {
 	align-items: center;
 	padding: 0 6px;
 	border-radius: 5px;
-	background: color-mix(in srgb, var(--status-warning) 10%, transparent);
-	border: 1px solid color-mix(in srgb, var(--status-warning) 32%, transparent);
+	background: rgb(var(--status-warning-rgb) / 10%);
+	border: 1px solid rgb(var(--status-warning-rgb) / 32%);
 	color: var(--status-warning);
 	font: 500 10px var(--font-mono);
 }
@@ -404,7 +404,7 @@ input {
 
 input:focus {
 	border-color: var(--accent);
-	box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 18%, transparent);
+	box-shadow: 0 0 0 3px rgb(var(--accent-rgb) / 18%);
 }
 
 input:disabled {

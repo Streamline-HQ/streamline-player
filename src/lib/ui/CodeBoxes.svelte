@@ -41,8 +41,8 @@ const chars = $derived([...code.toUpperCase()]);
 }
 
 .ch.ok {
-	background: color-mix(in srgb, var(--status-available) 10%, transparent);
-	border-color: color-mix(in srgb, var(--status-available) 35%, transparent);
+	background: rgb(var(--status-available-rgb) / 10%);
+	border-color: rgb(var(--status-available-rgb) / 35%);
 	color: var(--status-available);
 }
 

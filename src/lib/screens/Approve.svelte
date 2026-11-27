@@ -211,8 +211,8 @@ onMount(() => {
 	border-radius: 50%;
 	background: radial-gradient(
 		closest-side,
-		color-mix(in srgb, var(--accent) 22%, transparent),
-		color-mix(in srgb, var(--accent) 6%, transparent) 55%,
+		rgb(var(--accent-rgb) / 22%),
+		rgb(var(--accent-rgb) / 6%) 55%,
 		transparent 100%
 	);
 	pointer-events: none;
@@ -290,7 +290,7 @@ h1 {
 	display: grid;
 	place-items: center;
 	border-radius: var(--radius-md);
-	background: color-mix(in srgb, var(--accent) 12%, transparent);
+	background: rgb(var(--accent-rgb) / 12%);
 	color: var(--accent-text);
 }
 
@@ -351,7 +351,7 @@ button {
 }
 
 .approve:hover {
-	box-shadow: 0 0 24px color-mix(in srgb, var(--accent) 35%, transparent);
+	box-shadow: 0 0 24px rgb(var(--accent-rgb) / 35%);
 }
 
 .approve.ok {
@@ -423,9 +423,9 @@ input.invalid {
 	display: grid;
 	place-items: center;
 	border-radius: 50%;
-	background: color-mix(in srgb, var(--status-available) 12%, transparent);
+	background: rgb(var(--status-available-rgb) / 12%);
 	color: var(--status-available);
-	box-shadow: 0 0 0 6px color-mix(in srgb, var(--status-available) 6%, transparent);
+	box-shadow: 0 0 0 6px rgb(var(--status-available-rgb) / 6%);
 }
 
 .back {

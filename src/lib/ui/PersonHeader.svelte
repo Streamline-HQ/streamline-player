@@ -162,7 +162,7 @@ h2 {
 	gap: 12px;
 	min-height: 66px;
 	padding: 10px 14px 10px 10px;
-	border: 1px solid color-mix(in srgb, var(--fg) 10%, transparent);
+	border: 1px solid rgb(var(--fg-rgb) / 10%);
 	border-radius: var(--radius-player-controls);
 	background: var(--bg-elevated);
 	color: var(--fg);

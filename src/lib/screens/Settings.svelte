@@ -964,8 +964,8 @@ h1 {
 	gap: 8px;
 	padding: 6px 10px;
 	border-radius: var(--radius-full);
-	background: color-mix(in srgb, var(--status-available) 10%, transparent);
-	border: 1px solid color-mix(in srgb, var(--status-available) 25%, transparent);
+	background: rgb(var(--status-available-rgb) / 10%);
+	border: 1px solid rgb(var(--status-available-rgb) / 25%);
 	font: 500 11.5px var(--font-mono);
 	font-variant-numeric: tabular-nums;
 	color: var(--status-available);
@@ -980,8 +980,8 @@ h1 {
 	gap: 9px;
 	padding: 0 10px 0 12px;
 	border-radius: var(--radius-full);
-	background: color-mix(in srgb, var(--status-available) 8%, transparent);
-	border: 1px solid color-mix(in srgb, var(--status-available) 25%, transparent);
+	background: rgb(var(--status-available-rgb) / 8%);
+	border: 1px solid rgb(var(--status-available-rgb) / 25%);
 	color: var(--fg);
 	font: inherit;
 	font-size: 13px;
@@ -991,7 +991,7 @@ h1 {
 }
 
 .server:hover {
-	background: color-mix(in srgb, var(--status-available) 14%, transparent);
+	background: rgb(var(--status-available-rgb) / 14%);
 }
 
 .server .ms {
@@ -1027,7 +1027,7 @@ h1 {
 
 @keyframes beat {
 	from {
-		box-shadow: 0 0 0 0 color-mix(in srgb, var(--status-available) 60%, transparent);
+		box-shadow: 0 0 0 0 rgb(var(--status-available-rgb) / 60%);
 	}
 	to {
 		box-shadow: 0 0 0 7px transparent;
@@ -1060,8 +1060,8 @@ h1 {
 	align-items: center;
 	padding: 0 8px;
 	border-radius: var(--radius-sm);
-	background: color-mix(in srgb, var(--accent) 12%, transparent);
-	border: 1px solid color-mix(in srgb, var(--accent) 32%, transparent);
+	background: rgb(var(--accent-rgb) / 12%);
+	border: 1px solid rgb(var(--accent-rgb) / 32%);
 	color: var(--accent-text);
 	font: 500 11px var(--font-mono);
 }
@@ -1128,15 +1128,15 @@ h1 {
 	padding: 0 9px;
 	border: 1px solid var(--border);
 	border-radius: 7px;
-	background: color-mix(in srgb, var(--fg) 3%, transparent);
+	background: rgb(var(--fg-rgb) / 3%);
 	color: var(--fg-subtle);
 	font: 500 11.5px var(--font-mono);
 }
 
 .cap.yes {
 	color: var(--status-available);
-	background: color-mix(in srgb, var(--status-available) 8%, transparent);
-	border-color: color-mix(in srgb, var(--status-available) 25%, transparent);
+	background: rgb(var(--status-available-rgb) / 8%);
+	border-color: rgb(var(--status-available-rgb) / 25%);
 }
 
 .cap :global(.sl-ico) {

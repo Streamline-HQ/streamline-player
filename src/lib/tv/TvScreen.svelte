@@ -6,8 +6,10 @@ import { getLocale } from "#lib/paraglide/runtime.js";
 import { search } from "#lib/core/search.svelte.ts";
 import { onPlayer, voice as hear } from "#platform";
 import { Film, House, Search, Settings, TvMinimal } from "@lucide/svelte";
-import { onMount, type Snippet } from "svelte";
-import { focus, focusDefault, forgetFocus, move } from "./focus";
+import { onMount, type Snippet, untrack } from "svelte";
+import { tvNav } from "#lib/ui/Toast.svelte";
+import { focus, focusDefault, forgetFocus, move, point } from "./focus";
+import { tvKey } from "./keys.ts";
 
 type Tab = "search" | "home" | "movies" | "series" | "settings";
 let {
@@ -37,6 +39,14 @@ const TABS = [
 	{ id: "settings", label: "", name: i18n.nav_settings(), href: "/settings", icon: Settings },
 ] as const;
 
+$effect(() => {
+	if (!tab) return;
+	untrack(() => tvNav.shown++);
+	return () => {
+		tvNav.shown--;
+	};
+});
+
 const FOCUS_DELAY_MS = 120;
 let stage: HTMLElement;
 let scroller: HTMLElement;
@@ -57,16 +67,27 @@ function back() {
 }
 
 function onKey(e: KeyboardEvent) {
-	if (e.key === "Escape" || e.key === "Backspace" || e.key === "GoBack") {
+	const k = tvKey(e);
+	if (k === "Back") {
 		e.preventDefault();
 		back();
-	} else if (e.key.startsWith("Arrow")) {
+	} else if (k?.startsWith("Arrow")) {
 		e.preventDefault();
-		move(e.key, stage);
-	} else if (e.key === "Enter" && !document.activeElement?.hasAttribute("data-tv")) {
+		move(k, stage);
+	} else if (k === "Enter" && !document.activeElement?.hasAttribute("data-tv")) {
 		e.preventDefault();
 		focusDefault(stage);
 	}
+}
+
+// A screen that doesn't scroll moves its focus with the wheel instead, one step per notch.
+// ponytail: a trackpad's stream of small deltas is cut to one step per WHEEL_STEP_MS.
+const WHEEL_STEP_MS = 250;
+let wheelAt = -Infinity;
+function onWheel(e: WheelEvent) {
+	if (scroll || !e.deltaY || e.timeStamp - wheelAt < WHEEL_STEP_MS) return;
+	wheelAt = e.timeStamp;
+	move(e.deltaY > 0 ? "ArrowDown" : "ArrowUp", stage);
 }
 
 afterNavigate(({ type }) => {
@@ -105,7 +126,7 @@ onMount(() => {
 });
 </script>
 
-<svelte:window onkeydown={onKey} />
+<svelte:window onkeydown={onKey} onpointermove={(e) => point(e, stage)} onwheel={onWheel} />
 
 <div class="stage" data-tv-screen="1" bind:this={stage}>
 	<div class="scroller" class:scroll bind:this={scroller}>{@render children()}</div>
@@ -175,8 +196,8 @@ onMount(() => {
 	padding: 0 96px;
 	background: linear-gradient(
 		180deg,
-		color-mix(in srgb, var(--bg-deep) 90%, transparent) 0%,
-		color-mix(in srgb, var(--bg-deep) 55%, transparent) 55%,
+		rgb(var(--bg-deep-rgb) / 90%) 0%,
+		rgb(var(--bg-deep-rgb) / 55%) 55%,
 		transparent 100%
 	);
 }

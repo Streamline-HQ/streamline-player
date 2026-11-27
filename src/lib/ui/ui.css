@@ -96,7 +96,7 @@
 .sl-btn--danger-outline {
 	height: 36px;
 	padding: 0 14px;
-	border-color: color-mix(in srgb, var(--status-failed) 40%, transparent);
+	border-color: rgb(var(--status-failed-rgb) / 40%);
 	color: var(--status-failed);
 	font-size: 13px;
 	font-weight: 500;
@@ -109,12 +109,12 @@
 
 .sl-btn--destructive {
 	background: transparent;
-	border-color: color-mix(in srgb, var(--status-failed) 40%, transparent);
+	border-color: rgb(var(--status-failed-rgb) / 40%);
 	color: var(--status-failed);
 }
 
 .sl-btn--destructive:hover {
-	background: color-mix(in srgb, var(--status-failed) 10%, transparent);
+	background: rgb(var(--status-failed-rgb) / 10%);
 }
 
 .sl-btn--icon {

@@ -134,7 +134,7 @@ const COLOR: Record<State, string> = {
 	height: 6px;
 	overflow: hidden;
 	border-radius: var(--radius-full);
-	background: color-mix(in srgb, var(--fg) 10%, transparent);
+	background: rgb(var(--fg-rgb) / 10%);
 }
 
 .sl-dlpop__bar > b {

@@ -573,7 +573,7 @@ h2 {
 	display: block;
 	height: 3px;
 	border-radius: 2px;
-	background: color-mix(in srgb, var(--fg) 10%, transparent);
+	background: rgb(var(--fg-rgb) / 10%);
 	overflow: hidden;
 }
 
@@ -733,7 +733,7 @@ h2 {
 
 .still:hover {
 	box-shadow:
-		0 0 0 2px color-mix(in srgb, var(--accent) 55%, transparent),
+		0 0 0 2px rgb(var(--accent-rgb) / 55%),
 		0 16px 32px rgba(0, 0, 0, 0.45);
 }
 
@@ -746,7 +746,7 @@ h2 {
 	width: 30px;
 	height: 30px;
 	border-radius: 50%;
-	background: color-mix(in srgb, var(--fg) 92%, transparent);
+	background: rgb(var(--fg-rgb) / 92%);
 	color: var(--fg-on-accent);
 	font-size: 12px;
 }
@@ -889,7 +889,7 @@ h2 {
 	gap: 8px;
 	padding: 8px 8px 8px 16px;
 	border-radius: var(--radius-lg);
-	background: color-mix(in srgb, var(--bg-elevated) 94%, transparent);
+	background: rgb(var(--bg-elevated-rgb) / 94%);
 	backdrop-filter: blur(16px) saturate(150%);
 	-webkit-backdrop-filter: blur(16px) saturate(150%);
 	box-shadow:

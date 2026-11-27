@@ -15,6 +15,7 @@ import type { Component } from "svelte";
 import type { HaltIcon } from "#lib/core/playback/halt.ts";
 import type { HaltViewModel } from "#lib/core/player-panels.ts";
 import { m as i18n } from "#lib/paraglide/messages.js";
+import { monogram } from "#lib/core/format.ts";
 import { orPoster } from "#lib/ui/img.ts";
 
 let {
@@ -47,15 +48,6 @@ const ICONS: Record<HaltIcon, Component<{ size?: number; strokeWidth?: number }>
 	"wifi-off": WifiOff,
 };
 const Icon = $derived(ICONS[view.icon]);
-
-const initials = (name: string) => {
-	const parts = name.trim().split(/\s+/).filter(Boolean);
-	return (
-		(parts[0]?.[0] ?? "") + (parts.length > 1 ? (parts.at(-1)?.[0] ?? "") : "")
-	).toUpperCase();
-};
-const hue = (name: string) =>
-	[...name].reduce((h, ch) => (h * 31 + (ch.codePointAt(0) ?? 0)) >>> 0, 0) % 360;
 </script>
 
 <div class="halt" class:leaving role="alertdialog" aria-label={view.eyebrow}>
@@ -86,13 +78,9 @@ const hue = (name: string) =>
 				<span class="mono">{view.mono}</span>
 			{/if}
 			{#if view.message?.text}
+				{@const who = monogram(view.message.by)}
 				<div class="msg">
-					<span
-						class="avatar"
-						style:background="oklch(0.36 0.06 {hue(view.message.by)})"
-						style:color="oklch(0.92 0.04 {hue(view.message.by)})"
-						>{initials(view.message.by)}</span
-					>
+					<span class="avatar" style:background={who.bg} style:color={who.fg}>{who.initials}</span>
 					<span class="msg-text">
 						<span class="msg-by"><b>{view.message.by}</b> · {i18n.halt_admin_just_now()}</span>
 						<span class="msg-body">{view.message.text}</span>
@@ -185,8 +173,8 @@ const hue = (name: string) =>
 	background: linear-gradient(
 		90deg,
 		var(--hero-scrim) 0%,
-		color-mix(in srgb, var(--bg-deep) 74%, transparent) 55%,
-		color-mix(in srgb, var(--bg-deep) 45%, transparent) 100%
+		rgb(var(--bg-deep-rgb) / 74%) 55%,
+		rgb(var(--bg-deep-rgb) / 45%) 100%
 	);
 }
 
@@ -246,7 +234,7 @@ const hue = (name: string) =>
 .mono {
 	padding: 10px 12px;
 	border-radius: var(--radius-md);
-	background: color-mix(in srgb, var(--bg-elevated) 72%, transparent);
+	background: rgb(var(--bg-elevated-rgb) / 72%);
 	border: 1px solid var(--border);
 	font: 400 12px var(--font-mono);
 	line-height: 1.5;
@@ -261,7 +249,7 @@ const hue = (name: string) =>
 	margin-top: 4px;
 	padding: 14px 16px;
 	border-radius: 14px;
-	background: color-mix(in srgb, var(--bg-elevated) 82%, transparent);
+	background: rgb(var(--bg-elevated-rgb) / 82%);
 	border: 1px solid var(--border-strong);
 	backdrop-filter: blur(12px);
 	-webkit-backdrop-filter: blur(12px);
@@ -375,7 +363,7 @@ const hue = (name: string) =>
 	padding: 10px 16px;
 	border-radius: 14px;
 	border: 1px solid var(--border-strong);
-	background: color-mix(in srgb, var(--bg-elevated) 72%, transparent);
+	background: rgb(var(--bg-elevated-rgb) / 72%);
 	backdrop-filter: blur(12px);
 	-webkit-backdrop-filter: blur(12px);
 	color: var(--player-ink);

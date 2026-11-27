@@ -151,7 +151,7 @@ h2 {
 }
 
 .arrow:hover:not(:disabled) {
-	background: color-mix(in srgb, var(--player-glass-strong), white 12%);
+	background: rgba(48, 48, 54, 0.88);
 	color: var(--fg);
 }
 
@@ -199,7 +199,7 @@ h2 {
 
 .rail .arrow {
 	border: 0;
-	background: color-mix(in srgb, var(--fg) 6%, transparent);
+	background: rgb(var(--fg-rgb) / 6%);
 	box-shadow: inset 0 0 0 1px var(--border);
 	transition:
 		opacity var(--dur-fast),
@@ -211,7 +211,7 @@ h2 {
 }
 
 .rail .arrow:hover:not(:disabled) {
-	background: color-mix(in srgb, var(--fg) 12%, transparent);
+	background: rgb(var(--fg-rgb) / 12%);
 }
 
 .rail .scroller {

@@ -601,7 +601,7 @@ const toastNow = $derived(activeToast());
 	height: calc(env(safe-area-inset-top) * 0.85);
 	z-index: 10;
 	pointer-events: none;
-	background: color-mix(in srgb, var(--bg-deep) 92%, transparent);
+	background: rgb(var(--bg-deep-rgb) / 92%);
 	backdrop-filter: blur(16px);
 	-webkit-backdrop-filter: blur(16px);
 }

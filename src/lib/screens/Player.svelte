@@ -1572,7 +1572,7 @@ const labels = {
 }
 
 .pill.on {
-	background: color-mix(in srgb, var(--player-accent) 22%, transparent);
+	background: rgb(var(--player-accent-rgb) / 22%);
 }
 
 .dot {

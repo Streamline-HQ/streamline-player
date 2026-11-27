@@ -549,7 +549,7 @@ h1 {
 	border: 0;
 	border-radius: 10px;
 	box-shadow: inset 0 0 0 1px var(--border);
-	background: color-mix(in srgb, var(--fg) 4%, transparent);
+	background: rgb(var(--fg-rgb) / 4%);
 	color: var(--fg-muted);
 	font-size: 13px;
 	font-weight: 500;
@@ -565,7 +565,7 @@ h1 {
 }
 
 .genre-btn.on {
-	box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--accent) 45%, transparent);
+	box-shadow: inset 0 0 0 1px rgb(var(--accent-rgb) / 45%);
 	background: var(--accent-soft);
 	color: var(--fg);
 }

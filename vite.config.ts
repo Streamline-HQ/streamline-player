@@ -3,6 +3,7 @@ import { paraglideVitePlugin } from "@inlang/paraglide-js";
 import adapter from "@sveltejs/adapter-static";
 import { sveltekit } from "@sveltejs/kit/vite";
 import { defaultClientConditions, defineConfig } from "vite";
+import { chromium87 } from "./dev/chromium87-css.ts";
 
 // `cargo tauri android|ios dev` sets this to the host's LAN address: the app on
 // the device loads the dev server over the network, not from localhost.
@@ -11,6 +12,9 @@ const host = process.env.TAURI_DEV_HOST;
 // The target is fixed at build time: Tauri sets TAURI_ENV_PLATFORM, a plain Vite build leaves it unset.
 // package.json's `#platform` import resolves to native.ts under the "native" condition, web.ts otherwise.
 const native = !!process.env.TAURI_ENV_PLATFORM;
+// The webOS and Tizen packages run from file://, where the path is the install folder: the route
+// lives in the hash instead (`task build:webos`, `build:tizen`).
+const tvPackage = process.env.TV_PACKAGE === "1";
 
 const csp: NonNullable<Parameters<typeof sveltekit>[0]>["csp"] = !native
 	? {
@@ -54,14 +58,27 @@ export default defineConfig({
 			strategy: ["localStorage", "preferredLanguage", "baseLocale"],
 			isServer: "false",
 		}),
+		// Kit refuses page options under hash routing, where nothing renders on a server anyway:
+		// the root layout's `ssr = false` goes for the TV packages.
+		tvPackage && {
+			name: "tv-package-page-options",
+			enforce: "pre" as const,
+			resolveId: (source: string) =>
+				source === "./page-options.ts" ? "\0no-page-options" : undefined,
+			load: (id: string) => (id === "\0no-page-options" ? "export {};" : undefined),
+		},
 		sveltekit({
 			// Tauri serves files, not a Node server: an SPA with one fallback page.
 			adapter: adapter({ fallback: "index.html" }),
 			paths: { base: (process.env.BASE_PATH ?? "") as "" | `/${string}` },
+			router: tvPackage ? { type: "hash" } : undefined,
 			csp,
 		}),
 	],
 	resolve: { conditions: native ? ["native", ...defaultClientConditions] : undefined },
+	// The oldest engine shipped to: webOS 22 TVs run Chromium 87.
+	build: { target: "chrome87", cssTarget: "chrome87" },
+	css: { postcss: { plugins: [chromium87] } },
 	clearScreen: false,
 	server: {
 		port: 1420,

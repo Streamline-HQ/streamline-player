@@ -532,8 +532,8 @@ h2 {
 }
 
 .chip.on {
-	border-color: color-mix(in srgb, var(--accent) 45%, transparent);
-	background: color-mix(in srgb, var(--accent) 16%, transparent);
+	border-color: rgb(var(--accent-rgb) / 45%);
+	background: rgb(var(--accent-rgb) / 16%);
 	color: var(--fg);
 }
 

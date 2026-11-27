@@ -236,7 +236,7 @@ onMount(() => {
 	top: 0;
 	z-index: 2;
 	padding: calc(env(safe-area-inset-top) + 8px) 20px 12px;
-	background: color-mix(in srgb, var(--bg-deep) 92%, transparent);
+	background: rgb(var(--bg-deep-rgb) / 92%);
 	backdrop-filter: blur(16px);
 	-webkit-backdrop-filter: blur(16px);
 }

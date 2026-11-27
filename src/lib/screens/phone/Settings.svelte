@@ -172,11 +172,7 @@ const preview = $derived(
 			? { kind: "movies" as const, id: lib.movies[0].id }
 			: null,
 );
-const cueColor = $derived(
-	prefs.subColor === "Yellow"
-		? "color-mix(in srgb, var(--status-wanted) 40%, var(--fg))"
-		: "var(--fg)",
-);
+const cueColor = $derived(prefs.subColor === "Yellow" ? "var(--cue-yellow)" : "var(--fg)");
 const cueShadow = $derived(
 	prefs.subBg === "Shadow"
 		? "0 2px 4px rgba(0,0,0,0.9), 0 0 10px rgba(0,0,0,0.6)"
@@ -662,7 +658,7 @@ onMount(() => {
 	align-items: center;
 	gap: 4px;
 	padding: calc(env(safe-area-inset-top) + 6px) 12px 0;
-	background: color-mix(in srgb, var(--bg-deep) 92%, transparent);
+	background: rgb(var(--bg-deep-rgb) / 92%);
 	backdrop-filter: blur(16px);
 	-webkit-backdrop-filter: blur(16px);
 }
@@ -738,7 +734,7 @@ h1 {
 
 @keyframes beat {
 	from {
-		box-shadow: 0 0 0 0 color-mix(in srgb, var(--status-available) 60%, transparent);
+		box-shadow: 0 0 0 0 rgb(var(--status-available-rgb) / 60%);
 	}
 	to {
 		box-shadow: 0 0 0 7px transparent;
@@ -795,7 +791,7 @@ h2 {
 	align-items: center;
 	padding: 0 8px;
 	border-radius: var(--radius-sm);
-	background: color-mix(in srgb, var(--accent) 12%, transparent);
+	background: rgb(var(--accent-rgb) / 12%);
 	color: var(--accent-text);
 	font: 500 11px var(--font-mono);
 }
@@ -874,8 +870,8 @@ h2 {
 
 .cap.yes {
 	color: var(--status-available);
-	background: color-mix(in srgb, var(--status-available) 8%, transparent);
-	border-color: color-mix(in srgb, var(--status-available) 25%, transparent);
+	background: rgb(var(--status-available-rgb) / 8%);
+	border-color: rgb(var(--status-available-rgb) / 25%);
 }
 
 .admin {

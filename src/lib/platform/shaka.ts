@@ -140,6 +140,16 @@ async function drawStyled(url: string, fonts: string[]) {
 	canvas.style.pointerEvents = "none";
 	canvas.style.zIndex = el.style.zIndex;
 	el.insertAdjacentElement("afterend", canvas);
+	styledCanvas = canvas;
+	// The constructor's probe compiles a module on the page, which the CSP refuses before
+	// Chromium 97 (webOS 22): it knows no 'wasm-unsafe-eval'. The probe keeps its SIMD answer
+	// even when that compile throws and skips itself next time; the worker, a script file of its
+	// own, compiles libass, and a failure there rejects `ready` below.
+	try {
+		JASSUB._test();
+	} catch {
+		// Left to the worker, as above.
+	}
 	const drawn = new JASSUB({
 		video: el,
 		canvas,
@@ -152,7 +162,6 @@ async function drawStyled(url: string, fonts: string[]) {
 		queryFonts: false,
 	});
 	styled = drawn;
-	styledCanvas = canvas;
 	try {
 		await drawn.ready;
 	} catch (e) {

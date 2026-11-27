@@ -64,7 +64,7 @@ b {
 }
 
 .other {
-	background: color-mix(in srgb, var(--fg) 22%, transparent);
+	background: rgb(var(--fg-rgb) / 22%);
 }
 
 .legend {

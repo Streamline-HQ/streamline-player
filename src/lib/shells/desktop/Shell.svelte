@@ -1056,7 +1056,7 @@ if (import.meta.env.DEV)
 	gap: 8px;
 	padding: 10px 16px;
 	border-radius: var(--radius-md);
-	background: color-mix(in srgb, var(--bg-elevated) 92%, transparent);
+	background: rgb(var(--bg-elevated-rgb) / 92%);
 	border: 1px solid var(--border);
 	box-shadow: var(--shadow-3);
 	font-size: 13px;

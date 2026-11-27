@@ -106,16 +106,8 @@ $effect(() => {
    each per picture, and a season of episodes froze the page for seconds. */
 .frame {
 	background:
-		radial-gradient(
-			ellipse 70% 62% at 76% 42%,
-			color-mix(in srgb, var(--accent) 11%, transparent),
-			transparent
-		),
-		radial-gradient(
-			ellipse 75% 66% at 28% 92%,
-			color-mix(in srgb, var(--status-wanted) 8%, transparent),
-			transparent
-		),
+		radial-gradient(ellipse 70% 62% at 76% 42%, rgb(var(--accent-rgb) / 11%), transparent),
+		radial-gradient(ellipse 75% 66% at 28% 92%, rgb(var(--status-wanted-rgb) / 8%), transparent),
 		var(--bg-stage);
 }
 

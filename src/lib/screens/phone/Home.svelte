@@ -535,9 +535,9 @@ $effect(() => {
 	background: linear-gradient(
 		0deg,
 		var(--bg-deep) 0%,
-		color-mix(in srgb, var(--bg-deep) 75%, transparent) 30%,
-		color-mix(in srgb, var(--bg-deep) 10%, transparent) 62%,
-		color-mix(in srgb, var(--bg-deep) 55%, transparent) 100%
+		rgb(var(--bg-deep-rgb) / 75%) 30%,
+		rgb(var(--bg-deep-rgb) / 10%) 62%,
+		rgb(var(--bg-deep-rgb) / 55%) 100%
 	);
 }
 
@@ -565,7 +565,7 @@ $effect(() => {
 }
 
 .top.scrolled {
-	background: color-mix(in srgb, var(--bg-deep) 78%, transparent);
+	background: rgb(var(--bg-deep-rgb) / 78%);
 	backdrop-filter: blur(16px) saturate(150%);
 	-webkit-backdrop-filter: blur(16px) saturate(150%);
 	box-shadow: inset 0 -1px 0 var(--border);
@@ -753,7 +753,7 @@ h1 {
 	width: 100%;
 	height: 4px;
 	border-radius: 2px;
-	background: color-mix(in srgb, var(--fg) 30%, transparent);
+	background: rgb(var(--fg-rgb) / 30%);
 	overflow: hidden;
 }
 

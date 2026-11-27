@@ -567,8 +567,8 @@ main {
 
 .strip.late {
 	color: var(--status-warning);
-	border-color: color-mix(in srgb, var(--status-warning) 30%, transparent);
-	background: color-mix(in srgb, var(--status-warning) 8%, transparent);
+	border-color: rgb(var(--status-warning-rgb) / 30%);
+	background: rgb(var(--status-warning-rgb) / 8%);
 }
 
 .line {

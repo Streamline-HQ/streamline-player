@@ -317,7 +317,7 @@ const enter = (node: Element, o?: { duration?: number }) => (sheet ? slide(node,
 }
 
 .opt.sel {
-	background: color-mix(in srgb, var(--player-accent) 10%, transparent);
+	background: rgb(var(--player-accent-rgb) / 10%);
 }
 
 .opt:hover:not(:disabled),
@@ -421,19 +421,19 @@ const enter = (node: Element, o?: { duration?: number }) => (sheet ? slide(node,
 
 .badge.ok {
 	color: var(--status-available);
-	background: color-mix(in srgb, var(--status-available) 12%, transparent);
-	border-color: color-mix(in srgb, var(--status-available) 25%, transparent);
+	background: rgb(var(--status-available-rgb) / 12%);
+	border-color: rgb(var(--status-available-rgb) / 25%);
 }
 
 .badge.conv {
 	color: var(--status-downloading);
-	background: color-mix(in srgb, var(--status-downloading) 14%, transparent);
-	border-color: color-mix(in srgb, var(--status-downloading) 30%, transparent);
+	background: rgb(var(--status-downloading-rgb) / 14%);
+	border-color: rgb(var(--status-downloading-rgb) / 30%);
 }
 
 .badge.warn {
 	color: var(--status-warning);
-	background: color-mix(in srgb, var(--status-warning) 12%, transparent);
-	border-color: color-mix(in srgb, var(--status-warning) 30%, transparent);
+	background: rgb(var(--status-warning-rgb) / 12%);
+	border-color: rgb(var(--status-warning-rgb) / 30%);
 }
 </style>

@@ -1,3 +1,5 @@
+import { appPath } from "#lib/ui/nav.ts";
+
 type Dir = "left" | "right" | "up" | "down";
 
 const remembered = new Map<string, string>();
@@ -56,19 +58,31 @@ function reveal(el: HTMLElement, root: HTMLElement) {
 }
 
 /** Only Back returns to the remembered card; arriving any other way starts at the screen's default. */
-export const forgetFocus = () => remembered.delete(location.pathname);
+export const forgetFocus = () => remembered.delete(appPath());
 
-export function focus(el: HTMLElement | null | undefined, root: HTMLElement) {
+export function focus(el: HTMLElement | null | undefined, root: HTMLElement, scroll = true) {
 	if (!el) return;
 	el.focus({ preventScroll: true });
-	reveal(el, root);
+	if (scroll) reveal(el, root);
 	const fid = el.getAttribute("data-fid");
-	if (fid) remembered.set(location.pathname, fid);
+	if (fid) remembered.set(appPath(), fid);
+}
+
+/**
+ * Magic Remote: pointing at an element focuses it, so hover looks like D-pad focus. It does not
+ * scroll: the row would slide out from under the pointer. Wired to `pointermove`, not
+ * `pointerover`: Chromium fires `pointerover` when the D-pad scrolls a row under a resting
+ * pointer, which would pull focus back to the card under it.
+ */
+export function point(e: PointerEvent, root: HTMLElement) {
+	const el = (e.target as Element).closest<HTMLButtonElement>("[data-tv]");
+	if (!el || el === document.activeElement || el.disabled || el.closest("[inert]")) return;
+	if (scopeOf(root).contains(el)) focus(el, root, false);
 }
 
 export function focusDefault(root: HTMLElement, attempt = 0) {
 	const scope = scopeOf(root);
-	const back = remembered.get(location.pathname);
+	const back = remembered.get(appPath());
 	const el =
 		(back && !scope.hasAttribute("data-tv-trap")
 			? scope.querySelector<HTMLElement>(`[data-fid="${CSS.escape(back)}"]`)

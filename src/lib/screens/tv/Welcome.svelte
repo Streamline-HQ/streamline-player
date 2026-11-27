@@ -289,8 +289,8 @@ onMount(() => {
 	border-radius: 50%;
 	background: radial-gradient(
 		closest-side,
-		color-mix(in srgb, var(--accent) 22%, transparent),
-		color-mix(in srgb, var(--accent) 6%, transparent) 55%,
+		rgb(var(--accent-rgb) / 22%),
+		rgb(var(--accent-rgb) / 6%) 55%,
 		transparent 100%
 	);
 	pointer-events: none;
@@ -357,7 +357,7 @@ h1 {
 	padding: 0 28px;
 	border-radius: 18px;
 	background: var(--bg-elevated);
-	border: 2px solid color-mix(in srgb, var(--accent) 60%, transparent);
+	border: 2px solid rgb(var(--accent-rgb) / 60%);
 	font: 400 32px var(--font-mono);
 	white-space: pre;
 	overflow: hidden;
@@ -437,8 +437,8 @@ h1 {
 }
 
 .ch.ok {
-	background: color-mix(in srgb, var(--status-available) 10%, transparent);
-	border-color: color-mix(in srgb, var(--status-available) 35%, transparent);
+	background: rgb(var(--status-available-rgb) / 10%);
+	border-color: rgb(var(--status-available-rgb) / 35%);
 	color: var(--status-available);
 }
 
@@ -507,7 +507,7 @@ h1 {
 	gap: 12px;
 	padding: 28px;
 	border-radius: 24px;
-	background: color-mix(in srgb, var(--bg-elevated) 85%, transparent);
+	background: rgb(var(--bg-elevated-rgb) / 85%);
 	border: 1px solid var(--border);
 }
 
@@ -572,9 +572,9 @@ h1 {
 	display: grid;
 	place-items: center;
 	border-radius: 50%;
-	background: color-mix(in srgb, var(--status-available) 12%, transparent);
+	background: rgb(var(--status-available-rgb) / 12%);
 	color: var(--status-available);
-	box-shadow: 0 0 0 18px color-mix(in srgb, var(--status-available) 5%, transparent);
+	box-shadow: 0 0 0 18px rgb(var(--status-available-rgb) / 5%);
 }
 
 @keyframes pulse {

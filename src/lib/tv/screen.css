@@ -13,7 +13,7 @@
 .sl-full .halt-scrim {
 	position: absolute;
 	inset: 0;
-	background: linear-gradient(90deg, var(--hero-scrim) 0%, color-mix(in srgb, var(--bg-deep) 74%, transparent) 55%, color-mix(in srgb, var(--bg-deep) 45%, transparent) 100%);
+	background: linear-gradient(90deg, var(--hero-scrim) 0%, rgb(var(--bg-deep-rgb) / 74%) 55%, rgb(var(--bg-deep-rgb) / 45%) 100%);
 }
 
 .sl-full .halt-zoom {

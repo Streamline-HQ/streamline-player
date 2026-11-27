@@ -219,8 +219,8 @@ const open = (c: Pick<Credit, "kind" | "id" | "seasons">) =>
 	inset: 0;
 	background: linear-gradient(
 		180deg,
-		color-mix(in srgb, var(--bg-deep) 35%, transparent) 0%,
-		color-mix(in srgb, var(--bg-deep) 78%, transparent) 55%,
+		rgb(var(--bg-deep-rgb) / 35%) 0%,
+		rgb(var(--bg-deep-rgb) / 78%) 55%,
 		var(--bg-deep) 100%
 	);
 }
@@ -319,7 +319,7 @@ h2 {
 	gap: 20px;
 	min-height: 100px;
 	padding: 16px 24px 16px 16px;
-	border: 2px solid color-mix(in srgb, var(--fg) 10%, transparent);
+	border: 2px solid rgb(var(--fg-rgb) / 10%);
 	border-radius: 18px;
 	background: var(--bg-elevated);
 	color: var(--fg);

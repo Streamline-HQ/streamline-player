@@ -36,6 +36,7 @@ tasks:
       - node dev/browse-check.ts
       - node dev/detail-check.ts
       - node dev/form-factor-check.ts
+      - node dev/tv-keys-check.ts
       - node dev/downloads-view-check.ts
       - node --import ./dev/controller-check/register.mjs dev/downloads-store-check.ts
       - node dev/halt-check.ts

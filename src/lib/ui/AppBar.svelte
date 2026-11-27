@@ -153,9 +153,9 @@ let {
 	pointer-events: none;
 	background: linear-gradient(
 		180deg,
-		color-mix(in srgb, var(--bg-deep) 84%, transparent) 0%,
-		color-mix(in srgb, var(--bg-deep) 62%, transparent) 38%,
-		color-mix(in srgb, var(--bg-deep) 22%, transparent) 72%,
+		rgb(var(--bg-deep-rgb) / 84%) 0%,
+		rgb(var(--bg-deep-rgb) / 62%) 38%,
+		rgb(var(--bg-deep-rgb) / 22%) 72%,
 		transparent 100%
 	);
 	transition: opacity var(--dur-base);
@@ -166,11 +166,11 @@ let {
 }
 
 .bar:not(.scrolled) .account :global(.sl-avatar:not(.ring)) {
-	box-shadow: 0 0 0 2px color-mix(in srgb, var(--bg-deep) 55%, transparent);
+	box-shadow: 0 0 0 2px rgb(var(--bg-deep-rgb) / 55%);
 }
 
 .bar.scrolled {
-	background: color-mix(in srgb, var(--bg-deep) 78%, transparent);
+	background: rgb(var(--bg-deep-rgb) / 78%);
 	backdrop-filter: blur(16px) saturate(150%);
 	box-shadow: inset 0 -1px 0 var(--border);
 }
@@ -270,7 +270,7 @@ nav {
 	border: 1px solid var(--border);
 	border-radius: var(--radius-md);
 	/* Near solid: over a bright hero a see-through field leaves its label unreadable. */
-	background: color-mix(in srgb, var(--bg-selected) 82%, transparent);
+	background: rgb(var(--bg-selected-rgb) / 82%);
 	box-shadow: inset 0 0 0 1px var(--border-strong);
 	backdrop-filter: blur(16px) saturate(160%);
 	-webkit-backdrop-filter: blur(16px) saturate(160%);
@@ -286,7 +286,7 @@ nav {
 }
 
 .sl-searchbtn:hover {
-	background: color-mix(in srgb, var(--bg-selected) 88%, transparent);
+	background: rgb(var(--bg-selected-rgb) / 88%);
 	color: var(--fg);
 }
 

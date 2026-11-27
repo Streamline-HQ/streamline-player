@@ -96,8 +96,8 @@ const chosen = $derived(String(row.users.find((u) => u.on)?.id ?? ""));
 	border-radius: var(--radius-md);
 	display: grid;
 	place-items: center;
-	background: color-mix(in srgb, var(--accent) 12%, transparent);
-	border: 1px solid color-mix(in srgb, var(--accent) 30%, transparent);
+	background: rgb(var(--accent-rgb) / 12%);
+	border: 1px solid rgb(var(--accent-rgb) / 30%);
 	color: var(--accent-text);
 }
 

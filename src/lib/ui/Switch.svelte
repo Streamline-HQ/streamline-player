@@ -44,7 +44,7 @@ input {
 	height: 100%;
 	padding: 2px;
 	border-radius: var(--radius-full);
-	background: color-mix(in srgb, var(--fg) 16%, transparent);
+	background: rgb(var(--fg-rgb) / 16%);
 	pointer-events: none;
 	transition: background 200ms cubic-bezier(0.2, 0, 0, 1);
 }

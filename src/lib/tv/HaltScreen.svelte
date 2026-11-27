@@ -14,6 +14,7 @@ import {
 import type { Component } from "svelte";
 import { m as i18n } from "#lib/paraglide/messages.js";
 import type { Halt, HaltIcon } from "#lib/core/playback/halt.ts";
+import { monogram } from "#lib/core/format.ts";
 import { orPoster } from "#lib/ui/img.ts";
 import "./screen.css";
 
@@ -50,16 +51,6 @@ const ICONS: Record<HaltIcon, Component<{ size?: number; strokeWidth?: number }>
 };
 
 const Icon = $derived(ICONS[halt.icon]);
-
-const initials = (name: string) => {
-	const parts = name.trim().split(/\s+/).filter(Boolean);
-	return (
-		(parts[0]?.[0] ?? "") + (parts.length > 1 ? (parts.at(-1)?.[0] ?? "") : "")
-	).toUpperCase();
-};
-// The same name gets the same colour everywhere the design shows a person.
-const hue = (name: string) =>
-	[...name].reduce((h, ch) => (h * 31 + (ch.codePointAt(0) ?? 0)) >>> 0, 0) % 360;
 </script>
 
 <div
@@ -96,13 +87,9 @@ const hue = (name: string) =>
 				<span class="halt-mono">{halt.mono}</span>
 			{/if}
 			{#if halt.message?.text}
+				{@const who = monogram(halt.message.by)}
 				<div class="msg">
-					<span
-						class="avatar"
-						style:background="oklch(0.36 0.06 {hue(halt.message.by)})"
-						style:color="oklch(0.92 0.04 {hue(halt.message.by)})"
-						>{initials(halt.message.by)}</span
-					>
+					<span class="avatar" style:background={who.bg} style:color={who.fg}>{who.initials}</span>
 					<span class="msg-text">
 						<span class="msg-by"><b>{halt.message.by}</b> · {i18n.halt_admin_just_now()}</span>
 						<span class="msg-body">{halt.message.text}</span>
@@ -233,7 +220,7 @@ const hue = (name: string) =>
 	margin-top: 4px;
 	padding: 14px 16px;
 	border-radius: 14px;
-	background: color-mix(in srgb, var(--bg-elevated) 82%, transparent);
+	background: rgb(var(--bg-elevated-rgb) / 82%);
 	border: 1px solid var(--border-strong);
 	backdrop-filter: blur(12px);
 	-webkit-backdrop-filter: blur(12px);
@@ -283,7 +270,7 @@ const hue = (name: string) =>
 .halt-mono {
 	padding: 10px 12px;
 	border-radius: var(--radius-md);
-	background: color-mix(in srgb, var(--bg-elevated) 72%, transparent);
+	background: rgb(var(--bg-elevated-rgb) / 72%);
 	border: 1px solid var(--border);
 	font: 400 12px var(--font-mono);
 	line-height: 1.5;
@@ -340,7 +327,7 @@ const hue = (name: string) =>
 	padding: 10px 16px;
 	border-radius: 14px;
 	border: 1px solid var(--border-strong);
-	background: color-mix(in srgb, var(--bg-elevated) 72%, transparent);
+	background: rgb(var(--bg-elevated-rgb) / 72%);
 	backdrop-filter: blur(12px);
 	color: var(--player-ink);
 	text-align: left;

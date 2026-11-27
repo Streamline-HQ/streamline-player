@@ -242,7 +242,7 @@ let failed = $state(false);
 	height: 32px;
 	padding: 0 11px;
 	border-radius: 8px;
-	border: 1px solid color-mix(in srgb, var(--status-failed) 40%, transparent);
+	border: 1px solid rgb(var(--status-failed-rgb) / 40%);
 	background: transparent;
 	color: var(--status-failed);
 	font: inherit;
@@ -252,6 +252,6 @@ let failed = $state(false);
 }
 
 .stop:hover {
-	background: color-mix(in srgb, var(--status-failed) 10%, transparent);
+	background: rgb(var(--status-failed-rgb) / 10%);
 }
 </style>

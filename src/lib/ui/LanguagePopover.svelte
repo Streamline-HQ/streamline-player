@@ -38,6 +38,14 @@ let {
 	onpick: (patch: Partial<{ audio: string; subs: string }>) => void;
 	onapply: () => void;
 } = $props();
+// The label draws the hidden input's keyboard ring; Chromium 87 has no :has().
+let ring = $state<string | null>(null);
+const ringOn = (key: string) => (e: FocusEvent) => {
+	ring = (e.currentTarget as HTMLElement).matches(":focus-visible") ? key : null;
+};
+const ringOff = () => {
+	ring = null;
+};
 </script>
 
 <div
@@ -66,9 +74,11 @@ let {
 			<div class="cap pad">{subsLabel}</div>
 			<div class="subs">
 				{#each subs as o (o.value)}
-					<label class="sub">
+					<label class={["sub", ring === o.value && "ring"]}>
 						<input
 							type="radio"
+							onfocus={ringOn(o.value)}
+							onblur={ringOff}
 							name="subs"
 							value={o.value}
 							checked={draft.subs === o.value}
@@ -193,7 +203,7 @@ let {
 	pointer-events: none;
 }
 
-.sub:has(input:focus-visible) {
+.sub.ring {
 	outline: 2px solid var(--accent);
 }
 
