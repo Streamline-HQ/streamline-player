@@ -1,3 +1,5 @@
 [workspace]
 resolver = "3"
 members = ["src-tauri", "engine", "plugins/tauri-plugin-player"]
+# A copy of someone else's crates, see its README: built as a dependency, not linted as ours.
+exclude = ["vendor"]

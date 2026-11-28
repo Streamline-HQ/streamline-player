@@ -8,7 +8,7 @@ The app for watching your [Streamline](https://github.com/DataHearth/streamline)
 
 ## Features
 
-- One Tauri 2 + SvelteKit app for Android TV, the Linux desktop and the web; Windows, macOS, phones and tablets are next
+- One Tauri 3 + SvelteKit app for Android TV, the Linux desktop and the web; Windows, macOS, phones and tablets are next
 - Android TV plays through ExoPlayer with libass subtitles, the desktop through mpv, the web through Shaka Player
 - Direct play when the device can, otherwise a transcode sized to the source and to the connection, with Auto quality that steps down on a stall and back up when it holds
 - Subtitles (text, ASS, PGS, forced tracks), audio tracks, speed, chapters, skip intro, up next and trickplay

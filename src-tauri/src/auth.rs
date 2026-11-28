@@ -69,7 +69,7 @@ fn entry() -> Result<keyring_core::Entry, String> {
 
 #[cfg(target_os = "android")]
 fn vault(app: &AppHandle, command: &str, value: Option<&str>) -> Result<Value, String> {
-    app.state::<tauri_plugin_player::Android<tauri::Wry>>()
+    app.state::<tauri_plugin_player::Android<tauri::DynRuntime>>()
         .0
         .run_mobile_plugin::<Value>(command, json!({ "name": KEY_NAME, "value": value }))
         .map_err(|e| e.to_string())
@@ -176,7 +176,7 @@ fn device(app: &AppHandle) -> (String, &'static str) {
     #[cfg(target_os = "android")]
     {
         let info = app
-            .state::<tauri_plugin_player::Android<tauri::Wry>>()
+            .state::<tauri_plugin_player::Android<tauri::DynRuntime>>()
             .0
             .run_mobile_plugin::<Value>("deviceInfo", json!({}))
             .unwrap_or_default();

@@ -11,6 +11,7 @@ let
     ../../engine
     ../../src-tauri
     ../../plugins
+    ../../vendor
   ];
   web = lib.fileset.unions [
     ../../package.json

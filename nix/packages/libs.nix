@@ -1,32 +1,28 @@
 { pkgs, lib }:
 # numtide devshell runs no nixpkgs setup hooks, so nothing fills in the search
-# paths pkg-config, GStreamer, GIO and GSettings read. They are derived here
-# from two lists, which the desktop package takes as its buildInputs too, so
-# the shell and the package cannot disagree about what the app links.
+# paths pkg-config and Qt read. They are derived here from one list, which the
+# desktop package takes as its buildInputs too, so the shell and the package
+# cannot disagree about what the app links.
 let
-  libs = with pkgs; [
-    webkitgtk_4_1
-    gtk3
-    libsoup_3
-    openssl
-    librsvg
-    # The desktop player: libmpv through its OpenGL render API; libGL brings libEGL.
-    mpv-unwrapped
-    libGL
-    glib-networking
+  # The Linux shell is Qt Widgets around QtWebEngine (vendor/tauri-runtime-qt).
+  qt = with pkgs.qt6; [
+    qtbase
+    qtwebengine
+    qtwebchannel
+    qtwayland
   ];
 
-  # WebKitGTK's MSE plays through GStreamer; without these Shaka sees no codecs.
-  gstPlugins = with pkgs.gst_all_1; [
-    gstreamer
-    gst-plugins-base
-    gst-plugins-good
-    gst-plugins-bad
-    gst-libav
-  ];
+  libs =
+    qt
+    ++ (with pkgs; [
+      openssl
+      # The desktop player: libmpv through its OpenGL render API; libGL brings libEGL.
+      mpv-unwrapped
+      libGL
+    ]);
 
-  # A .pc file names its dependencies (webkit2gtk-4.1 requires glib-2.0,
-  # cairo, …) and pkg-config fails unless each one is on PKG_CONFIG_PATH too.
+  # A .pc file names its dependencies (Qt6WebEngineWidgets requires Qt6Widgets,
+  # Qt6Quick, …) and pkg-config fails unless each one is on PKG_CONFIG_PATH too.
   # nixpkgs records them as the dev outputs' propagatedBuildInputs.
   pcClosure =
     roots:
@@ -45,15 +41,16 @@ let
       }
     );
 
-  schemaDirs = map (p: "${p}/share/gsettings-schemas/${p.name}") [
-    pkgs.gtk3
-    pkgs.gsettings-desktop-schemas
-  ];
-
-  pc = pcClosure libs;
+  # Qt keeps its .pc files in `out`, the others in `dev`.
+  pc = lib.unique (
+    lib.concatMap (d: [
+      d
+      (d.out or d)
+    ]) (pcClosure libs)
+  );
 in
 {
-  inherit libs gstPlugins pcClosure;
+  inherit libs pcClosure;
 
   env = [
     {
@@ -64,16 +61,17 @@ in
       ];
     }
     {
-      name = "GST_PLUGIN_SYSTEM_PATH_1_0";
-      value = lib.makeSearchPathOutput "lib" "lib/gstreamer-1.0" gstPlugins;
-    }
-    {
-      name = "GIO_EXTRA_MODULES";
-      value = "${pkgs.glib-networking}/lib/gio/modules";
-    }
-    {
-      name = "XDG_DATA_DIRS";
-      prefix = lib.concatStringsSep ":" schemaDirs;
+      # A binary run from the shell is not wrapped: without this Qt finds neither its
+      # Wayland platform plugin nor QtWebEngine's.
+      name = "QT_PLUGIN_PATH";
+      value = lib.makeSearchPath "lib/qt-6/plugins" (
+        with pkgs.qt6;
+        [
+          qtbase
+          qtwayland
+          qtwebengine
+        ]
+      );
     }
     {
       # Build scripts that emit a bare `-lmpv` give the linker no -L; the cc

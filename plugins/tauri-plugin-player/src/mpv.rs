@@ -1,15 +1,10 @@
-//! The slice of libmpv's client and render API the desktop player uses.
+//! The slice of libmpv's client API the desktop player uses. Its render API is driven from C++,
+//! in `qt/video.cpp`.
 
 use std::{
     ffi::{CStr, CString, c_char, c_int, c_void},
     ptr,
 };
-
-#[repr(C)]
-pub struct RenderParam {
-    pub kind: c_int,
-    pub data: *mut c_void,
-}
 
 #[repr(C)]
 struct RawEvent {
@@ -43,18 +38,6 @@ unsafe extern "C" {
     fn mpv_free(data: *mut c_void);
     fn mpv_error_string(error: c_int) -> *const c_char;
     fn mpv_wait_event(h: *mut c_void, timeout: f64) -> *mut RawEvent;
-    pub fn mpv_render_context_create(
-        out: *mut *mut c_void,
-        h: *mut c_void,
-        params: *mut RenderParam,
-    ) -> c_int;
-    pub fn mpv_render_context_set_update_callback(
-        ctx: *mut c_void,
-        cb: Option<unsafe extern "C" fn(*mut c_void)>,
-        cb_ctx: *mut c_void,
-    );
-    pub fn mpv_render_context_render(ctx: *mut c_void, params: *mut RenderParam) -> c_int;
-    pub fn mpv_render_context_free(ctx: *mut c_void);
 }
 
 unsafe extern "C" {
@@ -93,7 +76,7 @@ fn check(code: c_int) -> Result<(), String> {
 
 impl Mpv {
     pub fn new(options: &[(&str, &str)]) -> Result<Self, String> {
-        // libmpv refuses to start under a non-C LC_NUMERIC, and gtk_init sets the user's locale.
+        // libmpv refuses to start under a non-C LC_NUMERIC, and QApplication sets the user's locale.
         unsafe { setlocale(LC_NUMERIC, c"C".as_ptr()) };
         let h = unsafe { mpv_create() };
         if h.is_null() {

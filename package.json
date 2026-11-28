@@ -23,7 +23,7 @@
 	},
 	"dependencies": {
 		"@lucide/svelte": "^1.67.0",
-		"@tauri-apps/api": "^2.12.4",
+		"@tauri-apps/api": "3.0.0-alpha.3",
 		"jassub": "2.5.23",
 		"shaka-player": "^5.3.4"
 	},

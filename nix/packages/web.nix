@@ -36,7 +36,7 @@ stdenvNoCC.mkDerivation (finalAttrs: {
     inherit (finalAttrs) version src;
     inherit pnpm;
     fetcherVersion = 4;
-    hash = "sha256-ay/xBnRxDwS+9g/EjsuoH98O85o0HyFp3CaURTAnAxY=";
+    hash = "sha256-O1D6psHM6ks1qQiJY1yIdTJbQUT14CbxJWpqWLAeJCQ=";
   };
 
   # nixpkgs' pnpmConfigHook restores the store index without WAL mode, and

@@ -19,7 +19,9 @@ updates `../streamline`.
 
 ## Stack
 
-- **Tauri 2** shell in `src-tauri/` (root `Cargo.toml` is the workspace).
+- **Tauri 3** (alpha) shell in `src-tauri/` (root `Cargo.toml` is the workspace).
+  On Linux its runtime is Qt Widgets around QtWebEngine, a copy of
+  `tauri-runtime-qt` in `vendor/` (see its README); elsewhere it is wry.
 - **Engine** in `engine/` (planned): a Rust HTTP service driving external
   ffmpeg, VAAPI or CPU. Streamline is its only control-plane caller.
 - **SvelteKit 3** (Svelte 5) UI in `src/`, as a static SPA: `adapter-static`
@@ -43,8 +45,8 @@ updates `../streamline`.
   plaintext. No password ever passes through the app.
 - **Capabilities come from the running webview** (`MediaCapabilities`,
   `isTypeSupported`, `matchMedia`), never from a per-platform table: the
-  server picks copy vs transcode from them. WebKitGTK's codecs are whatever
-  GStreamer plugins it finds, so a Linux bundle must ship them.
+  server picks copy vs transcode from them. On Linux the film plays in libmpv
+  under the page, so the plugin answers for libmpv there.
 - **Out of reach in v1**: tvOS (no WKWebView; Tauri closed it as not planned,
   tauri-apps/tauri#6364), casting (the Cast Web Sender SDK runs only in
   Chrome), and AirPlay (deferred server-side).

@@ -134,7 +134,7 @@ mod pump {
             return value;
         }
         let value = app
-            .state::<tauri_plugin_player::Android<tauri::Wry>>()
+            .state::<tauri_plugin_player::Android<tauri::DynRuntime>>()
             .0
             .run_mobile_plugin::<Value>("metered", json!({}))
             .ok()
@@ -145,7 +145,7 @@ mod pump {
     }
 
     fn call(app: &AppHandle, state: &ServiceState) -> Result<Value, String> {
-        app.state::<tauri_plugin_player::Android<tauri::Wry>>()
+        app.state::<tauri_plugin_player::Android<tauri::DynRuntime>>()
             .0
             .run_mobile_plugin::<Value>(
                 "downloadsService",

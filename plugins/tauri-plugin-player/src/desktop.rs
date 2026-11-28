@@ -265,7 +265,14 @@ pub fn attach<R: Runtime>(webview: Webview<R>) {
         return;
     }
     let mpv = player.mpv.clone();
-    if let Err(e) = webview.with_webview(move |w| view::attach(w.inner(), mpv)) {
+    let attached =
+        webview.with_webview(
+            move |w| match w.downcast_ref::<tauri_runtime_qt::QtWebview>() {
+                Some(qt) => view::attach(qt.view, qt.page, mpv),
+                None => eprintln!("not the Qt runtime; no video layer"),
+            },
+        );
+    if let Err(e) = attached {
         eprintln!("no video layer: {e}");
     }
 }
@@ -285,7 +292,7 @@ fn hardware_codecs() -> &'static [(&'static str, Vec<&'static str>)] {
 /// monitor the window is on.
 #[tauri::command]
 pub fn capabilities() -> Value {
-    let display = view::on_gtk(view::display).unwrap_or_default();
+    let display = view::on_ui(view::display).unwrap_or_default();
     probe::capabilities(hardware_codecs(), &display)
 }
 
@@ -297,7 +304,7 @@ pub fn deviceInfo(player: State<'_, Arc<Player>>) -> Value {
             .map(|s| s.trim().to_string())
             .unwrap_or_default()
     };
-    let display = view::on_gtk(view::display).unwrap_or_default();
+    let display = view::on_ui(view::display).unwrap_or_default();
     json!({
         "name": read("/proc/sys/kernel/hostname"),
         "model": read("/sys/devices/virtual/dmi/id/product_name"),
@@ -336,7 +343,7 @@ pub fn volume(player: State<'_, Arc<Player>>, volume: f64, muted: bool) -> Done 
 #[tauri::command]
 #[allow(non_snake_case)]
 pub fn subtitleLift(px: f64) {
-    let _ = view::on_gtk(move || view::lift(px));
+    let _ = view::on_ui(move || view::lift(px));
 }
 
 /// The picture's rectangle in CSS pixels of the window, or the whole window with `full`.
@@ -357,7 +364,7 @@ pub fn viewport(
         }),
         _ => None,
     };
-    let _ = view::on_gtk(move || view::place(rect));
+    let _ = view::on_ui(move || view::place(rect));
 }
 
 #[tauri::command]
@@ -368,7 +375,7 @@ pub async fn load(
     audio: Option<u32>,
 ) -> Done {
     let p = player.inner().clone();
-    let _ = view::on_gtk(|| view::see_through(true));
+    let _ = view::on_ui(|| view::see_through(true));
     tauri::async_runtime::spawn_blocking(move || p.load(&url, at.unwrap_or(0.0), audio))
         .await
         .map_err(|e| e.to_string())?
@@ -377,7 +384,7 @@ pub async fn load(
 #[tauri::command]
 pub fn stop(player: State<'_, Arc<Player>>) -> Done {
     player.finish_load();
-    let _ = view::on_gtk(|| view::see_through(false));
+    let _ = view::on_ui(|| view::see_through(false));
     player.mpv.command(&["stop"])
 }
 
